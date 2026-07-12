@@ -422,7 +422,8 @@ function sideStats(arr){
 ${line("Sessions",e.length)}${line("FR",pct(hitRate(e,"frHit")))}${line("HR",pct(hitRate(e,"hrHit")))}${line("QR",pct(hitRate(e,"qrHit")))}${line("ER",pct(hitRate(e,"erHit")))}
 ${line("Avg Ref FR",fmt(avg(e.map(s=>s.fullRange))))}${line("Avg Ref HR",fmt(avg(e.map(s=>s.halfRange))))}${line("Avg Ref QR",fmt(avg(e.map(s=>s.quarterRange))))}${line("Avg Ref ER",fmt(avg(e.map(s=>s.eighthRange))))}
 ${line("Avg Current Range",fmt(avg(e.map(s=>s.currentRange))))}${line("Avg London Range",fmt(avg(e.map(s=>s.londonRange))))}${line("Avg NY Range",fmt(avg(e.map(s=>s.nyRange))))}${line("Expectancy",fmt(expectancy(e))+"R")}${line("Profit Factor",fmt(profitFactor(e)))}
-${line("Avg Upside Total",fmt(avg(e.map(s=>s.extremeProj?.upTotal))))}${line("Avg Downside Total",fmt(avg(e.map(s=>s.extremeProj?.downTotal))))}
+${line("Avg Up FR",fmt(avg(e.map(s=>s.extremeProj?.upFR))))}${line("Avg Up HR",fmt(avg(e.map(s=>s.extremeProj?.upHR))))}${line("Avg Up QR",fmt(avg(e.map(s=>s.extremeProj?.upQR))))}${line("Avg Up ER",fmt(avg(e.map(s=>s.extremeProj?.upER))))}${line("Avg Upside Total",fmt(avg(e.map(s=>s.extremeProj?.upTotal))))}
+${line("Avg Down FR",fmt(avg(e.map(s=>s.extremeProj?.downFR))))}${line("Avg Down HR",fmt(avg(e.map(s=>s.extremeProj?.downHR))))}${line("Avg Down QR",fmt(avg(e.map(s=>s.extremeProj?.downQR))))}${line("Avg Down ER",fmt(avg(e.map(s=>s.extremeProj?.downER))))}${line("Avg Downside Total",fmt(avg(e.map(s=>s.extremeProj?.downTotal))))}
 <div class="sidetitle" style="margin-top:12px">FR BY SESSION</div>
 ${line("Weekly",pct(hitRate(e.filter(s=>s.sessionType==="Weekly"),"frHit")))}
 ${line("Daily",pct(hitRate(e.filter(s=>s.sessionType==="Daily"),"frHit")))}
