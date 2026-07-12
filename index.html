@@ -47,6 +47,7 @@
     .curr{background:#2563eb;color:white}
     .refgroup{display:contents}.refgroup.hidden{display:none}
     input.auto,input.auto:focus{background:#0b1220;color:#94a3b8;cursor:not-allowed;border-color:#334155}
+    .cellinput{padding:4px 6px;text-align:center;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);border-radius:6px;color:white;font-size:13px}
     .gate{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#020617,#111827 55%,#1e293b);padding:20px}
     .gate.hidden{display:none}
     .gatecard{max-width:420px;width:100%}
@@ -307,6 +308,15 @@ function targets(s){
   const d=s.bias==="Down"?-1:1;
   return{FR:base+d*fr,HR:base+d*fr/2,QR:base+d*fr/4,ER:base+d*fr/8}
 }
+function extremeProjections(s){
+  const fr=referenceRange(s);
+  if(!Number.isFinite(fr))return{};
+  const hr=fr/2, qr=fr/4, er=fr/8, total=fr+hr+qr+er;
+  const out={};
+  if(Number.isFinite(s.extremeLow)){out.upFR=s.extremeLow+fr;out.upHR=s.extremeLow+hr;out.upQR=s.extremeLow+qr;out.upER=s.extremeLow+er;out.upTotal=s.extremeLow+total}
+  if(Number.isFinite(s.extremeHigh)){out.downFR=s.extremeHigh-fr;out.downHR=s.extremeHigh-hr;out.downQR=s.extremeHigh-qr;out.downER=s.extremeHigh-er;out.downTotal=s.extremeHigh-total}
+  return out;
+}
 function enrich(arr){
   const vols=arr.map(s=>s.volume).filter(Number.isFinite), deltas=arr.map(s=>s.deltaFinish).filter(Number.isFinite);
   const va=avg(vols),vs=stdev(vols),da=avg(deltas),ds=stdev(deltas);
@@ -316,7 +326,7 @@ function enrich(arr){
     fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
     currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
     ibRange:ibRange(s), londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
-    volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s)
+    volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s)
   }))
 }
 function loadSessions(){
@@ -369,6 +379,21 @@ entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToS
 clearForm.addEventListener("click",()=>{entryForm.reset();recordId.value="";setDefaultDate();updateReferenceFields()});
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
+function editableCell(s,field,cls=""){
+  const d=document.createElement("div");d.className=`cell ${cls}`;
+  if(!s.id){return d}
+  const input=document.createElement("input");
+  input.type="number";input.step="0.01";input.className="cellinput";
+  input.value=Number.isFinite(s[field])?s[field]:"";
+  input.addEventListener("change",()=>{
+    const idx=sessions.findIndex(x=>x.id===s.id);
+    if(idx<0)return;
+    sessions[idx][field]=n(input.value);
+    saveSessions();syncUpsert([sessions[idx]]);renderAll();
+  });
+  d.appendChild(input);
+  return d;
+}
 function line(l,v){return `<div class="statline"><span>${l}</span><b>${v}</b></div>`}
 function sideStats(arr){
  const e=enrich(arr);
@@ -416,11 +441,13 @@ function renderProjectionGrid(){
     ["IB High",s=>fmt(s.ibHigh),"cream"],["IB Low",s=>fmt(s.ibLow),"cream"],["IB Range",s=>fmt(s.ibRange),"yellow"],
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
-    ["Extreme at High",s=>fmt(s.extremeHigh),"orange"],["Extreme at Low",s=>fmt(s.extremeLow),"orange"],
+    ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
+    ["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull"],
+    ["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear"],
     ["Projection FR",s=>`${fmt(s.targets?.FR)} <span class="pill">${s.frHit||""}</span>`,"cream"],["Projection HR",s=>`${fmt(s.targets?.HR)} <span class="pill">${s.hrHit||""}</span>`,"cream"],["Projection QR",s=>`${fmt(s.targets?.QR)} <span class="pill">${s.qrHit||""}</span>`,"cream"],["Projection ER",s=>`${fmt(s.targets?.ER)} <span class="pill">${s.erHit||""}</span>`,"cream"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
-  rows.forEach(([lab,fn,cls])=>{root.appendChild(cell(lab,"labelcell"));days.forEach(s=>root.appendChild(cell(fn(s),cls||biasCls(s))))})
+  rows.forEach(([lab,fn,cls,editField])=>{root.appendChild(cell(lab,"labelcell"));days.forEach(s=>root.appendChild(editField?editableCell(s,editField,cls||biasCls(s)):cell(fn(s),cls||biasCls(s))))})
 }
 function renderMetrics(){
  const session=sessionFilter.value;const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
