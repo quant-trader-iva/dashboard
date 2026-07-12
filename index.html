@@ -429,7 +429,6 @@ function renderProjectionGrid(){
   else if(mode==="Weekly" && focus){const start=new Date(focus);const day=start.getDay();const diff=(day===0?-6:1-day);start.setDate(start.getDate()+diff);const end=new Date(start);end.setDate(start.getDate()+6);arr=arr.filter(s=>{const d=new Date(s.date);return d>=start&&d<=end})}
   const days=buildColumns(arr,session);
   root.style.gridTemplateColumns=`250px repeat(${days.length},minmax(190px,1fr)) 350px`;
-  root.appendChild(cell("Metric","head"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${s.date||""}<br><span class="pill">${s.sessionType||""}</span>`,"head")));root.appendChild(cell(sideStats(arr),"side"));
   const rows=[
     ["SESSION",s=>s.sessionType||"","subhead"],
     ["Reference Source",s=>s.referenceLabel||"","ref"],["Reference High",s=>fmt(s.referenceHigh),"ref"],["Reference Low",s=>fmt(s.referenceLow),"ref"],["Reference FR Range",s=>fmt(s.referenceRange),"ref"],
@@ -447,6 +446,8 @@ function renderProjectionGrid(){
     ["Projection FR",s=>`${fmt(s.targets?.FR)} <span class="pill">${s.frHit||""}</span>`,"cream"],["Projection HR",s=>`${fmt(s.targets?.HR)} <span class="pill">${s.hrHit||""}</span>`,"cream"],["Projection QR",s=>`${fmt(s.targets?.QR)} <span class="pill">${s.qrHit||""}</span>`,"cream"],["Projection ER",s=>`${fmt(s.targets?.ER)} <span class="pill">${s.erHit||""}</span>`,"cream"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
+  root.appendChild(cell("Metric","head"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${s.date||""}<br><span class="pill">${s.sessionType||""}</span>`,"head")));
+  const sideCell=cell(sideStats(arr),"side");sideCell.style.gridRow=`span ${rows.length+1}`;root.appendChild(sideCell);
   rows.forEach(([lab,fn,cls,editField])=>{root.appendChild(cell(lab,"labelcell"));days.forEach(s=>root.appendChild(editField?editableCell(s,editField,cls||biasCls(s)):cell(fn(s),cls||biasCls(s))))})
 }
 function renderMetrics(){
