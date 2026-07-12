@@ -47,31 +47,9 @@
     .curr{background:#2563eb;color:white}
     .refgroup{display:contents}.refgroup.hidden{display:none}
     input.auto,input.auto:focus{background:#0b1220;color:#94a3b8;cursor:not-allowed;border-color:#334155}
-    .gate{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#020617,#111827 55%,#1e293b);padding:20px}
-    .gatecard{max-width:420px;width:100%}
-    .gatecard h1{font-size:22px}
   </style>
 </head>
 <body>
-<div id="gate" class="gate">
-  <div class="card gatecard">
-    <h1>Trading Projection Dashboard</h1>
-    <p class="hint">Sign in to access the dashboard. There is no public sign-up — this account is created by the owner directly in Supabase.</p>
-    <form id="gateForm">
-      <div id="gateConnectionFields">
-        <p class="hint">First time on this device: also enter your Supabase project connection. Saved only in this browser's local storage — never committed to the repo.</p>
-        <div style="margin-bottom:12px"><label>Supabase URL</label><input id="gateSupabaseUrl" placeholder="https://xxxxx.supabase.co"/></div>
-        <div style="margin-bottom:12px"><label>Supabase Anon Key</label><input id="gateSupabaseKey" placeholder="eyJ... or sb_publishable_..."/></div>
-      </div>
-      <div style="margin-bottom:12px"><label>Email</label><input id="gateEmail" type="email" placeholder="you@example.com"/></div>
-      <div style="margin-bottom:12px"><label>Password</label><input id="gatePassword" type="password"/></div>
-      <button id="gateSignInBtn" class="primary" type="submit" style="width:100%">Sign In</button>
-    </form>
-    <button id="gateChangeConfig" type="button" class="hidden" style="width:100%;margin-top:8px;background:#1f2937">Change Supabase Connection</button>
-    <p id="gateStatus" class="hint"></p>
-  </div>
-</div>
-<div id="appRoot" class="hidden">
 <header>
   <div>
     <h1>Trading Projection Dashboard v4</h1>
@@ -231,14 +209,28 @@
 <section id="settings" class="page hidden">
   <div class="grid">
     <div class="card span-6">
-      <h2>Account &amp; Sync</h2>
-      <p class="hint" id="settingsAuthStatus"></p>
+      <h2>Online Sync</h2>
+      <p class="hint">For online monitoring across devices, create a Supabase project, run the included SQL file, then paste your Supabase URL and anon key.</p>
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div><label>Supabase URL</label><input id="supabaseUrl" placeholder="https://xxxxx.supabase.co"/></div>
+        <div><label>Supabase Anon Key</label><input id="supabaseKey" placeholder="eyJ..."/></div>
+      </div>
       <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="saveSettings" class="primary">Save Settings</button>
         <button id="syncNow" class="good">Sync Now</button>
-        <button id="changeConnectionBtn">Change Supabase Connection</button>
-        <button id="logoutBtn" class="danger">Log Out</button>
       </div>
       <p id="syncStatus" class="hint"></p>
+      <h2 style="margin-top:18px">Sign In</h2>
+      <p class="hint">Sync only runs while signed in — your data stays private even if this page's URL is public. Ask your admin (you, in the Supabase dashboard) to create your account; there is no public sign-up here.</p>
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div id="loginEmailWrap"><label>Email</label><input id="loginEmail" type="email" placeholder="you@example.com"/></div>
+        <div id="loginPasswordWrap"><label>Password</label><input id="loginPassword" type="password"/></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="loginBtn" class="primary">Log In</button>
+        <button id="logoutBtn" class="danger hidden">Log Out</button>
+      </div>
+      <p id="authStatus" class="hint"></p>
     </div>
     <div class="card span-6">
       <h2>Correct Range Logic</h2>
@@ -252,7 +244,6 @@
   </div>
 </section>
 </main>
-</div>
 
 <script>
 const STORAGE_KEY="trading_projection_sessions_v4";
@@ -453,70 +444,33 @@ function readSettings(){
     return{}
   }catch{return{}}
 }
-let authUser=null, forceConfigView=false;
-function updateGateFields(){
-  const showConnection=!supabaseClient||forceConfigView;
-  gateConnectionFields.classList.toggle("hidden",!showConnection);
-  gateChangeConfig.classList.toggle("hidden",showConnection);
-}
-function showGate(){
-  appRoot.classList.add("hidden");
-  gate.classList.remove("hidden");
-  updateGateFields();
-}
-function showApp(){
-  gate.classList.add("hidden");
-  appRoot.classList.remove("hidden");
-  settingsAuthStatus.textContent=`Signed in as ${authUser.email}.`;
-  renderAll();
+let authUser=null;
+function updateAuthUI(){
+  const loggedIn=!!authUser;
+  authStatus.textContent=loggedIn?`Signed in as ${authUser.email}. Sync is active.`:(supabaseClient?"Not signed in — sync is disabled until you log in.":"Configure and save Supabase settings first.");
+  loginEmailWrap.classList.toggle("hidden",loggedIn);
+  loginPasswordWrap.classList.toggle("hidden",loggedIn);
+  loginBtn.classList.toggle("hidden",loggedIn);
+  logoutBtn.classList.toggle("hidden",!loggedIn);
 }
 async function initAuth(){
   if(!supabaseClient)return;
   const {data}=await supabaseClient.auth.getSession();
   authUser=data.session?data.session.user:null;
-  if(authUser)showApp();else showGate();
-  supabaseClient.auth.onAuthStateChange((event,session)=>{
-    authUser=session?session.user:null;
-    if(authUser)showApp();else showGate();
-  });
+  updateAuthUI();
+  supabaseClient.auth.onAuthStateChange((event,session)=>{authUser=session?session.user:null;updateAuthUI();if(authUser)fullSync()});
 }
-gateForm.addEventListener("submit",async e=>{
-  e.preventDefault();
-  if(!supabaseClient||forceConfigView){
-    const url=gateSupabaseUrl.value.trim(), key=gateSupabaseKey.value.trim();
-    if(!url||!key){gateStatus.textContent="Enter your Supabase URL and key.";return}
-    if(!window.supabase){gateStatus.textContent="Supabase library failed to load.";return}
-    localStorage.setItem(SETTINGS_KEY,JSON.stringify({url,key}));
-    supabaseClient=window.supabase.createClient(url,key);
-    forceConfigView=false;
-    updateGateFields();
-    await initAuth();
-  }
-  gateStatus.textContent="Signing in...";
-  const {error}=await supabaseClient.auth.signInWithPassword({email:gateEmail.value.trim(),password:gatePassword.value});
-  if(error){gateStatus.textContent="Login failed: "+error.message;return}
-  gatePassword.value="";
+loginBtn.addEventListener("click",async()=>{
+  if(!supabaseClient){authStatus.textContent="Save Supabase settings first.";return}
+  authStatus.textContent="Signing in...";
+  const {error}=await supabaseClient.auth.signInWithPassword({email:loginEmail.value.trim(),password:loginPassword.value});
+  if(error){authStatus.textContent="Login failed: "+error.message;return}
+  loginPassword.value="";
 });
-async function changeConnection(){
-  if(supabaseClient)await supabaseClient.auth.signOut();
-  forceConfigView=true;
-  gateStatus.textContent="";
-  showGate();
-}
-gateChangeConfig.addEventListener("click",changeConnection);
-changeConnectionBtn.addEventListener("click",changeConnection);
 logoutBtn.addEventListener("click",async()=>{if(supabaseClient)await supabaseClient.auth.signOut()});
+function initSettings(){const s=readSettings();supabaseUrl.value=s.url||"";supabaseKey.value=s.key||"";if(s.url&&s.key&&window.supabase)supabaseClient=window.supabase.createClient(s.url,s.key);updateAuthUI()}
+saveSettings.addEventListener("click",()=>{localStorage.setItem(SETTINGS_KEY,JSON.stringify({url:supabaseUrl.value.trim(),key:supabaseKey.value.trim()}));initSettings();initAuth();syncStatus.textContent="Settings saved."});
 syncNow.addEventListener("click",fullSync);
-function bootAuth(){
-  const s=readSettings();
-  if(s.url&&s.key&&window.supabase){
-    gateSupabaseUrl.value=s.url;gateSupabaseKey.value=s.key;
-    supabaseClient=window.supabase.createClient(s.url,s.key);
-    initAuth();
-  }else{
-    showGate();
-  }
-}
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,low:r.low,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,notes:r.notes,updatedAt:r.updated_at}}
 async function syncUpsert(records){if(!supabaseClient||!authUser||!records.length)return;await supabaseClient.from("trading_sessions").upsert(records.map(toDb),{onConflict:"id"})}
@@ -525,7 +479,7 @@ async function fullSync(){
   if(!supabaseClient){syncStatus.textContent="Supabase is not configured.";return}
   if(!authUser){syncStatus.textContent="Log in first to sync.";return}
   syncStatus.textContent="Syncing...";const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});if(error){syncStatus.textContent="Sync failed: "+error.message;return}const map=new Map();[...sessions,...data.map(fromDb)].forEach(s=>map.set(s.id,s));sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert(sessions);syncStatus.textContent=`Synced ${sessions.length} sessions.`;renderAll()}
-bootAuth();
+initSettings();initAuth();renderAll();
 </script>
 </body>
 </html>
