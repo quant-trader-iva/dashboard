@@ -416,7 +416,7 @@ function renderProjectionGrid(){
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange"],["Extreme at Low",s=>fmt(s.extremeLow),"orange"],
-    ["Projection FR",s=>`${fmt(s.targets.FR)} <span class="pill">${s.frHit||""}</span>`,"cream"],["Projection HR",s=>`${fmt(s.targets.HR)} <span class="pill">${s.hrHit||""}</span>`,"cream"],["Projection QR",s=>`${fmt(s.targets.QR)} <span class="pill">${s.qrHit||""}</span>`,"cream"],["Projection ER",s=>`${fmt(s.targets.ER)} <span class="pill">${s.erHit||""}</span>`,"cream"],
+    ["Projection FR",s=>`${fmt(s.targets?.FR)} <span class="pill">${s.frHit||""}</span>`,"cream"],["Projection HR",s=>`${fmt(s.targets?.HR)} <span class="pill">${s.hrHit||""}</span>`,"cream"],["Projection QR",s=>`${fmt(s.targets?.QR)} <span class="pill">${s.qrHit||""}</span>`,"cream"],["Projection ER",s=>`${fmt(s.targets?.ER)} <span class="pill">${s.erHit||""}</span>`,"cream"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
   rows.forEach(([lab,fn,cls])=>{root.appendChild(cell(lab,"labelcell"));days.forEach(s=>root.appendChild(cell(fn(s),cls||biasCls(s))))})
@@ -468,17 +468,20 @@ function showApp(){
   gate.classList.add("hidden");
   appRoot.classList.remove("hidden");
   settingsAuthStatus.textContent=`Signed in as ${authUser.email}.`;
-  renderAll();
+  try{renderAll()}catch(err){console.error("renderAll failed after sign-in:",err)}
 }
-async function initAuth(){
-  if(!supabaseClient)return;
-  const {data}=await supabaseClient.auth.getSession();
-  authUser=data.session?data.session.user:null;
-  if(authUser)showApp();else showGate();
+function registerAuthListener(){
   supabaseClient.auth.onAuthStateChange((event,session)=>{
     authUser=session?session.user:null;
     if(authUser)showApp();else showGate();
   });
+}
+async function initAuth(){
+  if(!supabaseClient)return;
+  registerAuthListener();
+  const {data}=await supabaseClient.auth.getSession();
+  authUser=data.session?data.session.user:null;
+  if(authUser)showApp();else showGate();
 }
 gateForm.addEventListener("submit",async e=>{
   e.preventDefault();
@@ -490,12 +493,13 @@ gateForm.addEventListener("submit",async e=>{
     supabaseClient=window.supabase.createClient(url,key);
     forceConfigView=false;
     updateGateFields();
-    await initAuth();
+    registerAuthListener();
   }
   gateStatus.textContent="Signing in...";
-  const {error}=await supabaseClient.auth.signInWithPassword({email:gateEmail.value.trim(),password:gatePassword.value});
+  const {data,error}=await supabaseClient.auth.signInWithPassword({email:gateEmail.value.trim(),password:gatePassword.value});
   if(error){gateStatus.textContent="Login failed: "+error.message;return}
   gatePassword.value="";
+  if(data&&data.user){authUser=data.user;showApp()}
 });
 async function changeConnection(){
   if(supabaseClient)await supabaseClient.auth.signOut();
