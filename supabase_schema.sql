@@ -1,6 +1,7 @@
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
+  user_id uuid references auth.users(id),
   date date,
   day text,
   session_type text check (session_type in ('Weekly','Daily','London','New York') or session_type is null),
@@ -56,13 +57,25 @@ create table if not exists public.trading_sessions (
 alter table public.trading_sessions enable row level security;
 
 drop policy if exists "allow anon dashboard access" on public.trading_sessions;
-create policy "allow anon dashboard access"
-on public.trading_sessions
-for all
-using (true)
-with check (true);
+drop policy if exists "select own sessions" on public.trading_sessions;
+drop policy if exists "insert own sessions" on public.trading_sessions;
+drop policy if exists "update own sessions" on public.trading_sessions;
+drop policy if exists "delete own sessions" on public.trading_sessions;
+
+create policy "select own sessions" on public.trading_sessions
+for select using (auth.uid() = user_id);
+
+create policy "insert own sessions" on public.trading_sessions
+for insert with check (auth.uid() = user_id);
+
+create policy "update own sessions" on public.trading_sessions
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own sessions" on public.trading_sessions
+for delete using (auth.uid() = user_id);
 
 create index if not exists trading_sessions_date_idx on public.trading_sessions(date);
 create index if not exists trading_sessions_session_type_idx on public.trading_sessions(session_type);
 create index if not exists trading_sessions_day_type_idx on public.trading_sessions(day_type);
 create index if not exists trading_sessions_open_type_idx on public.trading_sessions(open_type);
+create index if not exists trading_sessions_user_id_idx on public.trading_sessions(user_id);
