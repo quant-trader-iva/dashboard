@@ -56,21 +56,19 @@
 <div id="gate" class="gate">
   <div class="card gatecard">
     <h1>Trading Projection Dashboard</h1>
-    <div id="gateConfig">
-      <p class="hint">Connect this browser to your Supabase project. These values are saved only in this browser's local storage — never committed to the repo.</p>
-      <div style="margin-bottom:12px"><label>Supabase URL</label><input id="gateSupabaseUrl" placeholder="https://xxxxx.supabase.co"/></div>
-      <div style="margin-bottom:12px"><label>Supabase Anon Key</label><input id="gateSupabaseKey" placeholder="eyJ... or sb_publishable_..."/></div>
-      <button id="gateSaveConfig" class="primary" style="width:100%">Save &amp; Continue</button>
-      <p id="gateConfigStatus" class="hint"></p>
-    </div>
-    <div id="gateLogin" class="hidden">
-      <p class="hint">Sign in to access the dashboard. There is no public sign-up — the account is created by the owner directly in Supabase.</p>
+    <p class="hint">Sign in to access the dashboard. There is no public sign-up — this account is created by the owner directly in Supabase.</p>
+    <form id="gateForm">
+      <div id="gateConnectionFields">
+        <p class="hint">First time on this device: also enter your Supabase project connection. Saved only in this browser's local storage — never committed to the repo.</p>
+        <div style="margin-bottom:12px"><label>Supabase URL</label><input id="gateSupabaseUrl" placeholder="https://xxxxx.supabase.co"/></div>
+        <div style="margin-bottom:12px"><label>Supabase Anon Key</label><input id="gateSupabaseKey" placeholder="eyJ... or sb_publishable_..."/></div>
+      </div>
       <div style="margin-bottom:12px"><label>Email</label><input id="gateEmail" type="email" placeholder="you@example.com"/></div>
       <div style="margin-bottom:12px"><label>Password</label><input id="gatePassword" type="password"/></div>
-      <button id="gateLoginBtn" class="primary" style="width:100%">Log In</button>
-      <button id="gateChangeConfig" type="button" style="width:100%;margin-top:8px;background:#1f2937">Change Supabase Connection</button>
-      <p id="gateLoginStatus" class="hint"></p>
-    </div>
+      <button id="gateSignInBtn" class="primary" type="submit" style="width:100%">Sign In</button>
+    </form>
+    <button id="gateChangeConfig" type="button" class="hidden" style="width:100%;margin-top:8px;background:#1f2937">Change Supabase Connection</button>
+    <p id="gateStatus" class="hint"></p>
   </div>
 </div>
 <div id="appRoot" class="hidden">
@@ -455,12 +453,16 @@ function readSettings(){
     return{}
   }catch{return{}}
 }
-let authUser=null;
-function showGate(step){
+let authUser=null, forceConfigView=false;
+function updateGateFields(){
+  const showConnection=!supabaseClient||forceConfigView;
+  gateConnectionFields.classList.toggle("hidden",!showConnection);
+  gateChangeConfig.classList.toggle("hidden",showConnection);
+}
+function showGate(){
   appRoot.classList.add("hidden");
   gate.classList.remove("hidden");
-  gateConfig.classList.toggle("hidden",step!=="config");
-  gateLogin.classList.toggle("hidden",step!=="login");
+  updateGateFields();
 }
 function showApp(){
   gate.classList.add("hidden");
@@ -472,30 +474,37 @@ async function initAuth(){
   if(!supabaseClient)return;
   const {data}=await supabaseClient.auth.getSession();
   authUser=data.session?data.session.user:null;
-  if(authUser)showApp();else showGate("login");
+  if(authUser)showApp();else showGate();
   supabaseClient.auth.onAuthStateChange((event,session)=>{
     authUser=session?session.user:null;
-    if(authUser)showApp();else showGate(supabaseClient?"login":"config");
+    if(authUser)showApp();else showGate();
   });
 }
-gateSaveConfig.addEventListener("click",async()=>{
-  const url=gateSupabaseUrl.value.trim(), key=gateSupabaseKey.value.trim();
-  if(!url||!key){gateConfigStatus.textContent="Enter both the URL and the key.";return}
-  if(!window.supabase){gateConfigStatus.textContent="Supabase library failed to load.";return}
-  localStorage.setItem(SETTINGS_KEY,JSON.stringify({url,key}));
-  supabaseClient=window.supabase.createClient(url,key);
-  gateConfigStatus.textContent="Saved. Checking for an existing session...";
-  await initAuth();
-});
-gateLoginBtn.addEventListener("click",async()=>{
-  if(!supabaseClient){gateLoginStatus.textContent="Connect Supabase first.";return}
-  gateLoginStatus.textContent="Signing in...";
+gateForm.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(!supabaseClient||forceConfigView){
+    const url=gateSupabaseUrl.value.trim(), key=gateSupabaseKey.value.trim();
+    if(!url||!key){gateStatus.textContent="Enter your Supabase URL and key.";return}
+    if(!window.supabase){gateStatus.textContent="Supabase library failed to load.";return}
+    localStorage.setItem(SETTINGS_KEY,JSON.stringify({url,key}));
+    supabaseClient=window.supabase.createClient(url,key);
+    forceConfigView=false;
+    updateGateFields();
+    await initAuth();
+  }
+  gateStatus.textContent="Signing in...";
   const {error}=await supabaseClient.auth.signInWithPassword({email:gateEmail.value.trim(),password:gatePassword.value});
-  if(error){gateLoginStatus.textContent="Login failed: "+error.message;return}
+  if(error){gateStatus.textContent="Login failed: "+error.message;return}
   gatePassword.value="";
 });
-gateChangeConfig.addEventListener("click",()=>{gateConfigStatus.textContent="";showGate("config")});
-changeConnectionBtn.addEventListener("click",async()=>{if(supabaseClient)await supabaseClient.auth.signOut();showGate("config")});
+async function changeConnection(){
+  if(supabaseClient)await supabaseClient.auth.signOut();
+  forceConfigView=true;
+  gateStatus.textContent="";
+  showGate();
+}
+gateChangeConfig.addEventListener("click",changeConnection);
+changeConnectionBtn.addEventListener("click",changeConnection);
 logoutBtn.addEventListener("click",async()=>{if(supabaseClient)await supabaseClient.auth.signOut()});
 syncNow.addEventListener("click",fullSync);
 function bootAuth(){
@@ -505,7 +514,7 @@ function bootAuth(){
     supabaseClient=window.supabase.createClient(s.url,s.key);
     initAuth();
   }else{
-    showGate("config");
+    showGate();
   }
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,notes:s.notes||null,updated_at:new Date().toISOString()}}
