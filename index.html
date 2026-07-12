@@ -454,6 +454,8 @@ function readSettings(){
   }catch{return{}}
 }
 let authUser=null, forceConfigView=false;
+async function noOpLock(name,acquireTimeout,fn){return await fn()}
+function createSupabaseClient(url,key){return window.supabase.createClient(url,key,{auth:{lock:noOpLock}})}
 function updateGateFields(){
   const showConnection=!supabaseClient||forceConfigView;
   gateConnectionFields.classList.toggle("hidden",!showConnection);
@@ -490,13 +492,22 @@ gateForm.addEventListener("submit",async e=>{
     if(!url||!key){gateStatus.textContent="Enter your Supabase URL and key.";return}
     if(!window.supabase){gateStatus.textContent="Supabase library failed to load.";return}
     localStorage.setItem(SETTINGS_KEY,JSON.stringify({url,key}));
-    supabaseClient=window.supabase.createClient(url,key);
+    supabaseClient=createSupabaseClient(url,key);
     forceConfigView=false;
     updateGateFields();
     registerAuthListener();
   }
   gateStatus.textContent="Signing in...";
-  const {data,error}=await supabaseClient.auth.signInWithPassword({email:gateEmail.value.trim(),password:gatePassword.value});
+  const email=gateEmail.value.trim(), password=gatePassword.value;
+  const timeout=new Promise(r=>setTimeout(()=>r("TIMEOUT"),6000));
+  const result=await Promise.race([supabaseClient.auth.signInWithPassword({email,password}),timeout]);
+  if(result==="TIMEOUT"){
+    const {data}=await supabaseClient.auth.getSession();
+    if(data.session){gatePassword.value="";authUser=data.session.user;showApp();return}
+    gateStatus.textContent="Sign-in timed out. Please try again.";
+    return;
+  }
+  const {data,error}=result;
   if(error){gateStatus.textContent="Login failed: "+error.message;return}
   gatePassword.value="";
   if(data&&data.user){authUser=data.user;showApp()}
@@ -515,7 +526,7 @@ function bootAuth(){
   const s=readSettings();
   if(s.url&&s.key&&window.supabase){
     gateSupabaseUrl.value=s.url;gateSupabaseKey.value=s.key;
-    supabaseClient=window.supabase.createClient(s.url,s.key);
+    supabaseClient=createSupabaseClient(s.url,s.key);
     initAuth();
   }else{
     showGate();
