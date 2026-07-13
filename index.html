@@ -314,7 +314,7 @@ function extremeProjections(s){
   const fr=referenceRange(s);
   if(!Number.isFinite(fr))return{};
   const hr=fr/2, qr=fr/4, er=fr/8, total=fr+hr+qr+er;
-  const out={};
+  const out={combinedRange:total};
   if(Number.isFinite(s.extremeLow)){out.upFR=s.extremeLow+fr;out.upHR=s.extremeLow+hr;out.upQR=s.extremeLow+qr;out.upER=s.extremeLow+er;out.upTotal=s.extremeLow+total}
   if(Number.isFinite(s.extremeHigh)){out.downFR=s.extremeHigh-fr;out.downHR=s.extremeHigh-hr;out.downQR=s.extremeHigh-qr;out.downER=s.extremeHigh-er;out.downTotal=s.extremeHigh-total}
   return out;
@@ -443,7 +443,7 @@ function sideStats(arr){
 ${line("Sessions",e.length)}${line("FR",pct(hitRate(e,"frHit")))}${line("HR",pct(hitRate(e,"hrHit")))}${line("QR",pct(hitRate(e,"qrHit")))}${line("ER",pct(hitRate(e,"erHit")))}
 ${line("Avg Ref FR",fmt(avg(e.map(s=>s.fullRange))))}${line("Avg Ref HR",fmt(avg(e.map(s=>s.halfRange))))}${line("Avg Ref QR",fmt(avg(e.map(s=>s.quarterRange))))}${line("Avg Ref ER",fmt(avg(e.map(s=>s.eighthRange))))}
 ${line("Avg Current Range",fmt(avg(e.map(s=>s.currentRange))))}${line("Avg London Range",fmt(avg(e.map(s=>s.londonRange))))}${line("Avg NY Range",fmt(avg(e.map(s=>s.nyRange))))}${line("Expectancy",fmt(expectancy(e))+"R")}${line("Profit Factor",fmt(profitFactor(e)))}
-${line("Avg Upside Total",fmt(avg(e.map(s=>s.extremeProj?.upTotal))))}${line("Avg Downside Total",fmt(avg(e.map(s=>s.extremeProj?.downTotal))))}
+${line("Avg Upside Total Range",fmt(avg(e.map(s=>s.extremeProj?.combinedRange))))}${line("Avg Downside Total Range",fmt(avg(e.map(s=>s.extremeProj?.combinedRange))))}
 ${line("Upside Total Hit",pct(hitRate(e,"upTotalHit")))}${line("Downside Total Hit",pct(hitRate(e,"downTotalHit")))}
 <div class="sidetitle" style="margin-top:12px">FR BY SESSION</div>
 ${line("Weekly",pct(hitRate(e.filter(s=>s.sessionType==="Weekly"),"frHit")))}
@@ -498,7 +498,7 @@ function renderMetrics(){
  const session=sessionFilter.value;const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
  mSessions.textContent=arr.length;mFR.textContent=pct(hitRate(arr,"frHit"));mHR.textContent=pct(hitRate(arr,"hrHit"));mQR.textContent=pct(hitRate(arr,"qrHit"));mER.textContent=pct(hitRate(arr,"erHit"));mExp.textContent=fmt(expectancy(arr))+"R";barFR.style.width=(hitRate(arr,"frHit")*100)+"%";
  sessionStats.innerHTML=["Weekly","Daily","London","New York"].map(x=>{const a=arr.filter(s=>s.sessionType===x);return line(x+" FR",pct(hitRate(a,"frHit")))+line(x+" HR",pct(hitRate(a,"hrHit")))+line(x+" QR",pct(hitRate(a,"qrHit")))+line(x+" ER",pct(hitRate(a,"erHit")))}).join("");
- projectionStats.innerHTML=line("Average Reference FR",fmt(avg(arr.map(s=>s.fullRange))))+line("Average Reference HR",fmt(avg(arr.map(s=>s.halfRange))))+line("Average Reference QR",fmt(avg(arr.map(s=>s.quarterRange))))+line("Average Reference ER",fmt(avg(arr.map(s=>s.eighthRange))))+line("Average Current Session Range",fmt(avg(arr.map(s=>s.currentRange))))+line("Average London Range",fmt(avg(arr.map(s=>s.londonRange))))+line("Average New York Range",fmt(avg(arr.map(s=>s.nyRange))))+line("Average Upside Total",fmt(avg(arr.map(s=>s.extremeProj?.upTotal))))+line("Average Downside Total",fmt(avg(arr.map(s=>s.extremeProj?.downTotal))))+line("Upside Total Hit Rate",pct(hitRate(arr,"upTotalHit")))+line("Downside Total Hit Rate",pct(hitRate(arr,"downTotalHit")))+line("Profit Factor",fmt(profitFactor(arr)));
+ projectionStats.innerHTML=line("Average Reference FR",fmt(avg(arr.map(s=>s.fullRange))))+line("Average Reference HR",fmt(avg(arr.map(s=>s.halfRange))))+line("Average Reference QR",fmt(avg(arr.map(s=>s.quarterRange))))+line("Average Reference ER",fmt(avg(arr.map(s=>s.eighthRange))))+line("Average Current Session Range",fmt(avg(arr.map(s=>s.currentRange))))+line("Average London Range",fmt(avg(arr.map(s=>s.londonRange))))+line("Average New York Range",fmt(avg(arr.map(s=>s.nyRange))))+line("Average Upside Total Range",fmt(avg(arr.map(s=>s.extremeProj?.combinedRange))))+line("Average Downside Total Range",fmt(avg(arr.map(s=>s.extremeProj?.combinedRange))))+line("Upside Total Hit Rate",pct(hitRate(arr,"upTotalHit")))+line("Downside Total Hit Rate",pct(hitRate(arr,"downTotalHit")))+line("Profit Factor",fmt(profitFactor(arr)));
 }
 refreshDash.addEventListener("click",renderAll);viewMode.addEventListener("change",renderAll);sessionFilter.addEventListener("change",()=>{document.querySelectorAll(".quick").forEach(b=>b.classList.toggle("active",b.dataset.session===sessionFilter.value));renderAll()});focusDate.addEventListener("change",renderAll);
 document.querySelectorAll(".quick").forEach(b=>b.addEventListener("click",()=>{sessionFilter.value=b.dataset.session;document.querySelectorAll(".quick").forEach(x=>x.classList.toggle("active",x===b));renderAll()}));
