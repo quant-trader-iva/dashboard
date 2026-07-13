@@ -75,6 +75,7 @@
   </div>
 </div>
 <div id="appRoot" class="hidden">
+<div id="syncErrorBanner" class="hidden" style="background:#dc2626;color:white;padding:10px 18px;text-align:center;font-weight:800"></div>
 <header>
   <div>
     <h1>Trading Projection Dashboard v4</h1>
@@ -662,12 +663,28 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,low:r.low,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,notes:r.notes,updatedAt:r.updated_at}}
-async function syncUpsert(records){if(!supabaseClient||!authUser||!records.length)return;await supabaseClient.from("trading_sessions").upsert(records.map(toDb),{onConflict:"id"})}
-async function syncDelete(id){if(!supabaseClient||!authUser)return;await supabaseClient.from("trading_sessions").delete().eq("id",id)}
+function showSyncError(msg){syncErrorBanner.textContent=msg+" — your data is safely saved in this browser; click Sync Now in Settings to retry.";syncErrorBanner.classList.remove("hidden")}
+function clearSyncError(){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent=""}
+async function syncUpsert(records){
+  if(!supabaseClient||!authUser||!records.length)return;
+  try{
+    const {error}=await supabaseClient.from("trading_sessions").upsert(records.map(toDb),{onConflict:"id"});
+    if(error){showSyncError(`Failed to sync ${records.length} session${records.length>1?"s":""} to the cloud: ${error.message}`);return}
+    clearSyncError();
+  }catch(err){showSyncError(`Failed to sync ${records.length} session${records.length>1?"s":""} to the cloud: ${err.message}`)}
+}
+async function syncDelete(id){
+  if(!supabaseClient||!authUser)return;
+  try{
+    const {error}=await supabaseClient.from("trading_sessions").delete().eq("id",id);
+    if(error){showSyncError(`Failed to sync deletion to the cloud: ${error.message}`);return}
+    clearSyncError();
+  }catch(err){showSyncError(`Failed to sync deletion to the cloud: ${err.message}`)}
+}
 async function fullSync(){
   if(!supabaseClient){syncStatus.textContent="Supabase is not configured.";return}
   if(!authUser){syncStatus.textContent="Log in first to sync.";return}
-  syncStatus.textContent="Syncing...";const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});if(error){syncStatus.textContent="Sync failed: "+error.message;return}const map=new Map();[...sessions,...data.map(fromDb)].forEach(s=>map.set(s.id,s));sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert(sessions);syncStatus.textContent=`Synced ${sessions.length} sessions.`;renderAll()}
+  syncStatus.textContent="Syncing...";const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});if(error){syncStatus.textContent="Sync failed: "+error.message;showSyncError("Sync failed: "+error.message);return}const map=new Map();[...sessions,...data.map(fromDb)].forEach(s=>map.set(s.id,s));sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert(sessions);syncStatus.textContent=`Synced ${sessions.length} sessions.`;clearSyncError();renderAll()}
 bootAuth();
 </script>
 </body>
