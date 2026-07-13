@@ -51,6 +51,8 @@ create table if not exists public.trading_sessions (
   up_total_hit text check (up_total_hit in ('Yes','No') or up_total_hit is null),
   down_total_hit text check (down_total_hit in ('Yes','No') or down_total_hit is null),
 
+  news_events jsonb default '[]'::jsonb,
+
   notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
