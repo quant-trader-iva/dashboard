@@ -95,7 +95,12 @@
     <div class="toolbar">
       <div><label>Dashboard View</label><select id="viewMode"><option>Weekly</option><option>Daily</option></select></div>
       <div><label>Session Filter</label><select id="sessionFilter"><option>All</option><option>Weekly</option><option>Daily</option><option>London</option><option>New York</option></select></div>
-      <div><label>Week Start / Day</label><input type="date" id="focusDate"/></div>
+      <div><label>Week Start / Day</label>
+        <div style="position:relative">
+          <input type="text" id="focusDateDisplay" placeholder="DD/MM/YY" readonly style="cursor:pointer"/>
+          <input type="date" id="focusDate" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;overflow:hidden;top:0;left:0"/>
+        </div>
+      </div>
       <div><button class="primary" id="refreshDash">Refresh</button></div>
     </div>
     <div class="session-buttons">
@@ -343,7 +348,11 @@ function loadSessions(){
 function saveSessions(){localStorage.setItem(STORAGE_KEY,JSON.stringify(sessions))}
 function showTab(name){document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(name).classList.remove("hidden");document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));renderAll()}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
-function setDefaultDate(){if(!date.value)date.value=new Date().toISOString().slice(0,10); if(!focusDate.value)focusDate.value=new Date().toISOString().slice(0,10)}
+function formatDMY(iso){if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}/${m}/${y.slice(2)}`}
+function syncFocusDateDisplay(){focusDateDisplay.value=formatDMY(focusDate.value)}
+focusDateDisplay.addEventListener("click",()=>{if(focusDate.showPicker){focusDate.showPicker()}else{focusDate.focus();focusDate.click()}});
+focusDate.addEventListener("change",syncFocusDateDisplay);
+function setDefaultDate(){if(!date.value)date.value=new Date().toISOString().slice(0,10); if(!focusDate.value)focusDate.value=new Date().toISOString().slice(0,10); syncFocusDateDisplay()}
 setDefaultDate();
 
 function findPriorSession(pred){const list=sessions.filter(pred).sort((a,b)=>(a.date||"").localeCompare(b.date||""));return list.length?list[list.length-1]:null}
