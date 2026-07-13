@@ -38,6 +38,7 @@
     .head{background:#f3f4f6;color:#111827;font-weight:900;min-height:58px;flex-direction:column;gap:3px}
     .subhead{background:#3E7F8C;color:white;font-weight:900}.ref{background:var(--purple);color:white;font-weight:900}.pink{background:var(--magenta);color:white}.yellow{background:var(--yellow);color:#111827}.cream{background:var(--cream);color:#111827}.brown{background:var(--brown);color:white}.orange{background:#f6b26b;color:white;font-weight:800}
     .bull{background:#16a34a;color:white}.bear{background:#dc2626;color:white}.neutral{background:#334155;color:white}
+    .syncbanner{padding:10px 18px;text-align:center;font-weight:800}
     .bull-light{background:#4ade80;color:#052e16}.bear-light{background:#f87171;color:#450a0a}
     .side{grid-row:span 40;background:#0f172a;align-items:stretch;justify-content:flex-start;padding:0}
     .sideinner{width:100%;padding:12px}.sidetitle{background:var(--blue);padding:10px;border-radius:10px;text-align:center;font-weight:900;margin-bottom:8px}
@@ -75,6 +76,7 @@
   </div>
 </div>
 <div id="appRoot" class="hidden">
+<div id="syncErrorBanner" class="bear syncbanner hidden"></div>
 <header>
   <div>
     <h1>Trading Projection Dashboard v4</h1>
@@ -267,9 +269,12 @@
 <script>
 const STORAGE_KEY="trading_projection_sessions_v4";
 const SETTINGS_KEY="trading_projection_settings_v4";
+const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
 const LEGACY_STORAGE_KEY="trading_projection_sessions_v3";
 const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
-let sessions=loadSessions(), filtered=[], supabaseClient=null;
+function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
+function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stringify(pendingDeletes))}
+let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 
 function n(v){const x=Number(v);return Number.isFinite(x)?x:null}
@@ -662,12 +667,55 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,low:r.low,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,notes:r.notes,updatedAt:r.updated_at}}
-async function syncUpsert(records){if(!supabaseClient||!authUser||!records.length)return;await supabaseClient.from("trading_sessions").upsert(records.map(toDb),{onConflict:"id"})}
-async function syncDelete(id){if(!supabaseClient||!authUser)return;await supabaseClient.from("trading_sessions").delete().eq("id",id)}
+let syncErrors=new Map();
+function renderSyncErrors(){
+  if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
+  syncErrorBanner.textContent=[...syncErrors.values()].join(" | ");
+  syncErrorBanner.classList.remove("hidden");
+}
+function showSyncError(key,msg){syncErrors.set(key,msg);renderSyncErrors()}
+function clearSyncError(key){syncErrors.delete(key);renderSyncErrors()}
+function errMsg(err){return err&&err.message?err.message:String(err)}
+async function runSyncOp(key,fn,buildMsg){
+  try{
+    const {error}=await fn();
+    if(error){showSyncError(key,buildMsg(error.message));return false}
+    clearSyncError(key);
+    return true;
+  }catch(err){showSyncError(key,buildMsg(errMsg(err)));return false}
+}
+async function syncUpsert(records){
+  if(!supabaseClient||!authUser||!records.length)return false;
+  const key=records.length===1?"upsert:"+records[0].id:"upsert:bulk";
+  return runSyncOp(key,
+    ()=>supabaseClient.from("trading_sessions").upsert(records.map(toDb),{onConflict:"id"}),
+    msg=>`Failed to sync ${records.length} session${records.length>1?"s":""} to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+}
+async function syncDelete(id){
+  if(!supabaseClient||!authUser)return false;
+  const ok=await runSyncOp("delete:"+id,
+    ()=>supabaseClient.from("trading_sessions").delete().eq("id",id),
+    msg=>`Failed to sync a deletion to the cloud: ${msg}. The session was removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+  if(ok){pendingDeletes=pendingDeletes.filter(x=>x!==id)}else if(!pendingDeletes.includes(id)){pendingDeletes.push(id)}
+  savePendingDeletes();
+  return ok;
+}
 async function fullSync(){
   if(!supabaseClient){syncStatus.textContent="Supabase is not configured.";return}
   if(!authUser){syncStatus.textContent="Log in first to sync.";return}
-  syncStatus.textContent="Syncing...";const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});if(error){syncStatus.textContent="Sync failed: "+error.message;return}const map=new Map();[...sessions,...data.map(fromDb)].forEach(s=>map.set(s.id,s));sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert(sessions);syncStatus.textContent=`Synced ${sessions.length} sessions.`;renderAll()}
+  syncStatus.textContent="Syncing...";
+  for(const id of [...pendingDeletes]){await syncDelete(id)}
+  const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});
+  if(error){syncStatus.textContent="Sync failed: "+error.message;showSyncError("fullsync:select","Sync failed: "+error.message);return}
+  clearSyncError("fullsync:select");
+  const map=new Map();
+  [...sessions,...data.map(fromDb)].filter(s=>!pendingDeletes.includes(s.id)).forEach(s=>map.set(s.id,s));
+  sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  saveSessions();
+  const ok=await syncUpsert(sessions);
+  syncStatus.textContent=ok?`Synced ${sessions.length} sessions.`:"Some sessions failed to sync — see the banner above.";
+  renderAll();
+}
 bootAuth();
 </script>
 </body>
