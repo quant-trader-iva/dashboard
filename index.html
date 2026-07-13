@@ -38,6 +38,7 @@
     .head{background:#f3f4f6;color:#111827;font-weight:900;min-height:58px;flex-direction:column;gap:3px}
     .subhead{background:#3E7F8C;color:white;font-weight:900}.ref{background:var(--purple);color:white;font-weight:900}.pink{background:var(--magenta);color:white}.yellow{background:var(--yellow);color:#111827}.cream{background:var(--cream);color:#111827}.brown{background:var(--brown);color:white}.orange{background:#f6b26b;color:white;font-weight:800}
     .bull{background:#16a34a;color:white}.bear{background:#dc2626;color:white}.neutral{background:#334155;color:white}
+    .bull-light{background:#4ade80;color:#052e16}.bear-light{background:#f87171;color:#450a0a}
     .side{grid-row:span 40;background:#0f172a;align-items:stretch;justify-content:flex-start;padding:0}
     .sideinner{width:100%;padding:12px}.sidetitle{background:var(--blue);padding:10px;border-radius:10px;text-align:center;font-weight:900;margin-bottom:8px}
     .statline{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline b{color:white}
@@ -464,8 +465,8 @@ function renderProjectionGrid(){
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
-    ["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull"],
-    ["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear"],
+    ["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull-light"],["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],
+    ["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear-light"],["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],
     ["Projection FR",s=>fmt(s.targets?.FR),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER),"cream","erHit","hit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
