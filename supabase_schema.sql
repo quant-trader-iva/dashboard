@@ -1,3 +1,9 @@
+-- NOTE: `create table if not exists` below does NOT add new columns to a
+-- table that already exists. Every time a column is added here, an existing
+-- deployed database needs the matching ALTER TABLE run manually, e.g.:
+--   alter table public.trading_sessions add column if not exists news_events jsonb default '[]'::jsonb;
+-- Skipping this breaks sync for ALL sessions (not just ones using the new
+-- field), since toDb() sends every column on every upsert.
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -50,6 +56,8 @@ create table if not exists public.trading_sessions (
   er_hit text check (er_hit in ('Yes','No') or er_hit is null),
   up_total_hit text check (up_total_hit in ('Yes','No') or up_total_hit is null),
   down_total_hit text check (down_total_hit in ('Yes','No') or down_total_hit is null),
+
+  news_events jsonb default '[]'::jsonb,
 
   notes text,
   created_at timestamptz default now(),

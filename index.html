@@ -50,6 +50,7 @@
     .refgroup{display:contents}.refgroup.hidden{display:none}
     input.auto,input.auto:focus{background:#0b1220;color:#94a3b8;cursor:not-allowed;border-color:#334155}
     .cellinput{padding:4px 6px;text-align:center;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);border-radius:6px;color:white;font-size:13px}
+    .newsrow{display:flex;gap:8px;margin-bottom:8px;align-items:center}.newsrow .newsName{flex:2}.newsrow .newsImpact{flex:1}.newsrow .removeNewsEvent{flex:0 0 auto}
     .gate{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#020617,#111827 55%,#1e293b);padding:20px}
     .gate.hidden{display:none}
     .gatecard{max-width:420px;width:100%}
@@ -127,6 +128,7 @@
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
+    <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
   </div>
 </section>
 
@@ -194,6 +196,28 @@
 
         <div><label>QR Hit</label><select id="qrHit"><option>Yes</option><option>No</option></select></div>
         <div><label>ER Hit</label><select id="erHit"><option>Yes</option><option>No</option></select></div>
+        <div style="grid-column:1/-1">
+          <label>News Events (USD, High/Medium impact)</label>
+          <div id="newsEventsList"></div>
+          <button type="button" id="addNewsEvent" style="margin-top:4px">+ Add News Event</button>
+          <datalist id="newsEventSuggestions">
+            <option value="Core CPI"></option>
+            <option value="CPI"></option>
+            <option value="Non-Farm Payrolls (NFP)"></option>
+            <option value="ISM Manufacturing PMI"></option>
+            <option value="ISM Services PMI"></option>
+            <option value="Initial Jobless Claims"></option>
+            <option value="Fed Rate Decision"></option>
+            <option value="FOMC Statement"></option>
+            <option value="Retail Sales"></option>
+            <option value="Core Retail Sales"></option>
+            <option value="GDP"></option>
+            <option value="PPI"></option>
+            <option value="Unemployment Rate"></option>
+            <option value="Average Hourly Earnings"></option>
+            <option value="Fed Chair Speech"></option>
+          </datalist>
+        </div>
         <div style="grid-column:3/-1"><label>Notes</label><textarea id="notes" placeholder="Order-flow notes: delta, absorption, VPOC, profile shape, participants, execution..."></textarea></div>
       </div>
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
@@ -353,7 +377,7 @@ function loadSessions(){
 }
 function saveSessions(){localStorage.setItem(STORAGE_KEY,JSON.stringify(sessions))}
 function showTab(name){document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(name).classList.remove("hidden");document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));renderAll()}
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="entry")resetEntryForm();showTab(b.dataset.tab)}));
 function formatDMY(iso){if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}/${m}/${y.slice(2)}`}
 function syncFocusDateDisplay(){focusDateDisplay.value=formatDMY(focusDate.value)}
 focusDateDisplay.addEventListener("click",()=>{if(focusDate.showPicker){focusDate.showPicker()}else{focusDate.focus();focusDate.click()}});
@@ -390,10 +414,31 @@ sessionType.addEventListener("change",updateReferenceFields);
 date.addEventListener("change",updateReferenceFields);
 updateReferenceFields();
 
-function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();return o}
-function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});updateReferenceFields();showTab("entry")}
-entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);entryForm.reset();recordId.value="";setDefaultDate();updateReferenceFields();showTab("dashboard")});
-clearForm.addEventListener("click",()=>{entryForm.reset();recordId.value="";setDefaultDate();updateReferenceFields()});
+function addNewsEventRow(name,impact){
+  const row=document.createElement("div");row.className="newsrow";
+  const nameInput=document.createElement("input");
+  nameInput.type="text";nameInput.className="newsName";nameInput.setAttribute("list","newsEventSuggestions");nameInput.placeholder="Event name (e.g. Core CPI)";nameInput.value=name||"";
+  const select=document.createElement("select");select.className="newsImpact";
+  ["High","Medium"].forEach(v=>{const o=document.createElement("option");o.textContent=v;select.appendChild(o)});
+  select.value=impact==="Medium"?"Medium":"High";
+  const removeBtn=document.createElement("button");removeBtn.type="button";removeBtn.className="removeNewsEvent";removeBtn.textContent="✕";
+  removeBtn.addEventListener("click",()=>row.remove());
+  row.appendChild(nameInput);row.appendChild(select);row.appendChild(removeBtn);
+  newsEventsList.appendChild(row);
+}
+addNewsEvent.addEventListener("click",()=>addNewsEventRow("","High"));
+function getNewsEventsFromForm(){
+  return [...newsEventsList.querySelectorAll(".newsrow")].map(row=>({name:row.querySelector(".newsName").value.trim(),impact:row.querySelector(".newsImpact").value})).filter(ev=>ev.name);
+}
+function setNewsEventsInForm(events){
+  newsEventsList.innerHTML="";
+  (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact));
+}
+function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
+function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();showTab("entry")}
+function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields()}
+entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
+clearForm.addEventListener("click",resetEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
 function editableCell(s,field,cls=""){
@@ -521,13 +566,7 @@ document.querySelectorAll(".quick").forEach(b=>b.addEventListener("click",()=>{s
 function renderEdgeDecay(){
   const days=["Monday","Tuesday","Wednesday","Thursday","Friday"];
   const daily=enrich(sessions).filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
-  const rows=days.map(d=>{
-    const arr=daily.filter(s=>s.day===d);
-    const n=arr.length;
-    const breaksHigh=n?arr.filter(s=>s.high>s.referenceHigh).length/n:0;
-    const breaksLow=n?arr.filter(s=>s.low<s.referenceLow).length/n:0;
-    return{day:d,n,breaksHigh,breaksLow};
-  });
+  const rows=days.map(d=>({day:d,...newsBreachStats(daily.filter(s=>s.day===d))}));
   const total=rows.reduce((s,r)=>s+r.n,0);
   edgeDecayNote.textContent=`Daily High/Low breach rate vs. the previous day, split by weekday (n=${total} total${total&&total<40?" — small samples, read directionally only":""}).`;
   edgeDecayTable.innerHTML=`<thead><tr><th>Day</th><th>n</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.day}</td><td>${r.n}</td><td>${r.n?pct(r.breaksHigh):""}</td><td>${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
@@ -563,16 +602,47 @@ function renderRangeCorr(){
     :`<b>Prior-day range &rarr; current-day range:</b> Pearson r = ${r.toFixed(3)} (n=${pairs.length}). A ${corrStrength(r)} relationship${pairs.length<40?" — small sample, read directionally only":""}.`;
   rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody><tr><td>NY beyond London High</td><td>${breachHigh.length?fmt(avg(breachHigh)):""}</td><td>${breachHigh.length}</td></tr><tr><td>NY beyond London Low</td><td>${breachLow.length?fmt(avg(breachLow)):""}</td><td>${breachLow.length}</td></tr></tbody>`;
 }
+function newsBreachStats(arr){
+  const n=arr.length;
+  return{
+    n,
+    avgRange:avg(arr.map(s=>s.currentRange)),
+    breaksHigh:n?arr.filter(s=>s.high>s.referenceHigh).length/n:0,
+    breaksLow:n?arr.filter(s=>s.low<s.referenceLow).length/n:0
+  };
+}
+function renderNewsImpact(){
+  const daily=enrich(sessions).filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
+  const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
+  const noNews=daily.filter(s=>!(s.newsEvents||[]).length);
+  const nd=newsBreachStats(newsDay), nn=newsBreachStats(noNews);
+  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody><tr><td>News Day</td><td>${nd.n}</td><td>${nd.n?fmt(nd.avgRange):""}</td><td>${nd.n?pct(nd.breaksHigh):""}</td><td>${nd.n?pct(nd.breaksLow):""}</td></tr><tr><td>No News</td><td>${nn.n}</td><td>${nn.n?fmt(nn.avgRange):""}</td><td>${nn.n?pct(nn.breaksHigh):""}</td><td>${nn.n?pct(nn.breaksLow):""}</td></tr></tbody>`;
+  const byType=new Map();
+  daily.forEach(s=>{
+    const seenKeys=new Set();
+    (s.newsEvents||[]).forEach(ev=>{
+      const key=String(ev.name||"").trim().toLowerCase();
+      if(!key||seenKeys.has(key))return;
+      seenKeys.add(key);
+      if(!byType.has(key))byType.set(key,{name:String(ev.name).trim(),impacts:new Set(),sessions:[]});
+      const t=byType.get(key);
+      t.impacts.add(ev.impact);
+      t.sessions.push(s);
+    });
+  });
+  const rows=[...byType.values()].map(t=>({name:t.name,impact:t.impacts.size>1?"Mixed":[...t.impacts][0],...newsBreachStats(t.sessions)})).sort((a,b)=>b.n-a.n);
+  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td>${r.impact}</td><td>${r.n}</td><td>${fmt(r.avgRange)}</td><td>${pct(r.breaksHigh)}</td><td>${pct(r.breaksLow)}</td></tr>`).join(""):'<tr><td colspan="6">No news events logged yet.</td></tr>'}</tbody>`;
+}
 function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
 window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s)}
-window.deleteSession=async id=>{if(!confirm("Delete this session?"))return;sessions=sessions.filter(x=>x.id!==id);saveSessions();await syncDelete(id);renderAll()}
+window.deleteSession=async id=>{if(!confirm("Delete this session?"))return;sessions=sessions.filter(x=>x.id!==id);saveSessions();await syncDelete(id);if(recordId.value===id)resetEntryForm();renderAll()}
 function applyResearch(){let arr=enrich(sessions);if(fSession.value)arr=arr.filter(s=>s.sessionType===fSession.value);if(fDayType.value)arr=arr.filter(s=>s.dayType===fDayType.value);if(fOpenType.value)arr=arr.filter(s=>s.openType===fOpenType.value);if(fBias.value)arr=arr.filter(s=>s.bias===fBias.value);const vz=n(fVolumeZ.value);if(Number.isFinite(vz))arr=arr.filter(s=>Number.isFinite(s.volumeZ)&&s.volumeZ>=vz);filtered=arr;rSessions.textContent=arr.length;rFR.textContent=pct(hitRate(arr,"frHit"));rHR.textContent=pct(hitRate(arr,"hrHit"));rQR.textContent=pct(hitRate(arr,"qrHit"));rER.textContent=pct(hitRate(arr,"erHit"));rExp.textContent=fmt(expectancy(arr))+"R";renderTable("researchTable",arr)}
 applyFilters.addEventListener("click",applyResearch);
-function renderAll(){renderProjectionGrid();renderMetrics();renderEdgeDecay();renderRangeCorr();renderTable("dataTable",sessions);applyResearch()}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderNewsImpact,()=>renderTable("dataTable",sessions),applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
-exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.csv",[fields.join(",")].concat(sessions.map(s=>fields.map(f=>csvEscape(s[f])).join(","))).join("\n"),"text/csv"));
+exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.csv",[[...fields,"newsEvents"].join(",")].concat(sessions.map(s=>[...fields.map(f=>csvEscape(s[f])),csvEscape(JSON.stringify(s.newsEvents||[]))].join(","))).join("\n"),"text/csv"));
 downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify(sessions,null,2),"application/json"));
 importJson.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(!Array.isArray(data))return alert("Invalid file");sessions=data;saveSessions();renderAll()});
 clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data?"))return;sessions=[];saveSessions();renderAll()});
@@ -665,8 +735,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,low:r.low,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,low:r.low,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
