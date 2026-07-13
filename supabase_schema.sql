@@ -48,6 +48,8 @@ create table if not exists public.trading_sessions (
   hr_hit text check (hr_hit in ('Yes','No') or hr_hit is null),
   qr_hit text check (qr_hit in ('Yes','No') or qr_hit is null),
   er_hit text check (er_hit in ('Yes','No') or er_hit is null),
+  up_total_hit text check (up_total_hit in ('Yes','No') or up_total_hit is null),
+  down_total_hit text check (down_total_hit in ('Yes','No') or down_total_hit is null),
 
   notes text,
   created_at timestamptz default now(),
