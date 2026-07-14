@@ -397,7 +397,7 @@ function loadSessions(){
 }
 function saveSessions(){localStorage.setItem(STORAGE_KEY,JSON.stringify(sessions))}
 function showTab(name){document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(name).classList.remove("hidden");document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));renderAll()}
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="entry")resetEntryForm();showTab(b.dataset.tab)}));
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="entry"&&entryFormError.style.display!=="block")resetEntryForm();showTab(b.dataset.tab)}));
 function formatDMY(iso){if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}/${m}/${y.slice(2)}`}
 function syncFocusDateDisplay(){focusDateDisplay.value=formatDMY(focusDate.value)}
 focusDateDisplay.addEventListener("click",()=>{if(focusDate.showPicker){focusDate.showPicker()}else{focusDate.focus();focusDate.click()}});
@@ -430,8 +430,8 @@ function updateReferenceFields(){
     setRef("londonHigh","londonLow",sessions.find(s=>s.sessionType==="London"&&s.date===d)||null,"same-day London");
   }
 }
-sessionType.addEventListener("change",updateReferenceFields);
-date.addEventListener("change",updateReferenceFields);
+sessionType.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
+date.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
 updateReferenceFields();
 
 function addNewsEventRow(name,impact,time){
@@ -525,7 +525,7 @@ async function fetchPosSizing(){
 loadPosSizingIntoForm();
 [psAccountSize,psCurrency,psLeverage,psLotSize,psPointValue,psNotional].forEach(el=>el.addEventListener("input",renderPosSizing));
 renderPosSizing();
-entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const dup=sessions.find(x=>x.date===s.date&&x.sessionType===s.sessionType&&x.id!==s.id);if(dup){entryFormError.textContent=`An entry for ${s.sessionType} session on ${s.date} already exists. Edit that entry instead, or change the Date/Session Type.`;entryFormError.style.display="block";return}entryFormError.style.display="none";const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
+entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const original=sessions.find(x=>x.id===s.id);const keyChanged=!original||original.date!==s.date||original.sessionType!==s.sessionType;const dup=keyChanged?sessions.find(x=>x.date===s.date&&x.sessionType===s.sessionType&&x.id!==s.id):null;if(dup){entryFormError.textContent=`An entry for ${s.sessionType} session on ${s.date} already exists. Edit that entry instead, or change the Date/Session Type.`;entryFormError.style.display="block";return}entryFormError.style.display="none";const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
 clearForm.addEventListener("click",resetEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
@@ -757,6 +757,9 @@ importJson.addEventListener("change",async e=>{
     if(data.posSizing){localStorage.setItem(POS_SIZING_KEY,JSON.stringify(data.posSizing));applyPosSizingToForm(data.posSizing);renderPosSizingSummary(data.posSizing)}
   }else{return alert("Invalid file")}
   saveSessions();renderAll();
+  const seen=new Set(),dupKeys=new Set();
+  sessions.forEach(s=>{const k=s.date+"|"+s.sessionType;if(seen.has(k))dupKeys.add(k);else seen.add(k)});
+  if(dupKeys.size)alert(`Warning: this backup has ${dupKeys.size} Date+Session Type combination(s) with more than one entry (e.g. ${[...dupKeys][0]}). Delete the extra entries in the Data tab to avoid duplicate rows.`);
 });
 clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data?"))return;sessions=[];saveSessions();renderAll()});
 

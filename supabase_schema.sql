@@ -92,6 +92,17 @@ create index if not exists trading_sessions_day_type_idx on public.trading_sessi
 create index if not exists trading_sessions_open_type_idx on public.trading_sessions(open_type);
 create index if not exists trading_sessions_user_id_idx on public.trading_sessions(user_id);
 
+-- Enforces one session per user/date/session_type at the database level, as a
+-- backstop for the app's client-side duplicate check (which only guards the
+-- Session Entry form and can't see rows written by another device/tab before
+-- a sync, or rows brought in via Import Backup).
+-- On an EXISTING database, this will fail if duplicate (user_id, date,
+-- session_type) rows already exist — find and delete/merge them first, e.g.:
+--   select user_id, date, session_type, count(*) from public.trading_sessions
+--   group by 1,2,3 having count(*) > 1;
+create unique index if not exists trading_sessions_user_date_type_uidx
+  on public.trading_sessions(user_id, date, session_type);
+
 -- Position Sizing calculator settings — one row per user, synced across devices.
 create table if not exists public.position_sizing (
   user_id uuid primary key references auth.users(id),
