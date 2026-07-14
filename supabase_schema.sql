@@ -89,3 +89,34 @@ create index if not exists trading_sessions_session_type_idx on public.trading_s
 create index if not exists trading_sessions_day_type_idx on public.trading_sessions(day_type);
 create index if not exists trading_sessions_open_type_idx on public.trading_sessions(open_type);
 create index if not exists trading_sessions_user_id_idx on public.trading_sessions(user_id);
+
+-- Position Sizing calculator settings — one row per user, synced across devices.
+create table if not exists public.position_sizing (
+  user_id uuid primary key references auth.users(id),
+  account_size numeric,
+  currency text,
+  leverage text,
+  lot_size numeric,
+  point_value numeric,
+  notional numeric,
+  updated_at timestamptz default now()
+);
+
+alter table public.position_sizing enable row level security;
+
+drop policy if exists "select own position sizing" on public.position_sizing;
+drop policy if exists "insert own position sizing" on public.position_sizing;
+drop policy if exists "update own position sizing" on public.position_sizing;
+drop policy if exists "delete own position sizing" on public.position_sizing;
+
+create policy "select own position sizing" on public.position_sizing
+for select using (auth.uid() = user_id);
+
+create policy "insert own position sizing" on public.position_sizing
+for insert with check (auth.uid() = user_id);
+
+create policy "update own position sizing" on public.position_sizing
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own position sizing" on public.position_sizing
+for delete using (auth.uid() = user_id);
