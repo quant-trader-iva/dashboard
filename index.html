@@ -353,18 +353,19 @@ function referenceLabel(s){
   return "";
 }
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
+function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
 function targets(s){
   const base=Number.isFinite(s.openRangeClose)?s.openRangeClose:(Number.isFinite(s.openRangeOpen)?s.openRangeOpen:null);
   const fr=referenceRange(s);
   if(!Number.isFinite(base)||!Number.isFinite(fr))return{};
   const d=s.bias==="Down"?-1:1;
-  const hr=fr/2, qr=fr/4, er=fr/8;
-  return{FR:base+d*fr,HR:base+d*hr,QR:base+d*qr,ER:base+d*er,Total:base+d*(fr+hr+qr+er)}
+  const{hr,qr,er,total}=comboRange(fr);
+  return{FR:base+d*fr,HR:base+d*hr,QR:base+d*qr,ER:base+d*er,Total:base+d*total}
 }
 function extremeProjections(s){
   const fr=referenceRange(s);
   if(!Number.isFinite(fr))return{};
-  const hr=fr/2, qr=fr/4, er=fr/8, total=fr+hr+qr+er;
+  const{hr,qr,er,total}=comboRange(fr);
   const out={combinedRange:total};
   if(Number.isFinite(s.extremeLow)){out.upFR=s.extremeLow+fr;out.upHR=s.extremeLow+hr;out.upQR=s.extremeLow+qr;out.upER=s.extremeLow+er;out.upTotal=s.extremeLow+total}
   if(Number.isFinite(s.extremeHigh)){out.downFR=s.extremeHigh-fr;out.downHR=s.extremeHigh-hr;out.downQR=s.extremeHigh-qr;out.downER=s.extremeHigh-er;out.downTotal=s.extremeHigh-total}
