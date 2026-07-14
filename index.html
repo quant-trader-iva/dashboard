@@ -690,17 +690,30 @@ function corrStrength(r){
   if(a<0.9)return`strong ${dir}`;
   return`very strong ${dir}`;
 }
+function breachExtensions(all,sessionType){
+  const arr=all.filter(s=>s.sessionType===sessionType);
+  return{
+    high:arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.referenceHigh)&&s.high>s.referenceHigh).map(s=>s.high-s.referenceHigh),
+    low:arr.filter(s=>Number.isFinite(s.low)&&Number.isFinite(s.referenceLow)&&s.low<s.referenceLow).map(s=>s.referenceLow-s.low)
+  };
+}
 function renderRangeCorr(){
-  const daily=enrich(sessions).filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.referenceRange)&&Number.isFinite(s.currentRange));
+  const all=enrich(sessions);
+  const daily=all.filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.referenceRange)&&Number.isFinite(s.currentRange));
   const pairs=daily.map(s=>[s.referenceRange,s.currentRange]);
   const r=pearsonR(pairs);
-  const ny=enrich(sessions).filter(s=>s.sessionType==="New York"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
-  const breachHigh=ny.filter(s=>s.high>s.referenceHigh).map(s=>s.high-s.referenceHigh);
-  const breachLow=ny.filter(s=>s.low<s.referenceLow).map(s=>s.referenceLow-s.low);
+  const ny=breachExtensions(all,"New York");
+  const london=breachExtensions(all,"London");
   rangeCorrNote.innerHTML=r===null
     ?"Not enough Daily sessions with both a previous-day and current-day range yet (need at least 2)."
     :`<b>Prior-day range &rarr; current-day range:</b> Pearson r = ${r.toFixed(3)} (n=${pairs.length}). A ${corrStrength(r)} relationship${pairs.length<40?" — small sample, read directionally only":""}.`;
-  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody><tr><td>NY beyond London High</td><td>${breachHigh.length?fmt(avg(breachHigh)):""}</td><td>${breachHigh.length}</td></tr><tr><td>NY beyond London Low</td><td>${breachLow.length?fmt(avg(breachLow)):""}</td><td>${breachLow.length}</td></tr></tbody>`;
+  const breachRows=[
+    ["NY beyond London High",ny.high],
+    ["NY beyond London Low",ny.low],
+    ["London beyond Previous NY Day High",london.high],
+    ["London beyond Previous NY Day Low",london.low]
+  ];
+  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachRows.map(([label,arr])=>`<tr><td>${label}</td><td>${arr.length?fmt(avg(arr)):""}</td><td>${arr.length}</td></tr>`).join("")}</tbody>`;
 }
 function newsBreachStats(arr){
   const n=arr.length;
