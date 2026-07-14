@@ -34,8 +34,9 @@
     .session-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.session-buttons button{background:#1f2937}.session-buttons button.active{background:var(--cyan);color:#082f49}
     .dash-grid{display:grid;grid-template-columns:250px repeat(5,minmax(190px,1fr)) 350px;gap:0;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:#08111f}
     .cell{min-height:35px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px}
-    .labelcell{justify-content:flex-start;background:var(--orange);color:white;font-weight:900;text-align:left}
+    .labelcell{justify-content:flex-start;background:var(--orange);color:white;font-weight:900;text-align:left;position:sticky;left:0;z-index:2}
     .head{background:#f3f4f6;color:#111827;font-weight:900;min-height:58px;flex-direction:column;gap:3px}
+    .head.corner{position:sticky;left:0;z-index:3}
     .subhead{background:#3E7F8C;color:white;font-weight:900}.ref{background:var(--purple);color:white;font-weight:900}.pink{background:var(--magenta);color:white}.yellow{background:var(--yellow);color:#111827}.cream{background:var(--cream);color:#111827}.brown{background:var(--brown);color:white}.orange{background:#f6b26b;color:white;font-weight:800}
     .bull{background:#16a34a;color:white}.bear{background:#dc2626;color:white}.neutral{background:#334155;color:white}
     .syncbanner{padding:10px 18px;text-align:center;font-weight:800}
@@ -642,7 +643,7 @@ function renderProjectionGrid(){
     ["Projection FR",s=>fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange),"cream","erHit","hit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
-  root.appendChild(cell("Metric","head"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${formatDMY(s.date)}<br><span class="pill">${s.sessionType||""}</span>`,"head")));
+  root.appendChild(cell("Metric","head corner"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${formatDMY(s.date)}<br><span class="pill">${s.sessionType||""}</span>`,"head")));
   const sideCell=cell(sideStats(arr),"side");sideCell.style.gridRow=`span ${rows.length+1}`;root.appendChild(sideCell);
   rows.forEach(([lab,fn,cls,editField,editType])=>{root.appendChild(cell(lab,"labelcell"));days.forEach(s=>root.appendChild(editType==="hit"?editableHitCell(s,fn(s),editField,cls||biasCls(s)):editType==="select"?editableSelectCell(s,editField,cls||biasCls(s)):editField?editableCell(s,editField,cls||biasCls(s)):cell(fn(s),cls||biasCls(s))))})
 }
