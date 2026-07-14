@@ -669,7 +669,7 @@ function renderEdgeDecay(){
   const rows=days.map(d=>({day:d,...newsBreachStats(daily.filter(s=>s.day===d))}));
   const total=rows.reduce((s,r)=>s+r.n,0);
   edgeDecayNote.textContent=`Daily High/Low breach rate vs. the previous day, split by weekday (n=${total} total${total&&total<40?" — small samples, read directionally only":""}).`;
-  edgeDecayTable.innerHTML=`<thead><tr><th>Day</th><th>n</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.day}</td><td>${r.n}</td><td>${r.n?pct(r.breaksHigh):""}</td><td>${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
+  edgeDecayTable.innerHTML=`<thead><tr><th>Day</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.day}</td><td>${r.n}</td><td>${r.n?fmt(r.avgRange):""}</td><td>${r.n?pct(r.breaksHigh):""}</td><td>${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
 }
 function pearsonR(pairs){
   const n=pairs.length;
