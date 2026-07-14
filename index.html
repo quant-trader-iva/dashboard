@@ -309,6 +309,7 @@ const STORAGE_KEY="trading_projection_sessions_v4";
 const SETTINGS_KEY="trading_projection_settings_v4";
 const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
 const POS_SIZING_KEY="trading_projection_position_sizing_v4";
+const SESSION_ORDER=["Weekly","Daily","London","New York"];
 const LEGACY_STORAGE_KEY="trading_projection_sessions_v3";
 const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
@@ -483,7 +484,7 @@ function renderPosSizing(){
     line("Required Margin",requiredMargin!==null?`${currency}${fmt(requiredMargin)}`:"— (enter Notional Value)")+
     line("Max Lot Size Supported",maxLot!==null?fmt(maxLot):"— (enter Notional Value)")+
     (overLeveraged?`<div class="statline" style="color:var(--red)"><span>Warning</span><b>Lot Size (${fmt(ps.lotSize)}) exceeds Max Lot Size Supported</b></div>`:"");
-  renderProjectionGrid();
+  try{renderProjectionGrid()}catch(err){console.error("renderProjectionGrid failed:",err)}
 }
 loadPosSizingIntoForm();
 [psAccountSize,psCurrency,psLeverage,psLotSize,psPointValue,psNotional].forEach(el=>el.addEventListener("input",renderPosSizing));
@@ -564,8 +565,6 @@ ${line("New York",pct(hitRate(e.filter(s=>s.sessionType==="New York"),"frHit")))
 </div>`
 }
 function biasCls(s){return s.bias==="Up"?"bull":s.bias==="Down"?"bear":"neutral"}
-
-const SESSION_ORDER=["Weekly","Daily","London","New York"];
 function buildColumns(arr,session){
   if(session==="All"){
     const map=new Map();
