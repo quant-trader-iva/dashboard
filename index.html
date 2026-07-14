@@ -705,7 +705,8 @@ function timingBreakdown(entries,timeField,breachPred){
     if(!time||!s[timeField]||!breachPred(s))return;
     if(s[timeField]<time)before++;else after++;
   });
-  return before||after?`${before} before / ${after} after`:"—";
+  const total=before+after;
+  return total?`${pct(before/total)} before <span class="hint">(n=${total})</span>`:"—";
 }
 function renderNewsImpact(){
   const daily=enrich(sessions).filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
