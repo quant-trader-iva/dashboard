@@ -50,7 +50,7 @@
     .refgroup{display:contents}.refgroup.hidden{display:none}
     input.auto,input.auto:focus{background:#0b1220;color:#94a3b8;cursor:not-allowed;border-color:#334155}
     .cellinput{padding:4px 6px;text-align:center;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);border-radius:6px;color:white;font-size:13px}
-    .newsrow{display:flex;gap:8px;margin-bottom:8px;align-items:center}.newsrow .newsName{flex:2}.newsrow .newsImpact{flex:1}.newsrow .removeNewsEvent{flex:0 0 auto}
+    .newsrow{display:flex;gap:8px;margin-bottom:8px;align-items:center}.newsrow .newsName{flex:2}.newsrow .newsTime{flex:0 0 110px}.newsrow .newsImpact{flex:1}.newsrow .removeNewsEvent{flex:0 0 auto}
     .gate{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#020617,#111827 55%,#1e293b);padding:20px}
     .gate.hidden{display:none}
     .gatecard{max-width:420px;width:100%}
@@ -128,7 +128,7 @@
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
-    <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
+    <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session. "Timing" compares each session's High/Low Time (optional, entered on the session) against that event's release time — only counted when both a breach happened and both times are known.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
   </div>
 </section>
 
@@ -186,7 +186,9 @@
         <div><label>Close Range - Close Price</label><input id="closeRangeClose" type="number" step="0.01"/></div>
 
         <div><label>Current Session High</label><input id="high" type="number" step="0.01"/></div>
+        <div><label>High Time <span class="hint" style="font-weight:400">(optional)</span></label><input id="highTime" type="time"/></div>
         <div><label>Current Session Low</label><input id="low" type="number" step="0.01"/></div>
+        <div><label>Low Time <span class="hint" style="font-weight:400">(optional)</span></label><input id="lowTime" type="time"/></div>
         <div><label>POC</label><input id="poc" type="number" step="0.01"/></div>
         <div><label>VPOC</label><input id="vpoc" type="number" step="0.01"/></div>
 
@@ -314,7 +316,7 @@ const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stringify(pendingDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 
 function n(v){const x=Number(v);return Number.isFinite(x)?x:null}
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
@@ -431,25 +433,27 @@ sessionType.addEventListener("change",updateReferenceFields);
 date.addEventListener("change",updateReferenceFields);
 updateReferenceFields();
 
-function addNewsEventRow(name,impact){
+function addNewsEventRow(name,impact,time){
   const row=document.createElement("div");row.className="newsrow";
   const nameInput=document.createElement("input");
   nameInput.type="text";nameInput.className="newsName";nameInput.setAttribute("list","newsEventSuggestions");nameInput.placeholder="Event name (e.g. Core CPI)";nameInput.value=name||"";
+  const timeInput=document.createElement("input");
+  timeInput.type="time";timeInput.className="newsTime";timeInput.title="Release time (optional)";timeInput.value=time||"";
   const select=document.createElement("select");select.className="newsImpact";
   ["High","Medium"].forEach(v=>{const o=document.createElement("option");o.textContent=v;select.appendChild(o)});
   select.value=impact==="Medium"?"Medium":"High";
   const removeBtn=document.createElement("button");removeBtn.type="button";removeBtn.className="removeNewsEvent";removeBtn.textContent="✕";
   removeBtn.addEventListener("click",()=>row.remove());
-  row.appendChild(nameInput);row.appendChild(select);row.appendChild(removeBtn);
+  row.appendChild(nameInput);row.appendChild(timeInput);row.appendChild(select);row.appendChild(removeBtn);
   newsEventsList.appendChild(row);
 }
-addNewsEvent.addEventListener("click",()=>addNewsEventRow("","High"));
+addNewsEvent.addEventListener("click",()=>addNewsEventRow("","High",""));
 function getNewsEventsFromForm(){
-  return [...newsEventsList.querySelectorAll(".newsrow")].map(row=>({name:row.querySelector(".newsName").value.trim(),impact:row.querySelector(".newsImpact").value})).filter(ev=>ev.name);
+  return [...newsEventsList.querySelectorAll(".newsrow")].map(row=>({name:row.querySelector(".newsName").value.trim(),impact:row.querySelector(".newsImpact").value,time:row.querySelector(".newsTime").value||null})).filter(ev=>ev.name);
 }
 function setNewsEventsInForm(events){
   newsEventsList.innerHTML="";
-  (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact));
+  (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact,ev.time));
 }
 function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
 function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();showTab("entry")}
@@ -695,6 +699,14 @@ function newsBreachStats(arr){
     breaksLow:n?arr.filter(s=>s.low<s.referenceLow).length/n:0
   };
 }
+function timingBreakdown(entries,timeField,breachPred){
+  let before=0,after=0;
+  entries.forEach(({session:s,time})=>{
+    if(!time||!s[timeField]||!breachPred(s))return;
+    if(s[timeField]<time)before++;else after++;
+  });
+  return before||after?`${before} before / ${after} after`:"—";
+}
 function renderNewsImpact(){
   const daily=enrich(sessions).filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
   const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
@@ -708,14 +720,21 @@ function renderNewsImpact(){
       const key=String(ev.name||"").trim().toLowerCase();
       if(!key||seenKeys.has(key))return;
       seenKeys.add(key);
-      if(!byType.has(key))byType.set(key,{name:String(ev.name).trim(),impacts:new Set(),sessions:[]});
+      if(!byType.has(key))byType.set(key,{name:String(ev.name).trim(),impacts:new Set(),sessions:[],entries:[]});
       const t=byType.get(key);
       t.impacts.add(ev.impact);
       t.sessions.push(s);
+      t.entries.push({session:s,time:ev.time});
     });
   });
-  const rows=[...byType.values()].map(t=>({name:t.name,impact:t.impacts.size>1?"Mixed":[...t.impacts][0],...newsBreachStats(t.sessions)})).sort((a,b)=>b.n-a.n);
-  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td>${r.impact}</td><td>${r.n}</td><td>${fmt(r.avgRange)}</td><td>${pct(r.breaksHigh)}</td><td>${pct(r.breaksLow)}</td></tr>`).join(""):'<tr><td colspan="6">No news events logged yet.</td></tr>'}</tbody>`;
+  const rows=[...byType.values()].map(t=>({
+    name:t.name,
+    impact:t.impacts.size>1?"Mixed":[...t.impacts][0],
+    ...newsBreachStats(t.sessions),
+    highTiming:timingBreakdown(t.entries,"highTime",s=>s.high>s.referenceHigh),
+    lowTiming:timingBreakdown(t.entries,"lowTime",s=>s.low<s.referenceLow)
+  })).sort((a,b)=>b.n-a.n);
+  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>High Timing</th><th>Breaks Prior Low</th><th>Low Timing</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td>${r.impact}</td><td>${r.n}</td><td>${fmt(r.avgRange)}</td><td>${pct(r.breaksHigh)}</td><td>${r.highTiming}</td><td>${pct(r.breaksLow)}</td><td>${r.lowTiming}</td></tr>`).join(""):'<tr><td colspan="8">No news events logged yet.</td></tr>'}</tbody>`;
 }
 function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
 window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s)}
@@ -831,8 +850,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,low:s.low,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,low:r.low,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}

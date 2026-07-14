@@ -32,7 +32,9 @@ create table if not exists public.trading_sessions (
   close_range_close numeric,
 
   high numeric,
+  high_time text,
   low numeric,
+  low_time text,
   poc numeric,
   vpoc numeric,
 
