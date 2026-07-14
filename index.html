@@ -459,20 +459,18 @@ function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":
 function leverageRatio(lev){const m=/1:(\d+)/.exec(lev||"");return m?Number(m[1]):null}
 function psNum(v){return v===""?null:n(v)}
 function getPosSizing(){return{accountSize:psNum(psAccountSize.value),currency:psCurrency.value||"$",leverage:psLeverage.value,lotSize:psNum(psLotSize.value),pointValue:psNum(psPointValue.value),notional:psNum(psNotional.value)}}
-function loadPosSizingIntoForm(){
-  const ps=readJSON(POS_SIZING_KEY,{});
+function applyPosSizingToForm(ps){
   psAccountSize.value=ps.accountSize??"";psCurrency.value=ps.currency??"$";psLeverage.value=ps.leverage||"1:500";
   psLotSize.value=ps.lotSize??"";psPointValue.value=ps.pointValue??"";psNotional.value=ps.notional??"";
 }
+function loadPosSizingIntoForm(){applyPosSizingToForm(readJSON(POS_SIZING_KEY,{}))}
 function moneyPerPointOf(ps){return ps.lotSize>0&&ps.pointValue>0?ps.lotSize*ps.pointValue:null}
 function moneySuffix(ps,target,points){
   const mpp=moneyPerPointOf(ps);
   if(!Number.isFinite(target)||!Number.isFinite(points)||mpp===null)return"";
   return` (${ps.currency}${fmt(points*mpp)})`;
 }
-function renderPosSizing(){
-  const ps=getPosSizing();
-  localStorage.setItem(POS_SIZING_KEY,JSON.stringify(ps));
+function renderPosSizingSummary(ps){
   const lev=leverageRatio(ps.leverage);
   const moneyPerPoint=moneyPerPointOf(ps);
   const requiredMargin=ps.lotSize>0&&ps.notional>0&&lev?(ps.lotSize*ps.notional)/lev:null;
@@ -484,7 +482,39 @@ function renderPosSizing(){
     line("Required Margin",requiredMargin!==null?`${currency}${fmt(requiredMargin)}`:"— (enter Notional Value)")+
     line("Max Lot Size Supported",maxLot!==null?fmt(maxLot):"— (enter Notional Value)")+
     (overLeveraged?`<div class="statline" style="color:var(--red)"><span>Warning</span><b>Lot Size (${fmt(ps.lotSize)}) exceeds Max Lot Size Supported</b></div>`:"");
+}
+function renderPosSizing(){
+  const ps=getPosSizing();
+  localStorage.setItem(POS_SIZING_KEY,JSON.stringify(ps));
+  renderPosSizingSummary(ps);
   try{renderProjectionGrid()}catch(err){console.error("renderProjectionGrid failed:",err)}
+  clearTimeout(posSizingSyncTimer);
+  posSizingSyncTimer=setTimeout(()=>syncPosSizing(ps),600);
+}
+let posSizingSyncTimer=null;
+function toPosSizingDb(ps){return{user_id:authUser.id,account_size:ps.accountSize,currency:ps.currency,leverage:ps.leverage,lot_size:ps.lotSize,point_value:ps.pointValue,notional:ps.notional,updated_at:new Date().toISOString()}}
+function fromPosSizingDb(r){return{accountSize:r.account_size,currency:r.currency,leverage:r.leverage,lotSize:r.lot_size,pointValue:r.point_value,notional:r.notional}}
+async function syncPosSizing(ps){
+  if(!supabaseClient||!authUser)return false;
+  return runSyncOp("possizing",
+    ()=>supabaseClient.from("position_sizing").upsert(toPosSizingDb(ps),{onConflict:"user_id"}),
+    msg=>`Failed to sync your position sizing settings to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+}
+async function fetchPosSizing(){
+  if(!supabaseClient||!authUser)return;
+  try{
+    const {data,error}=await supabaseClient.from("position_sizing").select("*").eq("user_id",authUser.id).maybeSingle();
+    if(error){showSyncError("possizing:fetch",`Failed to load your position sizing settings from the cloud: ${error.message}. Using your local copy.`);return}
+    clearSyncError("possizing:fetch");
+    if(!data)return;
+    clearTimeout(posSizingSyncTimer);
+    const ps=fromPosSizingDb(data);
+    localStorage.setItem(POS_SIZING_KEY,JSON.stringify(ps));
+    applyPosSizingToForm(ps);
+    renderPosSizingSummary(ps);
+  }catch(err){
+    showSyncError("possizing:fetch",`Failed to load your position sizing settings from the cloud: ${errMsg(err)}. Using your local copy.`);
+  }
 }
 loadPosSizingIntoForm();
 [psAccountSize,psCurrency,psLeverage,psLotSize,psPointValue,psNotional].forEach(el=>el.addEventListener("input",renderPosSizing));
@@ -565,6 +595,7 @@ ${line("New York",pct(hitRate(e.filter(s=>s.sessionType==="New York"),"frHit")))
 </div>`
 }
 function biasCls(s){return s.bias==="Up"?"bull":s.bias==="Down"?"bear":"neutral"}
+
 function buildColumns(arr,session){
   if(session==="All"){
     const map=new Map();
@@ -694,8 +725,17 @@ function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderR
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.csv",[[...fields,"newsEvents"].join(",")].concat(sessions.map(s=>[...fields.map(f=>csvEscape(s[f])),csvEscape(JSON.stringify(s.newsEvents||[]))].join(","))).join("\n"),"text/csv"));
-downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify(sessions,null,2),"application/json"));
-importJson.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(!Array.isArray(data))return alert("Invalid file");sessions=data;saveSessions();renderAll()});
+downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,posSizing:getPosSizing()},null,2),"application/json"));
+importJson.addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const data=JSON.parse(await f.text());
+  if(Array.isArray(data)){sessions=data}
+  else if(data&&Array.isArray(data.sessions)){
+    sessions=data.sessions;
+    if(data.posSizing){localStorage.setItem(POS_SIZING_KEY,JSON.stringify(data.posSizing));applyPosSizingToForm(data.posSizing);renderPosSizingSummary(data.posSizing)}
+  }else{return alert("Invalid file")}
+  saveSessions();renderAll();
+});
 clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data?"))return;sessions=[];saveSessions();renderAll()});
 
 function readSettings(){
@@ -716,20 +756,23 @@ function updateGateFields(){
   gateChangeConfig.classList.toggle("hidden",showConnection);
 }
 function showGate(){
+  clearTimeout(posSizingSyncTimer);
   appRoot.classList.add("hidden");
   gate.classList.remove("hidden");
   updateGateFields();
 }
-function showApp(){
+async function showApp(){
   gate.classList.add("hidden");
   appRoot.classList.remove("hidden");
   settingsAuthStatus.textContent=`Signed in as ${authUser.email}.`;
+  await fetchPosSizing();
   try{renderAll()}catch(err){console.error("renderAll failed after sign-in:",err)}
 }
 function registerAuthListener(){
   supabaseClient.auth.onAuthStateChange((event,session)=>{
     authUser=session?session.user:null;
-    if(authUser)showApp();else showGate();
+    if(!authUser){showGate();return}
+    if(event==="SIGNED_IN")showApp();
   });
 }
 async function initAuth(){
@@ -825,6 +868,7 @@ async function fullSync(){
   if(!supabaseClient){syncStatus.textContent="Supabase is not configured.";return}
   if(!authUser){syncStatus.textContent="Log in first to sync.";return}
   syncStatus.textContent="Syncing...";
+  await fetchPosSizing();
   for(const id of [...pendingDeletes]){await syncDelete(id)}
   const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});
   if(error){syncStatus.textContent="Sync failed: "+error.message;showSyncError("fullsync:select","Sync failed: "+error.message);return}
