@@ -277,6 +277,13 @@
       <label style="display:inline-flex;align-items:center;gap:8px;margin:0;cursor:pointer"><input id="importJson" type="file" accept=".json" style="display:none"><span class="pill">Import Backup</span></label>
       <button id="clearAll" class="danger">Clear Local Data</button>
     </div>
+    <div class="toolbar">
+      <div><label>Session</label><select id="dfSession"><option value="">All</option><option>Weekly</option><option>Daily</option><option>London</option><option>New York</option></select></div>
+      <div><label>Day</label><select id="dfDay"><option value="">All</option><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option></select></div>
+      <div><label>From Date</label><input id="dfDateFrom" type="date"/></div>
+      <div><label>To Date</label><input id="dfDateTo" type="date"/></div>
+      <div><button id="dfReset" type="button">Reset Filters</button></div>
+    </div>
     <div class="tablewrap"><table id="dataTable"></table></div>
   </div>
 </section>
@@ -747,7 +754,17 @@ window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s
 window.deleteSession=async id=>{if(!confirm("Delete this session?"))return;sessions=sessions.filter(x=>x.id!==id);saveSessions();await syncDelete(id);if(recordId.value===id)resetEntryForm();renderAll()}
 function applyResearch(){let arr=enrich(sessions);if(fSession.value)arr=arr.filter(s=>s.sessionType===fSession.value);if(fDayType.value)arr=arr.filter(s=>s.dayType===fDayType.value);if(fOpenType.value)arr=arr.filter(s=>s.openType===fOpenType.value);if(fBias.value)arr=arr.filter(s=>s.bias===fBias.value);const vz=n(fVolumeZ.value);if(Number.isFinite(vz))arr=arr.filter(s=>Number.isFinite(s.volumeZ)&&s.volumeZ>=vz);filtered=arr;rSessions.textContent=arr.length;rFR.textContent=pct(hitRate(arr,"frHit"));rHR.textContent=pct(hitRate(arr,"hrHit"));rQR.textContent=pct(hitRate(arr,"qrHit"));rER.textContent=pct(hitRate(arr,"erHit"));rExp.textContent=fmt(expectancy(arr))+"R";renderTable("researchTable",arr)}
 applyFilters.addEventListener("click",applyResearch);
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderNewsImpact,()=>renderTable("dataTable",sessions),applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function applyDataFilters(){
+  let arr=sessions;
+  if(dfSession.value)arr=arr.filter(s=>s.sessionType===dfSession.value);
+  if(dfDay.value)arr=arr.filter(s=>s.day===dfDay.value);
+  if(dfDateFrom.value)arr=arr.filter(s=>s.date&&s.date>=dfDateFrom.value);
+  if(dfDateTo.value)arr=arr.filter(s=>s.date&&s.date<=dfDateTo.value);
+  renderTable("dataTable",arr);
+}
+[dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
+dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderNewsImpact,applyDataFilters,applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
