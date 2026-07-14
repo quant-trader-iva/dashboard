@@ -235,6 +235,7 @@
         </div>
         <div style="grid-column:3/-1"><label>Notes</label><textarea id="notes" placeholder="Order-flow notes: delta, absorption, VPOC, profile shape, participants, execution..."></textarea></div>
       </div>
+      <p id="entryFormError" class="hint" style="color:#f87171;font-weight:700;display:none"></p>
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="primary" type="submit">Save Session</button>
         <button type="button" id="clearForm">Clear Form</button>
@@ -456,8 +457,8 @@ function setNewsEventsInForm(events){
   (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact,ev.time));
 }
 function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
-function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();showTab("entry")}
-function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields()}
+function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();entryFormError.style.display="none";showTab("entry")}
+function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields();entryFormError.style.display="none"}
 
 function readJSON(key,fallback){try{const v=localStorage.getItem(key);return v?JSON.parse(v):fallback}catch{return fallback}}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
@@ -524,7 +525,7 @@ async function fetchPosSizing(){
 loadPosSizingIntoForm();
 [psAccountSize,psCurrency,psLeverage,psLotSize,psPointValue,psNotional].forEach(el=>el.addEventListener("input",renderPosSizing));
 renderPosSizing();
-entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
+entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const dup=sessions.find(x=>x.date===s.date&&x.sessionType===s.sessionType&&x.id!==s.id);if(dup){entryFormError.textContent=`An entry for ${s.sessionType} session on ${s.date} already exists. Edit that entry instead, or change the Date/Session Type.`;entryFormError.style.display="block";return}entryFormError.style.display="none";const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
 clearForm.addEventListener("click",resetEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
