@@ -695,12 +695,21 @@ function renderRangeCorr(){
   const pairs=daily.map(s=>[s.referenceRange,s.currentRange]);
   const r=pearsonR(pairs);
   const ny=enrich(sessions).filter(s=>s.sessionType==="New York"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
-  const breachHigh=ny.filter(s=>s.high>s.referenceHigh).map(s=>s.high-s.referenceHigh);
-  const breachLow=ny.filter(s=>s.low<s.referenceLow).map(s=>s.referenceLow-s.low);
+  const nyBreachHigh=ny.filter(s=>s.high>s.referenceHigh).map(s=>s.high-s.referenceHigh);
+  const nyBreachLow=ny.filter(s=>s.low<s.referenceLow).map(s=>s.referenceLow-s.low);
+  const london=enrich(sessions).filter(s=>s.sessionType==="London"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
+  const londonBreachHigh=london.filter(s=>s.high>s.referenceHigh).map(s=>s.high-s.referenceHigh);
+  const londonBreachLow=london.filter(s=>s.low<s.referenceLow).map(s=>s.referenceLow-s.low);
   rangeCorrNote.innerHTML=r===null
     ?"Not enough Daily sessions with both a previous-day and current-day range yet (need at least 2)."
     :`<b>Prior-day range &rarr; current-day range:</b> Pearson r = ${r.toFixed(3)} (n=${pairs.length}). A ${corrStrength(r)} relationship${pairs.length<40?" — small sample, read directionally only":""}.`;
-  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody><tr><td>NY beyond London High</td><td>${breachHigh.length?fmt(avg(breachHigh)):""}</td><td>${breachHigh.length}</td></tr><tr><td>NY beyond London Low</td><td>${breachLow.length?fmt(avg(breachLow)):""}</td><td>${breachLow.length}</td></tr></tbody>`;
+  const breachRows=[
+    ["NY beyond London High",nyBreachHigh],
+    ["NY beyond London Low",nyBreachLow],
+    ["London beyond Previous NY Day High",londonBreachHigh],
+    ["London beyond Previous NY Day Low",londonBreachLow]
+  ];
+  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachRows.map(([label,arr])=>`<tr><td>${label}</td><td>${arr.length?fmt(avg(arr)):""}</td><td>${arr.length}</td></tr>`).join("")}</tbody>`;
 }
 function newsBreachStats(arr){
   const n=arr.length;
