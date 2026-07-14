@@ -629,7 +629,7 @@ function renderProjectionGrid(){
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
     ["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull-light"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],
     ["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear-light"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],
-    ["Projection Total",s=>fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange),"cream"],
+    ["Projection Total",s=>fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange),"yellow"],
     ["Projection FR",s=>fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange),"cream","erHit","hit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
