@@ -539,6 +539,7 @@ function editableCell(s,field,cls=""){
     const idx=sessions.findIndex(x=>x.id===s.id);
     if(idx<0)return;
     sessions[idx][field]=n(input.value);
+    sessions[idx].updatedAt=new Date().toISOString();
     saveSessions();syncUpsert([sessions[idx]]);renderAll();
   });
   d.appendChild(input);
@@ -560,6 +561,7 @@ function editableHitCell(s,price,hitField,cls=""){
     const idx=sessions.findIndex(x=>x.id===s.id);
     if(idx<0)return;
     sessions[idx][hitField]=select.value||null;
+    sessions[idx].updatedAt=new Date().toISOString();
     saveSessions();syncUpsert([sessions[idx]]);renderAll();
   });
   d.appendChild(select);
@@ -579,6 +581,7 @@ function editableSelectCell(s,hitField,cls=""){
     const idx=sessions.findIndex(x=>x.id===s.id);
     if(idx<0)return;
     sessions[idx][hitField]=select.value||null;
+    sessions[idx].updatedAt=new Date().toISOString();
     saveSessions();syncUpsert([sessions[idx]]);renderAll();
   });
   d.appendChild(select);
@@ -900,7 +903,10 @@ async function fullSync(){
   if(error){syncStatus.textContent="Sync failed: "+error.message;showSyncError("fullsync:select","Sync failed: "+error.message);return}
   clearSyncError("fullsync:select");
   const map=new Map();
-  [...sessions,...data.map(fromDb)].filter(s=>!pendingDeletes.includes(s.id)).forEach(s=>map.set(s.id,s));
+  [...sessions,...data.map(fromDb)].filter(s=>!pendingDeletes.includes(s.id)).forEach(s=>{
+    const existing=map.get(s.id);
+    if(!existing||(s.updatedAt||"")>=(existing.updatedAt||""))map.set(s.id,s);
+  });
   sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   saveSessions();
   const ok=await syncUpsert(sessions);
