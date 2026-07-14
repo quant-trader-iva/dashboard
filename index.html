@@ -353,17 +353,19 @@ function referenceLabel(s){
   return "";
 }
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
+function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
 function targets(s){
   const base=Number.isFinite(s.openRangeClose)?s.openRangeClose:(Number.isFinite(s.openRangeOpen)?s.openRangeOpen:null);
   const fr=referenceRange(s);
   if(!Number.isFinite(base)||!Number.isFinite(fr))return{};
   const d=s.bias==="Down"?-1:1;
-  return{FR:base+d*fr,HR:base+d*fr/2,QR:base+d*fr/4,ER:base+d*fr/8}
+  const{hr,qr,er,total}=comboRange(fr);
+  return{FR:base+d*fr,HR:base+d*hr,QR:base+d*qr,ER:base+d*er,Total:base+d*total}
 }
 function extremeProjections(s){
   const fr=referenceRange(s);
   if(!Number.isFinite(fr))return{};
-  const hr=fr/2, qr=fr/4, er=fr/8, total=fr+hr+qr+er;
+  const{hr,qr,er,total}=comboRange(fr);
   const out={combinedRange:total};
   if(Number.isFinite(s.extremeLow)){out.upFR=s.extremeLow+fr;out.upHR=s.extremeLow+hr;out.upQR=s.extremeLow+qr;out.upER=s.extremeLow+er;out.upTotal=s.extremeLow+total}
   if(Number.isFinite(s.extremeHigh)){out.downFR=s.extremeHigh-fr;out.downHR=s.extremeHigh-hr;out.downQR=s.extremeHigh-qr;out.downER=s.extremeHigh-er;out.downTotal=s.extremeHigh-total}
@@ -628,6 +630,7 @@ function renderProjectionGrid(){
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
     ["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull-light"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],
     ["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear-light"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],
+    ["Projection Total",s=>fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange),"yellow"],
     ["Projection FR",s=>fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange),"cream","erHit","hit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
