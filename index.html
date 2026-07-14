@@ -319,7 +319,7 @@ function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stri
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 
-function n(v){const x=Number(v);return Number.isFinite(x)?x:null}
+function n(v){if(v===""||v==null)return null;const x=Number(v);return Number.isFinite(x)?x:null}
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
 function fmt(x,d=2){return Number.isFinite(x)?x.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):""}
 function avg(a){const x=a.filter(Number.isFinite);return x.length?x.reduce((s,v)=>s+v,0)/x.length:0}
