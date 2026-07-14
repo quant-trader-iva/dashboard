@@ -133,6 +133,19 @@
 </section>
 
 <section id="entry" class="page hidden">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Position Sizing (Money Calculator)</h2>
+    <p class="hint">Not saved per session — these are your account/broker settings, stored locally in this browser, and used to show the expected money value next to Projection FR/HR/QR/ER below. Leverage does not change the money value per point (that's Lot Size × Value per Point) — it only affects the required margin and max lot size shown here.</p>
+    <div class="form-grid">
+      <div><label>Account Size (Capital)</label><input id="psAccountSize" type="number" step="0.01"/></div>
+      <div><label>Currency Symbol</label><input id="psCurrency" placeholder="$"/></div>
+      <div><label>Leverage</label><select id="psLeverage"><option>1:500</option><option>1:1000</option><option>1:1500</option><option>1:2000</option></select></div>
+      <div><label>Lot Size</label><input id="psLotSize" type="number" step="0.01"/></div>
+      <div><label>Value per Point (per 1.00 lot)</label><input id="psPointValue" type="number" step="0.01" placeholder="from your broker's contract specs"/></div>
+      <div><label>Notional Value per 1.00 Lot <span class="hint" style="font-weight:400">(optional — for margin only)</span></label><input id="psNotional" type="number" step="0.01"/></div>
+    </div>
+    <div id="posSizingSummary" style="margin-top:10px"></div>
+  </div>
   <div class="card">
     <h2>Session Entry</h2>
     <p class="hint"><b>Important:</b> Fill the correct reference high/low for the session. The dashboard calculates FR/HR/QR/ER from the reference range, not from the current session high/low. Only the reference pair relevant to the selected Session Type is shown below, and it auto-fills (and locks) from your saved sessions when a match is found.</p>
@@ -294,6 +307,7 @@
 const STORAGE_KEY="trading_projection_sessions_v4";
 const SETTINGS_KEY="trading_projection_settings_v4";
 const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
+const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const LEGACY_STORAGE_KEY="trading_projection_sessions_v3";
 const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
@@ -437,6 +451,35 @@ function setNewsEventsInForm(events){
 function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
 function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();showTab("entry")}
 function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields()}
+
+function leverageRatio(lev){const m=/1:(\d+)/.exec(lev||"");return m?Number(m[1]):null}
+function getPosSizing(){return{accountSize:n(psAccountSize.value),currency:psCurrency.value||"$",leverage:psLeverage.value,lotSize:n(psLotSize.value),pointValue:n(psPointValue.value),notional:n(psNotional.value)}}
+function loadPosSizingIntoForm(){
+  const ps=(()=>{try{return JSON.parse(localStorage.getItem(POS_SIZING_KEY)||"{}")}catch{return{}}})();
+  psAccountSize.value=ps.accountSize??"";psCurrency.value=ps.currency??"$";psLeverage.value=ps.leverage||"1:500";
+  psLotSize.value=ps.lotSize??"";psPointValue.value=ps.pointValue??"";psNotional.value=ps.notional??"";
+}
+function moneySuffix(points){
+  const ps=getPosSizing();
+  if(!Number.isFinite(points)||!(ps.lotSize>0)||!(ps.pointValue>0))return"";
+  return` (${ps.currency}${fmt(points*ps.lotSize*ps.pointValue)})`;
+}
+function renderPosSizing(){
+  const ps=getPosSizing();
+  localStorage.setItem(POS_SIZING_KEY,JSON.stringify(ps));
+  const lev=leverageRatio(ps.leverage);
+  const moneyPerPoint=ps.lotSize>0&&ps.pointValue>0?ps.lotSize*ps.pointValue:null;
+  const requiredMargin=ps.lotSize>0&&ps.notional>0&&lev?(ps.lotSize*ps.notional)/lev:null;
+  const maxLot=ps.accountSize>0&&ps.notional>0&&lev?(ps.accountSize*lev)/ps.notional:null;
+  posSizingSummary.innerHTML=
+    line("Money per Point",moneyPerPoint!==null?`${ps.currency}${fmt(moneyPerPoint)}`:"—")+
+    line("Required Margin",requiredMargin!==null?`${ps.currency}${fmt(requiredMargin)}`:"— (enter Notional Value)")+
+    line("Max Lot Size Supported",maxLot!==null?fmt(maxLot):"— (enter Notional Value)");
+  renderAll();
+}
+loadPosSizingIntoForm();
+[psAccountSize,psCurrency,psLeverage,psLotSize,psPointValue,psNotional].forEach(el=>el.addEventListener("input",renderPosSizing));
+renderPosSizing();
 entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
 clearForm.addEventListener("click",resetEntryForm);
 
@@ -547,7 +590,7 @@ function renderProjectionGrid(){
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
     ["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull-light"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],
     ["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear-light"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],
-    ["Projection FR",s=>fmt(s.targets?.FR),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER),"cream","erHit","hit"],
+    ["Projection FR",s=>fmt(s.targets?.FR)+moneySuffix(s.fullRange),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR)+moneySuffix(s.halfRange),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR)+moneySuffix(s.quarterRange),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER)+moneySuffix(s.eighthRange),"cream","erHit","hit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
   root.appendChild(cell("Metric","head"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${formatDMY(s.date)}<br><span class="pill">${s.sessionType||""}</span>`,"head")));
