@@ -548,10 +548,14 @@ clearForm.addEventListener("click",resetEntryForm);
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
 function editableCell(s,field,cls=""){
   const d=document.createElement("div");d.className=`cell ${cls}`;
-  if(!s.id){return d}
   const input=document.createElement("input");
   input.type="number";input.step="0.01";input.className="cellinput";
   input.value=Number.isFinite(s[field])?s[field]:"";
+  if(!s.id){
+    input.disabled=true;
+    d.appendChild(input);
+    return d;
+  }
   input.addEventListener("change",()=>{
     const idx=sessions.findIndex(x=>x.id===s.id);
     if(idx<0)return;
