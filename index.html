@@ -373,11 +373,8 @@ function targets(s){
   const fr=referenceRange(s);
   if(!Number.isFinite(fr))return{};
   const d=s.bias==="Down"?-1:1;
-  const refBase=d===-1?referenceHigh(s):referenceLow(s);
-  const base=Number.isFinite(s.openRangeClose)?s.openRangeClose:(Number.isFinite(s.openRangeOpen)?s.openRangeOpen:refBase);
-  if(!Number.isFinite(base))return{};
   const{hr,qr,er,total}=comboRange(fr);
-  return{FR:base+d*fr,HR:base+d*hr,QR:base+d*qr,ER:base+d*er,Total:base+d*total}
+  return{FR:d*fr,HR:d*hr,QR:d*qr,ER:d*er,Total:d*total}
 }
 function extremeProjections(s){
   const fr=referenceRange(s);
