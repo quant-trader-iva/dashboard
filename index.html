@@ -582,14 +582,14 @@ function buildHitSelect(s,hitField){
 }
 function splitCell(top,bottom,topCls="",bottomCls=""){
   const d=document.createElement("div");d.className="cell split";
-  const t=document.createElement("div");t.className=`splitpart ${topCls}`;t.textContent=top;
+  const t=document.createElement("div");t.className=`splitpart ${topCls}`;t.textContent=top||" ";
   const b=document.createElement("div");b.className=`splitpart ${bottomCls}`;b.textContent=bottom;
   d.appendChild(t);d.appendChild(b);
   return d;
 }
 function splitHitCell(s,top,bottom,hitField,topCls="",bottomCls="",active=true){
   const d=document.createElement("div");d.className="cell split";
-  const t=document.createElement("div");t.className=`splitpart ${topCls}`;t.textContent=top;
+  const t=document.createElement("div");t.className=`splitpart ${topCls}`;t.textContent=top||" ";
   d.appendChild(t);
   const b=document.createElement("div");b.className=`splitpart ${bottomCls}`;
   const bottomText=document.createElement("div");bottomText.textContent=bottom;
