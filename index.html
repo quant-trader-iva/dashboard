@@ -52,6 +52,9 @@
     input.auto,input.auto:focus{background:#0b1220;color:#94a3b8;cursor:not-allowed;border-color:#334155}
     .cellinput{padding:4px 6px;text-align:center;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);border-radius:6px;color:white;font-size:13px}
     .newsrow{display:flex;gap:8px;margin-bottom:8px;align-items:center}.newsrow .newsName{flex:2}.newsrow .newsTime{flex:0 0 110px}.newsrow .newsImpact{flex:1}.newsrow .removeNewsEvent{flex:0 0 auto}
+    .impact-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:3px}
+    .impact-dot.impact-High{background:#ef4444}
+    .impact-dot.impact-Medium{background:#f97316}
     .gate{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#020617,#111827 55%,#1e293b);padding:20px}
     .gate.hidden{display:none}
     .gatecard{max-width:420px;width:100%}
@@ -733,6 +736,10 @@ function timingBreakdown(entries,timeField,breachPred){
   const total=before+after;
   return total?`${pct(before/total)} before <span class="hint">(n=${total})</span>`:"—";
 }
+function impactBadge(impact){
+  if(impact==="Mixed")return`<span class="impact-dot impact-High" title="High"></span><span class="impact-dot impact-Medium" title="Medium"></span> Mixed`;
+  return impact?`<span class="impact-dot impact-${impact}" title="${impact}"></span>`:"";
+}
 function renderNewsImpact(){
   const daily=enrich(sessions).filter(s=>s.sessionType==="Daily"&&Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
   const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
@@ -760,7 +767,7 @@ function renderNewsImpact(){
     highTiming:timingBreakdown(t.entries,"highTime",s=>s.high>s.referenceHigh),
     lowTiming:timingBreakdown(t.entries,"lowTime",s=>s.low<s.referenceLow)
   })).sort((a,b)=>b.n-a.n);
-  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>High Timing</th><th>Breaks Prior Low</th><th>Low Timing</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td>${r.impact}</td><td>${r.n}</td><td>${fmt(r.avgRange)}</td><td>${pct(r.breaksHigh)}</td><td>${r.highTiming}</td><td>${pct(r.breaksLow)}</td><td>${r.lowTiming}</td></tr>`).join(""):'<tr><td colspan="8">No news events logged yet.</td></tr>'}</tbody>`;
+  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>High Timing</th><th>Breaks Prior Low</th><th>Low Timing</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td>${impactBadge(r.impact)}</td><td>${r.n}</td><td>${fmt(r.avgRange)}</td><td>${pct(r.breaksHigh)}</td><td>${r.highTiming}</td><td>${pct(r.breaksLow)}</td><td>${r.lowTiming}</td></tr>`).join(""):'<tr><td colspan="8">No news events logged yet.</td></tr>'}</tbody>`;
 }
 function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
 window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s)}
