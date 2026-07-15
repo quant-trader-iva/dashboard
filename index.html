@@ -366,10 +366,12 @@ function referenceLabel(s){
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
 function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
 function targets(s){
-  const base=Number.isFinite(s.openRangeClose)?s.openRangeClose:(Number.isFinite(s.openRangeOpen)?s.openRangeOpen:null);
   const fr=referenceRange(s);
-  if(!Number.isFinite(base)||!Number.isFinite(fr))return{};
+  if(!Number.isFinite(fr))return{};
   const d=s.bias==="Down"?-1:1;
+  const refBase=d===-1?referenceHigh(s):referenceLow(s);
+  const base=Number.isFinite(s.openRangeClose)?s.openRangeClose:(Number.isFinite(s.openRangeOpen)?s.openRangeOpen:refBase);
+  if(!Number.isFinite(base))return{};
   const{hr,qr,er,total}=comboRange(fr);
   return{FR:base+d*fr,HR:base+d*hr,QR:base+d*qr,ER:base+d*er,Total:base+d*total}
 }
@@ -416,9 +418,12 @@ setDefaultDate();
 function findPriorSession(pred){const list=sessions.filter(pred).sort((a,b)=>(a.date||"").localeCompare(b.date||""));return list.length?list[list.length-1]:null}
 function setRef(idHigh,idLow,src,label){
   const hi=document.getElementById(idHigh), lo=document.getElementById(idLow);
-  if(src&&Number.isFinite(src.high)&&Number.isFinite(src.low)){
+  if(src&&Number.isFinite(src.high)&&Number.isFinite(src.low)&&src.high>src.low){
     hi.value=src.high;lo.value=src.low;hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
     refHint.textContent=`Auto-filled from ${label} session on ${src.date} (High ${src.high}, Low ${src.low}). Locked — edit that session to change it.`;
+  }else if(src){
+    hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
+    refHint.textContent=`${label} session on ${src.date} has no valid High/Low (High must be greater than Low) — enter the reference manually, or fix that session's Current Session High/Low.`;
   }else{
     hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
     refHint.textContent=`No matching ${label} session found yet — enter manually.`;
