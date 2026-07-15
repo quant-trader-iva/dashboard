@@ -562,11 +562,8 @@ function editableCell(s,field,cls=""){
   d.appendChild(input);
   return d;
 }
-function editableHitCell(s,price,hitField,cls=""){
-  const d=document.createElement("div");d.className=`cell ${cls}`;d.style.flexDirection="column";d.style.gap="4px";
-  const priceEl=document.createElement("div");priceEl.textContent=price;
-  d.appendChild(priceEl);
-  if(!s.id){return d}
+function buildHitSelect(s,hitField){
+  if(!s.id)return null;
   const select=document.createElement("select");
   select.className="cellinput";select.style.width="auto";
   ["","Yes","No"].forEach(opt=>{
@@ -581,8 +578,7 @@ function editableHitCell(s,price,hitField,cls=""){
     sessions[idx].updatedAt=new Date().toISOString();
     saveSessions();syncUpsert([sessions[idx]]);renderAll();
   });
-  d.appendChild(select);
-  return d;
+  return select;
 }
 function splitCell(top,bottom,topCls="",bottomCls=""){
   const d=document.createElement("div");d.className="cell split";
@@ -591,51 +587,24 @@ function splitCell(top,bottom,topCls="",bottomCls=""){
   d.appendChild(t);d.appendChild(b);
   return d;
 }
-function splitHitCell(s,top,bottom,hitField,topCls="",bottomCls=""){
+function splitHitCell(s,top,bottom,hitField,topCls="",bottomCls="",active=true){
   const d=document.createElement("div");d.className="cell split";
   const t=document.createElement("div");t.className=`splitpart ${topCls}`;t.textContent=top;
   d.appendChild(t);
   const b=document.createElement("div");b.className=`splitpart ${bottomCls}`;
   const bottomText=document.createElement("div");bottomText.textContent=bottom;
   b.appendChild(bottomText);
-  if(s.id){
-    const select=document.createElement("select");
-    select.className="cellinput";select.style.width="auto";
-    ["","Yes","No"].forEach(opt=>{
-      const o=document.createElement("option");o.value=opt;o.textContent=opt||"—";
-      if((s[hitField]||"")===opt)o.selected=true;
-      select.appendChild(o);
-    });
-    select.addEventListener("change",()=>{
-      const idx=sessions.findIndex(x=>x.id===s.id);
-      if(idx<0)return;
-      sessions[idx][hitField]=select.value||null;
-      sessions[idx].updatedAt=new Date().toISOString();
-      saveSessions();syncUpsert([sessions[idx]]);renderAll();
-    });
-    b.appendChild(select);
+  if(active){
+    const select=buildHitSelect(s,hitField);
+    if(select)b.appendChild(select);
   }
   d.appendChild(b);
   return d;
 }
 function editableSelectCell(s,hitField,cls=""){
   const d=document.createElement("div");d.className=`cell ${cls}`;
-  if(!s.id){return d}
-  const select=document.createElement("select");
-  select.className="cellinput";select.style.width="auto";
-  ["","Yes","No"].forEach(opt=>{
-    const o=document.createElement("option");o.value=opt;o.textContent=opt||"—";
-    if((s[hitField]||"")===opt)o.selected=true;
-    select.appendChild(o);
-  });
-  select.addEventListener("change",()=>{
-    const idx=sessions.findIndex(x=>x.id===s.id);
-    if(idx<0)return;
-    sessions[idx][hitField]=select.value||null;
-    sessions[idx].updatedAt=new Date().toISOString();
-    saveSessions();syncUpsert([sessions[idx]]);renderAll();
-  });
-  d.appendChild(select);
+  const select=buildHitSelect(s,hitField);
+  if(select)d.appendChild(select);
   return d;
 }
 function line(l,v){return `<div class="statline"><span>${l}</span><b>${v}</b></div>`}
@@ -687,13 +656,30 @@ function renderProjectionGrid(){
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
-    ["Upside Total (All Combined)",s=>({top:fmt(s.extremeProj?.upTotal),bottom:fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange)}),["bull-light","cream"],null,"split"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Extreme Low +)",s=>({top:fmt(s.extremeProj?.upFR),bottom:fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange)}),["bull","cream"],"frHit","splitHit"],["Upside HR",s=>({top:fmt(s.extremeProj?.upHR),bottom:fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange)}),["bull","cream"],"hrHit","splitHit"],["Upside QR",s=>({top:fmt(s.extremeProj?.upQR),bottom:fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange)}),["bull","cream"],"qrHit","splitHit"],["Upside ER",s=>({top:fmt(s.extremeProj?.upER),bottom:fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange)}),["bull","cream"],"erHit","splitHit"],
-    ["Downside Total (All Combined)",s=>({top:fmt(s.extremeProj?.downTotal),bottom:fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange)}),["bear-light","cream"],null,"split"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Extreme High −)",s=>({top:fmt(s.extremeProj?.downFR),bottom:fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange)}),["bear","cream"],"frHit","splitHit"],["Downside HR",s=>({top:fmt(s.extremeProj?.downHR),bottom:fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange)}),["bear","cream"],"hrHit","splitHit"],["Downside QR",s=>({top:fmt(s.extremeProj?.downQR),bottom:fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange)}),["bear","cream"],"qrHit","splitHit"],["Downside ER",s=>({top:fmt(s.extremeProj?.downER),bottom:fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange)}),["bear","cream"],"erHit","splitHit"],
+    ["Upside Total (All Combined)",s=>{const active=s.bias!=="Down";return{top:fmt(s.extremeProj?.upTotal),bottom:active?fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange):"",active}},["bull-light","cream"],null,"split"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Extreme Low +)",s=>{const active=s.bias!=="Down";return{top:fmt(s.extremeProj?.upFR),bottom:active?fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange):"",active}},["bull","cream"],"frHit","splitHit"],["Upside HR",s=>{const active=s.bias!=="Down";return{top:fmt(s.extremeProj?.upHR),bottom:active?fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange):"",active}},["bull","cream"],"hrHit","splitHit"],["Upside QR",s=>{const active=s.bias!=="Down";return{top:fmt(s.extremeProj?.upQR),bottom:active?fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange):"",active}},["bull","cream"],"qrHit","splitHit"],["Upside ER",s=>{const active=s.bias!=="Down";return{top:fmt(s.extremeProj?.upER),bottom:active?fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange):"",active}},["bull","cream"],"erHit","splitHit"],
+    ["Downside Total (All Combined)",s=>{const active=s.bias==="Down";return{top:fmt(s.extremeProj?.downTotal),bottom:active?fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange):"",active}},["bear-light","cream"],null,"split"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Extreme High −)",s=>{const active=s.bias==="Down";return{top:fmt(s.extremeProj?.downFR),bottom:active?fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange):"",active}},["bear","cream"],"frHit","splitHit"],["Downside HR",s=>{const active=s.bias==="Down";return{top:fmt(s.extremeProj?.downHR),bottom:active?fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange):"",active}},["bear","cream"],"hrHit","splitHit"],["Downside QR",s=>{const active=s.bias==="Down";return{top:fmt(s.extremeProj?.downQR),bottom:active?fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange):"",active}},["bear","cream"],"qrHit","splitHit"],["Downside ER",s=>{const active=s.bias==="Down";return{top:fmt(s.extremeProj?.downER),bottom:active?fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange):"",active}},["bear","cream"],"erHit","splitHit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
   ];
   root.appendChild(cell("Metric","head corner"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${formatDMY(s.date)}<br><span class="pill">${s.sessionType||""}</span>`,"head")));
   const sideCell=cell(sideStats(arr),"side");sideCell.style.gridRow=`span ${rows.length+1}`;root.appendChild(sideCell);
-  rows.forEach(([lab,fn,cls,editField,editType])=>{root.appendChild(cell(lab,"labelcell"));days.forEach(s=>root.appendChild(editType==="splitHit"?splitHitCell(s,fn(s).top,fn(s).bottom,editField,cls[0],cls[1]):editType==="split"?splitCell(fn(s).top,fn(s).bottom,cls[0],cls[1]):editType==="hit"?editableHitCell(s,fn(s),editField,cls||biasCls(s)):editType==="select"?editableSelectCell(s,editField,cls||biasCls(s)):editField?editableCell(s,editField,cls||biasCls(s)):cell(fn(s),cls||biasCls(s))))})
+  rows.forEach(([lab,fn,cls,editField,editType])=>{
+    root.appendChild(cell(lab,"labelcell"));
+    days.forEach(s=>{
+      let node;
+      if(editType==="splitHit"||editType==="split"){
+        const v=fn(s);
+        const [topCls,bottomCls]=Array.isArray(cls)?cls:[cls,cls];
+        node=editType==="splitHit"?splitHitCell(s,v.top,v.bottom,editField,topCls,bottomCls,v.active!==false):splitCell(v.top,v.bottom,topCls,bottomCls);
+      }else if(editType==="select"){
+        node=editableSelectCell(s,editField,cls||biasCls(s));
+      }else if(editField){
+        node=editableCell(s,editField,cls||biasCls(s));
+      }else{
+        node=cell(fn(s),cls||biasCls(s));
+      }
+      root.appendChild(node);
+    });
+  })
 }
 function renderMetrics(){
  const session=sessionFilter.value;const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
