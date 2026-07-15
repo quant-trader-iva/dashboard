@@ -35,8 +35,8 @@
     .dash-grid{display:grid;grid-template-columns:250px repeat(5,minmax(190px,1fr)) 350px;gap:0;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:#08111f}
     .cell{min-height:35px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px}
     .cell.split{padding:0;flex-direction:column;align-items:stretch}
-    .splitpart{flex:1;padding:6px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-    .splitpart+.splitpart{border-top:1px solid rgba(0,0,0,.15)}
+    .splitpart{flex:0 0 auto;padding:6px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+    .splitpart+.splitpart{flex:1;border-top:1px solid rgba(0,0,0,.15)}
     .labelcell{justify-content:flex-start;background:var(--orange);color:white;font-weight:900;text-align:left;position:sticky;left:0;z-index:2}
     .head{background:#f3f4f6;color:#111827;font-weight:900;min-height:58px;flex-direction:column;gap:3px}
     .head.corner{position:sticky;left:0;z-index:3}
