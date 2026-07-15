@@ -380,7 +380,10 @@ function extremeProjections(s){
   const fr=referenceRange(s);
   if(!Number.isFinite(fr))return{};
   const{hr,qr,er,total}=comboRange(fr);
-  return{combinedRange:total,upFR:fr,upHR:hr,upQR:qr,upER:er,upTotal:total,downFR:-fr,downHR:-hr,downQR:-qr,downER:-er,downTotal:-total};
+  const out={combinedRange:total};
+  if(Number.isFinite(s.extremeLow)){out.upFR=s.extremeLow+fr;out.upHR=s.extremeLow+hr;out.upQR=s.extremeLow+qr;out.upER=s.extremeLow+er;out.upTotal=s.extremeLow+total}
+  if(Number.isFinite(s.extremeHigh)){out.downFR=s.extremeHigh-fr;out.downHR=s.extremeHigh-hr;out.downQR=s.extremeHigh-qr;out.downER=s.extremeHigh-er;out.downTotal=s.extremeHigh-total}
+  return out;
 }
 function enrich(arr){
   const vols=arr.map(s=>s.volume).filter(Number.isFinite), deltas=arr.map(s=>s.deltaFinish).filter(Number.isFinite);
@@ -647,8 +650,8 @@ function renderProjectionGrid(){
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
-    ["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull-light"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Reference Range)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],
-    ["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear-light"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Reference Range)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],
+    ["Upside Total (All Combined)",s=>fmt(s.extremeProj?.upTotal),"bull-light"],["Upside Total Hit",null,"bull-light","upTotalHit","select"],["Upside FR (Extreme Low +)",s=>fmt(s.extremeProj?.upFR),"bull"],["Upside HR",s=>fmt(s.extremeProj?.upHR),"bull"],["Upside QR",s=>fmt(s.extremeProj?.upQR),"bull"],["Upside ER",s=>fmt(s.extremeProj?.upER),"bull"],
+    ["Downside Total (All Combined)",s=>fmt(s.extremeProj?.downTotal),"bear-light"],["Downside Total Hit",null,"bear-light","downTotalHit","select"],["Downside FR (Extreme High −)",s=>fmt(s.extremeProj?.downFR),"bear"],["Downside HR",s=>fmt(s.extremeProj?.downHR),"bear"],["Downside QR",s=>fmt(s.extremeProj?.downQR),"bear"],["Downside ER",s=>fmt(s.extremeProj?.downER),"bear"],
     ["Projection Total",s=>fmt(s.targets?.Total)+moneySuffix(ps,s.targets?.Total,s.extremeProj?.combinedRange),"yellow"],
     ["Projection FR",s=>fmt(s.targets?.FR)+moneySuffix(ps,s.targets?.FR,s.fullRange),"cream","frHit","hit"],["Projection HR",s=>fmt(s.targets?.HR)+moneySuffix(ps,s.targets?.HR,s.halfRange),"cream","hrHit","hit"],["Projection QR",s=>fmt(s.targets?.QR)+moneySuffix(ps,s.targets?.QR,s.quarterRange),"cream","qrHit","hit"],["Projection ER",s=>fmt(s.targets?.ER)+moneySuffix(ps,s.targets?.ER,s.eighthRange),"cream","erHit","hit"],
     ["Volume Z",s=>fmt(s.volumeZ),""],["Delta Finish",s=>fmt(s.deltaFinish,0),""],["Delta Z",s=>fmt(s.deltaZ),""],["TPOs",s=>fmt(s.tpos,0),"orange"]
