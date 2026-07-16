@@ -368,7 +368,7 @@ function closingRange(s){return Number.isFinite(s.openRangeOpen)&&Number.isFinit
 const SESSION_REF={
   Weekly:{fieldPrefix:"prevWeek", hlLabel:"Previous Weekly H/L", vaLabel:"Previous Weekly VA", entryLabel:"previous Weekly",
     findSrc:d=>findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d)},
-  Daily:{fieldPrefix:"prevDay", hlLabel:"Previous Day H/L", vaLabel:"Previous Daily VA", entryLabel:"previous Daily",
+  Daily:{fieldPrefix:"prevDay", hlLabel:"Previous Day H/L", vaLabel:"Previous Day VA", entryLabel:"previous Daily",
     findSrc:d=>findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d)},
   London:{fieldPrefix:"prevNy", hlLabel:"Previous NY Day H/L", vaLabel:"Previous NY Day VA", entryLabel:"previous New York",
     findSrc:d=>findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d)},
@@ -385,12 +385,17 @@ function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Nu
 function referenceVaHigh(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"VaHigh"]:null}
 function referenceVaLow(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"VaLow"]:null}
 function referenceVaLabel(s){const c=SESSION_REF[s.sessionType];return c?c.vaLabel:""}
+// The Value Area [VA Low, VA High] is treated as a closed range, so an Open Price landing exactly on
+// either edge counts as "Inside" (still within the value area) rather than "Above"/"Below" it.
+// VA_BUCKETS is the single source of truth for these three labels — renderVaOpen() below iterates the
+// same array instead of a separately hardcoded one, so the two can't drift out of sync.
+const VA_BUCKETS=["Above","Inside","Below"];
 function openVsVa(s){
   const h=referenceVaHigh(s), l=referenceVaLow(s);
   if(!Number.isFinite(s.openRangeOpen)||!Number.isFinite(h)||!Number.isFinite(l))return null;
-  if(s.openRangeOpen>h)return"Above";
-  if(s.openRangeOpen<l)return"Below";
-  return"Inside";
+  if(s.openRangeOpen>h)return VA_BUCKETS[0];
+  if(s.openRangeOpen<l)return VA_BUCKETS[2];
+  return VA_BUCKETS[1];
 }
 function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
 function targets(s){
@@ -442,38 +447,42 @@ function setDefaultDate(){if(!date.value)date.value=new Date().toISOString().sli
 setDefaultDate();
 
 function findPriorSession(pred){const list=sessions.filter(pred).sort((a,b)=>(a.date||"").localeCompare(b.date||""));return list.length?list[list.length-1]:null}
-function setRef(idHigh,idLow,src,label){
+// Shared by setRef()/setVaRef() below. If this record already has a valid saved reference (i.e. we're
+// editing an existing session, not creating a new one), that saved value is kept locked as-is rather
+// than re-derived from the source session's *current* data — otherwise saving this record for any
+// unrelated reason (fixing a typo in Notes, say) would silently rewrite an already-passed reference.
+// New entries (no recordId yet) always fall through to the normal auto-fill-from-source behavior.
+function setFieldRef(idHigh,idLow,src,label,hintEl,highKey,lowKey,highLabel,lowLabel,invalidDesc,invalidHint){
   const hi=document.getElementById(idHigh), lo=document.getElementById(idLow);
-  if(src&&Number.isFinite(src.high)&&Number.isFinite(src.low)&&src.high>src.low){
-    hi.value=src.high;lo.value=src.low;hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
-    refHint.textContent=`Auto-filled from ${label} session on ${src.date} (High ${src.high}, Low ${src.low}). Locked — edit that session to change it.`;
+  const savedHigh=n(hi.value), savedLow=n(lo.value);
+  if(recordId.value&&Number.isFinite(savedHigh)&&Number.isFinite(savedLow)&&savedHigh>savedLow){
+    hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
+    hintEl.textContent=`Using this session's saved reference (${highLabel} ${savedHigh}, ${lowLabel} ${savedLow}). Locked — this won't change even if the source session's data changes later.`;
+    return;
+  }
+  if(src&&Number.isFinite(src[highKey])&&Number.isFinite(src[lowKey])&&src[highKey]>src[lowKey]){
+    hi.value=src[highKey];lo.value=src[lowKey];hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
+    hintEl.textContent=`Auto-filled from ${label} session on ${src.date} (${highLabel} ${src[highKey]}, ${lowLabel} ${src[lowKey]}). Locked — edit that session to change it.`;
   }else if(src){
     hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
-    refHint.textContent=`${label} session on ${src.date} has no valid High/Low (High must be greater than Low) — enter the reference manually, or fix that session's Current Session High/Low.`;
+    hintEl.textContent=`${label} session on ${src.date} has no valid ${invalidDesc} (${highLabel} must be greater than ${lowLabel}) — enter the reference manually, or fix that session's ${invalidHint}.`;
   }else{
     hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
-    refHint.textContent=`No matching ${label} session found yet — enter manually.`;
+    hintEl.textContent=`No matching ${label} session found yet — enter manually.`;
   }
 }
+function setRef(idHigh,idLow,src,label){
+  setFieldRef(idHigh,idLow,src,label,refHint,"high","low","High","Low","High/Low","Current Session High/Low");
+}
 function setVaRef(idHigh,idLow,src,label){
-  const hi=document.getElementById(idHigh), lo=document.getElementById(idLow);
-  if(src&&Number.isFinite(src.vaHigh)&&Number.isFinite(src.vaLow)&&src.vaHigh>src.vaLow){
-    hi.value=src.vaHigh;lo.value=src.vaLow;hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
-    vaRefHint.textContent=`Auto-filled from ${label} session on ${src.date} (VA High ${src.vaHigh}, VA Low ${src.vaLow}). Locked — edit that session to change it.`;
-  }else if(src){
-    hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
-    vaRefHint.textContent=`${label} session on ${src.date} has no valid Value Area (VA High must be greater than VA Low) — enter the reference manually, or fix that session's Value Area.`;
-  }else{
-    hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
-    vaRefHint.textContent=`No matching ${label} session found yet — enter manually.`;
-  }
+  setFieldRef(idHigh,idLow,src,label,vaRefHint,"vaHigh","vaLow","VA High","VA Low","Value Area","Value Area");
 }
 function updateReferenceFields(){
   const type=sessionType.value, d=date.value;
   document.querySelectorAll(".refgroup").forEach(g=>g.classList.toggle("hidden",g.dataset.type!==type));
   if(!d){refHint.textContent="";vaRefHint.textContent="";return}
   const c=SESSION_REF[type];
-  if(!c)return;
+  if(!c){refHint.textContent="";vaRefHint.textContent="";return}
   const src=c.findSrc(d);
   setRef(c.fieldPrefix+"High",c.fieldPrefix+"Low",src,c.entryLabel);
   setVaRef(c.fieldPrefix+"VaHigh",c.fieldPrefix+"VaLow",src,c.entryLabel);
@@ -776,24 +785,27 @@ function renderRangeCorr(){
 function outcomeMix(arr){
   const n=arr.length;
   if(!n)return"—";
-  const order=["Up","Down","Balanced","Reversal"];
+  // Reads the Outcome dropdown's own options instead of a hardcoded copy, so adding/renaming an
+  // Outcome option here automatically flows through instead of silently landing in "Unset".
+  const order=[...document.getElementById("outcome").options].map(o=>o.value);
   const counts=order.map(k=>[k,arr.filter(s=>s.outcome===k).length]);
   const unset=n-counts.reduce((sum,[,c])=>sum+c,0);
   if(unset>0)counts.push(["Unset",unset]);
   return counts.filter(([,c])=>c>0).map(([k,c])=>`${k} ${pct(c/n)}`).join(" · ");
 }
+// Returns raw numbers/fractions (not formatted strings), matching the newsBreachStats/eventTypeStats
+// convention elsewhere in the file — formatting happens once, at HTML-build time, in renderVaOpen.
+function hitStat(arr,key){const answered=arr.filter(s=>s[key]==="Yes"||s[key]==="No");return{rate:answered.length?hitRate(answered,key):null,n:answered.length}}
 function vaBucketStats(arr){
-  const n=arr.length;
-  const hitCell=key=>{const answered=arr.filter(s=>s[key]==="Yes"||s[key]==="No");return answered.length?`${pct(hitRate(answered,key))} (n=${answered.length})`:"—"};
   return{
-    n, outcomeStr:outcomeMix(arr),
-    fr:hitCell("frHit"), hr:hitCell("hrHit"), qr:hitCell("qrHit"), er:hitCell("erHit"),
-    avgR:arr.some(s=>Number.isFinite(s.resultR))?fmt(expectancy(arr))+"R":"—"
+    n:arr.length, outcomeStr:outcomeMix(arr),
+    fr:hitStat(arr,"frHit"), hr:hitStat(arr,"hrHit"), qr:hitStat(arr,"qrHit"), er:hitStat(arr,"erHit"),
+    avgR:arr.some(s=>Number.isFinite(s.resultR))?expectancy(arr):null
   };
 }
 function renderVaOpen(){
   const all=enrich(sessions).filter(s=>s.openVsVa);
-  const buckets=["Above","Inside","Below"];
+  const buckets=VA_BUCKETS;
   const rows=[];
   SESSION_ORDER.forEach(type=>{
     const byType=all.filter(s=>s.sessionType===type);
@@ -803,8 +815,9 @@ function renderVaOpen(){
       if(arr.length)rows.push({type,bucket:b,...vaBucketStats(arr)});
     });
   });
+  const fmtHit=h=>h.n?`${pct(h.rate)} (n=${h.n})`:"—";
   vaOpenTable.innerHTML=`<thead><tr><th>Session</th><th>Open vs Prior VA</th><th>n</th><th>Outcome Mix</th><th>FR Hit</th><th>HR Hit</th><th>QR Hit</th><th>ER Hit</th><th>Avg Result R</th></tr></thead><tbody>${
-    rows.length?rows.map(r=>`<tr><td>${r.type}</td><td>${r.bucket}</td><td>${r.n}</td><td>${r.outcomeStr}</td><td>${r.fr}</td><td>${r.hr}</td><td>${r.qr}</td><td>${r.er}</td><td>${r.avgR}</td></tr>`).join("")
+    rows.length?rows.map(r=>`<tr><td>${r.type}</td><td>${r.bucket}</td><td>${r.n}</td><td>${r.outcomeStr}</td><td>${fmtHit(r.fr)}</td><td>${fmtHit(r.hr)}</td><td>${fmtHit(r.qr)}</td><td>${fmtHit(r.er)}</td><td>${r.avgR!=null?fmt(r.avgR)+"R":"—"}</td></tr>`).join("")
     :'<tr><td colspan="9">No sessions yet have both an Open Price and a matching prior session\'s Value Area filled in.</td></tr>'
   }</tbody>`;
 }
