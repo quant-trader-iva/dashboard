@@ -136,6 +136,7 @@
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
+    <div class="card span-12"><h2>Session Open vs Prior Value Area</h2><p class="hint">Breaks down sessions by the "Open vs Prior VA" field entered on each session — your own Above/Inside/Below judgment of where that session opened relative to the relevant prior session's Value Area (Weekly &rarr; previous Weekly, Daily &rarr; previous Daily, London &rarr; previous New York day, New York &rarr; same-day London). Requires that field to be filled in.</p><div class="tablewrap"><table id="vaOpenTable"></table></div></div>
     <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session. "Timing" compares each session's High/Low Time (optional, entered on the session) against that event's release time — only counted when both a breach happened and both times are known.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
   </div>
 </section>
@@ -187,6 +188,8 @@
           <div><label>Current London High</label><input id="londonHigh" type="number" step="0.01"/></div>
           <div><label>Current London Low</label><input id="londonLow" type="number" step="0.01"/></div>
         </div>
+
+        <div><label>Open vs Prior VA</label><select id="openVsVa"><option value="">—</option><option>Above</option><option>Inside</option><option>Below</option></select></div>
 
         <div><label>Open Range - Open Price</label><input id="openRangeOpen" type="number" step="0.01"/></div>
         <div><label>Open Range - Close Price</label><input id="openRangeClose" type="number" step="0.01"/></div>
@@ -332,7 +335,7 @@ const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stringify(pendingDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 
 function n(v){if(v===""||v==null)return null;const x=Number(v);return Number.isFinite(x)?x:null}
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
@@ -349,28 +352,28 @@ function londonRange(s){return Number.isFinite(s.londonHigh)&&Number.isFinite(s.
 function nyRange(s){return Number.isFinite(s.nyHigh)&&Number.isFinite(s.nyLow)?s.nyHigh-s.nyLow:null}
 function closingRange(s){return Number.isFinite(s.openRangeOpen)&&Number.isFinite(s.openRangeClose)?s.openRangeClose-s.openRangeOpen:null}
 
-function referenceHigh(s){
-  if(s.sessionType==="Weekly") return s.prevWeekHigh;
-  if(s.sessionType==="Daily") return s.prevDayHigh;
-  if(s.sessionType==="London") return s.prevNyHigh;
-  if(s.sessionType==="New York") return s.londonHigh;
-  return null;
-}
-function referenceLow(s){
-  if(s.sessionType==="Weekly") return s.prevWeekLow;
-  if(s.sessionType==="Daily") return s.prevDayLow;
-  if(s.sessionType==="London") return s.prevNyLow;
-  if(s.sessionType==="New York") return s.londonLow;
-  return null;
-}
-function referenceLabel(s){
-  if(s.sessionType==="Weekly") return "Previous Weekly H/L";
-  if(s.sessionType==="Daily") return "Previous Day H/L";
-  if(s.sessionType==="London") return "Previous NY Day H/L";
-  if(s.sessionType==="New York") return "Current London H/L";
-  return "";
-}
+// Single source of truth for "which prior/paired session backs this session type" — every place that
+// needs to find, read, or label that reference dispatches off this one table instead of repeating its
+// own sessionType if/else chain. fieldPrefix builds the frozen-snapshot field names (e.g. "prevWeek" ->
+// prevWeekHigh/prevWeekLow).
+const SESSION_REF={
+  Weekly:{fieldPrefix:"prevWeek", hlLabel:"Previous Weekly H/L", entryLabel:"previous Weekly",
+    findSrc:d=>findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d)},
+  Daily:{fieldPrefix:"prevDay", hlLabel:"Previous Day H/L", entryLabel:"previous Daily",
+    findSrc:d=>findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d)},
+  London:{fieldPrefix:"prevNy", hlLabel:"Previous NY Day H/L", entryLabel:"previous New York",
+    findSrc:d=>findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d)},
+  "New York":{fieldPrefix:"london", hlLabel:"Current London H/L", entryLabel:"same-day London",
+    findSrc:d=>sessions.find(s=>s.sessionType==="London"&&s.date===d)||null}
+};
+function referenceHigh(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"High"]:null}
+function referenceLow(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"Low"]:null}
+function referenceLabel(s){const c=SESSION_REF[s.sessionType];return c?c.hlLabel:""}
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
+// Open vs Prior VA is entered directly by the user per session (Above/Inside/Below, a manual judgment
+// call against whichever prior session's Value Area is relevant — see SESSION_REF above) rather than
+// computed from numeric VA levels, so it's just s.openVsVa, no derivation needed.
+const VA_BUCKETS=["Above","Inside","Below"];
 function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
 function targets(s){
   const fr=referenceRange(s);
@@ -420,8 +423,19 @@ function setDefaultDate(){if(!date.value)date.value=new Date().toISOString().sli
 setDefaultDate();
 
 function findPriorSession(pred){const list=sessions.filter(pred).sort((a,b)=>(a.date||"").localeCompare(b.date||""));return list.length?list[list.length-1]:null}
+// If this record already has a valid saved reference (i.e. we're editing an existing session, not
+// creating a new one), that saved value is kept locked as-is rather than re-derived from the source
+// session's *current* data — otherwise saving this record for any unrelated reason (fixing a typo in
+// Notes, say) would silently rewrite an already-passed reference. New entries (no recordId yet) always
+// fall through to the normal auto-fill-from-source behavior.
 function setRef(idHigh,idLow,src,label){
   const hi=document.getElementById(idHigh), lo=document.getElementById(idLow);
+  const savedHigh=n(hi.value), savedLow=n(lo.value);
+  if(recordId.value&&Number.isFinite(savedHigh)&&Number.isFinite(savedLow)&&savedHigh>savedLow){
+    hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
+    refHint.textContent=`Using this session's saved reference (High ${savedHigh}, Low ${savedLow}). Locked — this won't change even if the source session's data changes later.`;
+    return;
+  }
   if(src&&Number.isFinite(src.high)&&Number.isFinite(src.low)&&src.high>src.low){
     hi.value=src.high;lo.value=src.low;hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
     refHint.textContent=`Auto-filled from ${label} session on ${src.date} (High ${src.high}, Low ${src.low}). Locked — edit that session to change it.`;
@@ -437,15 +451,10 @@ function updateReferenceFields(){
   const type=sessionType.value, d=date.value;
   document.querySelectorAll(".refgroup").forEach(g=>g.classList.toggle("hidden",g.dataset.type!==type));
   if(!d){refHint.textContent="";return}
-  if(type==="Weekly"){
-    setRef("prevWeekHigh","prevWeekLow",findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d),"previous Weekly");
-  }else if(type==="Daily"){
-    setRef("prevDayHigh","prevDayLow",findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d),"previous Daily");
-  }else if(type==="London"){
-    setRef("prevNyHigh","prevNyLow",findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d),"previous New York");
-  }else if(type==="New York"){
-    setRef("londonHigh","londonLow",sessions.find(s=>s.sessionType==="London"&&s.date===d)||null,"same-day London");
-  }
+  const c=SESSION_REF[type];
+  if(!c){refHint.textContent="";return}
+  const src=c.findSrc(d);
+  setRef(c.fieldPrefix+"High",c.fieldPrefix+"Low",src,c.entryLabel);
 }
 sessionType.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
 date.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
@@ -645,6 +654,7 @@ function renderProjectionGrid(){
   const rows=[
     ["SESSION",s=>s.sessionType||"","subhead"],
     ["Reference Source",s=>s.referenceLabel||"","ref"],["Reference High",s=>fmt(s.referenceHigh),"ref"],["Reference Low",s=>fmt(s.referenceLow),"ref"],["Reference FR Range",s=>fmt(s.referenceRange),"ref"],
+    ["Open vs Prior VA",s=>s.openVsVa||"","ref"],
     ["Open Range - Open Price",s=>fmt(s.openRangeOpen),""],["Open Range - Close Price",s=>fmt(s.openRangeClose),""],["Closing Range",s=>fmt(s.closingRange),"yellow"],["POC",s=>fmt(s.poc),""],["VPOC",s=>fmt(s.vpoc),""],
     ["Close Range - Open Price",s=>fmt(s.closeRangeOpen),""],["Close Range - Close Price",s=>fmt(s.closeRangeClose),""],["Total Volume",s=>fmt(s.volume,0),"yellow"],
     ["Current Session High",s=>fmt(s.high),""],["Current Session Low",s=>fmt(s.low),""],["Current Session Range",s=>fmt(s.currentRange),""],
@@ -740,6 +750,45 @@ function renderRangeCorr(){
   ];
   rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachRows.map(([label,arr])=>`<tr><td>${label}</td><td>${arr.length?fmt(avg(arr)):""}</td><td>${arr.length}</td></tr>`).join("")}</tbody>`;
 }
+function outcomeMix(arr){
+  const n=arr.length;
+  if(!n)return"—";
+  // Reads the Outcome dropdown's own options instead of a hardcoded copy, so adding/renaming an
+  // Outcome option here automatically flows through instead of silently landing in "Unset".
+  const order=[...document.getElementById("outcome").options].map(o=>o.value);
+  const counts=order.map(k=>[k,arr.filter(s=>s.outcome===k).length]);
+  const unset=n-counts.reduce((sum,[,c])=>sum+c,0);
+  if(unset>0)counts.push(["Unset",unset]);
+  return counts.filter(([,c])=>c>0).map(([k,c])=>`${k} ${pct(c/n)}`).join(" · ");
+}
+// Returns raw numbers/fractions (not formatted strings), matching the newsBreachStats/eventTypeStats
+// convention elsewhere in the file — formatting happens once, at HTML-build time, in renderVaOpen.
+function hitStat(arr,key){const answered=arr.filter(s=>s[key]==="Yes"||s[key]==="No");return{rate:answered.length?hitRate(answered,key):null,n:answered.length}}
+function vaBucketStats(arr){
+  return{
+    n:arr.length, outcomeStr:outcomeMix(arr),
+    fr:hitStat(arr,"frHit"), hr:hitStat(arr,"hrHit"), qr:hitStat(arr,"qrHit"), er:hitStat(arr,"erHit"),
+    avgR:arr.some(s=>Number.isFinite(s.resultR))?expectancy(arr):null
+  };
+}
+function renderVaOpen(){
+  const all=enrich(sessions).filter(s=>s.openVsVa);
+  const buckets=VA_BUCKETS;
+  const rows=[];
+  SESSION_ORDER.forEach(type=>{
+    const byType=all.filter(s=>s.sessionType===type);
+    if(!byType.length)return;
+    buckets.forEach(b=>{
+      const arr=byType.filter(s=>s.openVsVa===b);
+      if(arr.length)rows.push({type,bucket:b,...vaBucketStats(arr)});
+    });
+  });
+  const fmtHit=h=>h.n?`${pct(h.rate)} (n=${h.n})`:"—";
+  vaOpenTable.innerHTML=`<thead><tr><th>Session</th><th>Open vs Prior VA</th><th>n</th><th>Outcome Mix</th><th>FR Hit</th><th>HR Hit</th><th>QR Hit</th><th>ER Hit</th><th>Avg Result R</th></tr></thead><tbody>${
+    rows.length?rows.map(r=>`<tr><td>${r.type}</td><td>${r.bucket}</td><td>${r.n}</td><td>${r.outcomeStr}</td><td>${fmtHit(r.fr)}</td><td>${fmtHit(r.hr)}</td><td>${fmtHit(r.qr)}</td><td>${fmtHit(r.er)}</td><td>${r.avgR!=null?fmt(r.avgR)+"R":"—"}</td></tr>`).join("")
+    :'<tr><td colspan="9">No sessions yet have the Open vs Prior VA field filled in.</td></tr>'
+  }</tbody>`;
+}
 function newsBreachStats(arr){
   const n=arr.length;
   return{
@@ -817,7 +866,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderNewsImpact,applyDataFilters,applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
@@ -929,8 +978,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
