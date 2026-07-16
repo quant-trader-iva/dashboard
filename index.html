@@ -160,6 +160,7 @@
     <h2>Session Entry</h2>
     <p class="hint"><b>Important:</b> Fill the correct reference high/low for the session. The dashboard calculates FR/HR/QR/ER from the reference range, not from the current session high/low. Only the reference pair relevant to the selected Session Type is shown below, and it auto-fills (and locks) from your saved sessions when a match is found.</p>
     <p class="hint" id="refHint"></p>
+    <p class="hint" id="vaRefHint"></p>
     <form id="entryForm">
       <input type="hidden" id="recordId"/>
       <div class="form-grid">
@@ -176,18 +177,26 @@
         <div class="refgroup" data-type="Weekly">
           <div><label>Previous Weekly High</label><input id="prevWeekHigh" type="number" step="0.01"/></div>
           <div><label>Previous Weekly Low</label><input id="prevWeekLow" type="number" step="0.01"/></div>
+          <div><label>Previous Weekly VA High</label><input id="prevWeekVaHigh" type="number" step="0.01"/></div>
+          <div><label>Previous Weekly VA Low</label><input id="prevWeekVaLow" type="number" step="0.01"/></div>
         </div>
         <div class="refgroup" data-type="Daily">
           <div><label>Previous Day High</label><input id="prevDayHigh" type="number" step="0.01"/></div>
           <div><label>Previous Day Low</label><input id="prevDayLow" type="number" step="0.01"/></div>
+          <div><label>Previous Day VA High</label><input id="prevDayVaHigh" type="number" step="0.01"/></div>
+          <div><label>Previous Day VA Low</label><input id="prevDayVaLow" type="number" step="0.01"/></div>
         </div>
         <div class="refgroup" data-type="London">
           <div><label>Previous NY Day High</label><input id="prevNyHigh" type="number" step="0.01"/></div>
           <div><label>Previous NY Day Low</label><input id="prevNyLow" type="number" step="0.01"/></div>
+          <div><label>Previous NY Day VA High</label><input id="prevNyVaHigh" type="number" step="0.01"/></div>
+          <div><label>Previous NY Day VA Low</label><input id="prevNyVaLow" type="number" step="0.01"/></div>
         </div>
         <div class="refgroup" data-type="New York">
           <div><label>Current London High</label><input id="londonHigh" type="number" step="0.01"/></div>
           <div><label>Current London Low</label><input id="londonLow" type="number" step="0.01"/></div>
+          <div><label>Current London VA High</label><input id="londonVaHigh" type="number" step="0.01"/></div>
+          <div><label>Current London VA Low</label><input id="londonVaLow" type="number" step="0.01"/></div>
         </div>
 
         <div><label>Open Range - Open Price</label><input id="openRangeOpen" type="number" step="0.01"/></div>
@@ -331,7 +340,7 @@ const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stringify(pendingDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","vaHigh","vaLow","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","upFrHit","downFrHit","upHrHit","downHrHit","upQrHit","downQrHit","upErHit","downErHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","prevWeekVaHigh","prevWeekVaLow","prevDayVaHigh","prevDayVaLow","prevNyVaHigh","prevNyVaLow","londonVaHigh","londonVaLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","vaHigh","vaLow","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","upFrHit","downFrHit","upHrHit","downHrHit","upQrHit","downQrHit","upErHit","downErHit","notes"];
 
 function n(v){if(v===""||v==null)return null;const x=Number(v);return Number.isFinite(x)?x:null}
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
@@ -370,27 +379,35 @@ function referenceLabel(s){
   return "";
 }
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
-// Same session-pairing used by referenceHigh/referenceLow (and by updateReferenceFields' auto-fill),
-// reused here to find which *other* session's own Value Area a given session's open should be judged against.
-function vaRefSession(s){
-  if(!s.sessionType)return null;
-  if(s.sessionType==="Weekly") return findPriorSession(x=>x.sessionType==="Weekly"&&x.date&&x.date<s.date);
-  if(s.sessionType==="Daily") return findPriorSession(x=>x.sessionType==="Daily"&&x.date&&x.date<s.date);
-  if(s.sessionType==="London") return findPriorSession(x=>x.sessionType==="New York"&&x.date&&x.date<s.date);
-  if(s.sessionType==="New York") return sessions.find(x=>x.sessionType==="London"&&x.date===s.date)||null;
+// Value Area reference is a frozen snapshot, same as referenceHigh/referenceLow above — it's filled in
+// (and locked) on the record itself at entry time by setVaRef()/updateReferenceFields(), not looked up
+// live, so editing a past session's own Value Area later never rewrites an already-saved session's stats.
+function referenceVaHigh(s){
+  if(s.sessionType==="Weekly") return s.prevWeekVaHigh;
+  if(s.sessionType==="Daily") return s.prevDayVaHigh;
+  if(s.sessionType==="London") return s.prevNyVaHigh;
+  if(s.sessionType==="New York") return s.londonVaHigh;
   return null;
 }
-function vaRefLabel(s){
+function referenceVaLow(s){
+  if(s.sessionType==="Weekly") return s.prevWeekVaLow;
+  if(s.sessionType==="Daily") return s.prevDayVaLow;
+  if(s.sessionType==="London") return s.prevNyVaLow;
+  if(s.sessionType==="New York") return s.londonVaLow;
+  return null;
+}
+function referenceVaLabel(s){
   if(s.sessionType==="Weekly") return "Previous Weekly VA";
   if(s.sessionType==="Daily") return "Previous Daily VA";
   if(s.sessionType==="London") return "Previous NY Day VA";
   if(s.sessionType==="New York") return "Current London VA";
   return "";
 }
-function openVsVa(s,vaHigh,vaLow){
-  if(!Number.isFinite(s.openRangeOpen)||!Number.isFinite(vaHigh)||!Number.isFinite(vaLow))return null;
-  if(s.openRangeOpen>vaHigh)return"Above";
-  if(s.openRangeOpen<vaLow)return"Below";
+function openVsVa(s){
+  const h=referenceVaHigh(s), l=referenceVaLow(s);
+  if(!Number.isFinite(s.openRangeOpen)||!Number.isFinite(h)||!Number.isFinite(l))return null;
+  if(s.openRangeOpen>h)return"Above";
+  if(s.openRangeOpen<l)return"Below";
   return"Inside";
 }
 function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
@@ -421,13 +438,10 @@ function enrich(arr){
     const upQrHit=s.upQrHit??s.qrHit??null, downQrHit=s.downQrHit??s.qrHit??null;
     const upErHit=s.upErHit??s.erHit??null, downErHit=s.downErHit??s.erHit??null;
     const down=s.bias==="Down";
-    const vaSrc=vaRefSession(s);
-    const vaRefHigh=vaSrc&&Number.isFinite(vaSrc.vaHigh)?vaSrc.vaHigh:null;
-    const vaRefLow=vaSrc&&Number.isFinite(vaSrc.vaLow)?vaSrc.vaLow:null;
     return{
       ...s,
       referenceLabel:referenceLabel(s), referenceHigh:referenceHigh(s), referenceLow:referenceLow(s), referenceRange:referenceRange(s),
-      vaRefLabel:vaRefLabel(s), vaRefHigh, vaRefLow, openVsVa:openVsVa(s,vaRefHigh,vaRefLow),
+      vaRefLabel:referenceVaLabel(s), vaRefHigh:referenceVaHigh(s), vaRefLow:referenceVaLow(s), openVsVa:openVsVa(s),
       fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
       currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
       ibRange:ibRange(s), londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
@@ -472,18 +486,39 @@ function setRef(idHigh,idLow,src,label){
     refHint.textContent=`No matching ${label} session found yet — enter manually.`;
   }
 }
+function setVaRef(idHigh,idLow,src,label){
+  const hi=document.getElementById(idHigh), lo=document.getElementById(idLow);
+  if(src&&Number.isFinite(src.vaHigh)&&Number.isFinite(src.vaLow)&&src.vaHigh>src.vaLow){
+    hi.value=src.vaHigh;lo.value=src.vaLow;hi.readOnly=true;lo.readOnly=true;hi.classList.add("auto");lo.classList.add("auto");
+    vaRefHint.textContent=`Auto-filled from ${label} session on ${src.date} (VA High ${src.vaHigh}, VA Low ${src.vaLow}). Locked — edit that session to change it.`;
+  }else if(src){
+    hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
+    vaRefHint.textContent=`${label} session on ${src.date} has no valid Value Area (VA High must be greater than VA Low) — enter the reference manually, or fix that session's Value Area.`;
+  }else{
+    hi.readOnly=false;lo.readOnly=false;hi.classList.remove("auto");lo.classList.remove("auto");
+    vaRefHint.textContent=`No matching ${label} session found yet — enter manually.`;
+  }
+}
 function updateReferenceFields(){
   const type=sessionType.value, d=date.value;
   document.querySelectorAll(".refgroup").forEach(g=>g.classList.toggle("hidden",g.dataset.type!==type));
-  if(!d){refHint.textContent="";return}
+  if(!d){refHint.textContent="";vaRefHint.textContent="";return}
   if(type==="Weekly"){
-    setRef("prevWeekHigh","prevWeekLow",findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d),"previous Weekly");
+    const src=findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d);
+    setRef("prevWeekHigh","prevWeekLow",src,"previous Weekly");
+    setVaRef("prevWeekVaHigh","prevWeekVaLow",src,"previous Weekly");
   }else if(type==="Daily"){
-    setRef("prevDayHigh","prevDayLow",findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d),"previous Daily");
+    const src=findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d);
+    setRef("prevDayHigh","prevDayLow",src,"previous Daily");
+    setVaRef("prevDayVaHigh","prevDayVaLow",src,"previous Daily");
   }else if(type==="London"){
-    setRef("prevNyHigh","prevNyLow",findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d),"previous New York");
+    const src=findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d);
+    setRef("prevNyHigh","prevNyLow",src,"previous New York");
+    setVaRef("prevNyVaHigh","prevNyVaLow",src,"previous New York");
   }else if(type==="New York"){
-    setRef("londonHigh","londonLow",sessions.find(s=>s.sessionType==="London"&&s.date===d)||null,"same-day London");
+    const src=sessions.find(s=>s.sessionType==="London"&&s.date===d)||null;
+    setRef("londonHigh","londonLow",src,"same-day London");
+    setVaRef("londonVaHigh","londonVaLow",src,"same-day London");
   }
 }
 sessionType.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
@@ -512,7 +547,7 @@ function setNewsEventsInForm(events){
   newsEventsList.innerHTML="";
   (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact,ev.time));
 }
-function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","vaHigh","vaLow","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
+function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","prevWeekVaHigh","prevWeekVaLow","prevDayVaHigh","prevDayVaLow","prevNyVaHigh","prevNyVaLow","londonVaHigh","londonVaLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","vaHigh","vaLow","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
 function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();entryFormError.style.display="none";showTab("entry")}
 function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields();entryFormError.style.display="none"}
 
@@ -1018,8 +1053,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,va_high:s.vaHigh,va_low:s.vaLow,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,up_fr_hit:s.upFrHit,down_fr_hit:s.downFrHit,up_hr_hit:s.upHrHit,down_hr_hit:s.downHrHit,up_qr_hit:s.upQrHit,down_qr_hit:s.downQrHit,up_er_hit:s.upErHit,down_er_hit:s.downErHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,vaHigh:r.va_high,vaLow:r.va_low,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,upFrHit:r.up_fr_hit,downFrHit:r.down_fr_hit,upHrHit:r.up_hr_hit,downHrHit:r.down_hr_hit,upQrHit:r.up_qr_hit,downQrHit:r.down_qr_hit,upErHit:r.up_er_hit,downErHit:r.down_er_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,prev_week_va_high:s.prevWeekVaHigh,prev_week_va_low:s.prevWeekVaLow,prev_day_va_high:s.prevDayVaHigh,prev_day_va_low:s.prevDayVaLow,prev_ny_va_high:s.prevNyVaHigh,prev_ny_va_low:s.prevNyVaLow,london_va_high:s.londonVaHigh,london_va_low:s.londonVaLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,va_high:s.vaHigh,va_low:s.vaLow,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,up_fr_hit:s.upFrHit,down_fr_hit:s.downFrHit,up_hr_hit:s.upHrHit,down_hr_hit:s.downHrHit,up_qr_hit:s.upQrHit,down_qr_hit:s.downQrHit,up_er_hit:s.upErHit,down_er_hit:s.downErHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,prevWeekVaHigh:r.prev_week_va_high,prevWeekVaLow:r.prev_week_va_low,prevDayVaHigh:r.prev_day_va_high,prevDayVaLow:r.prev_day_va_low,prevNyVaHigh:r.prev_ny_va_high,prevNyVaLow:r.prev_ny_va_low,londonVaHigh:r.london_va_high,londonVaLow:r.london_va_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,vaHigh:r.va_high,vaLow:r.va_low,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,upFrHit:r.up_fr_hit,downFrHit:r.down_fr_hit,upHrHit:r.up_hr_hit,downHrHit:r.down_hr_hit,upQrHit:r.up_qr_hit,downQrHit:r.down_qr_hit,upErHit:r.up_er_hit,downErHit:r.down_er_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
