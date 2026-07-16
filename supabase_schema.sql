@@ -5,24 +5,24 @@
 -- Skipping this breaks sync for ALL sessions (not just ones using the new
 -- field), since toDb() sends every column on every upsert.
 --
--- Run this on an existing database to add the Value Area columns (manually-entered
--- per session, used to check whether the next session's open traded above/inside/below it):
---   alter table public.trading_sessions add column if not exists va_high numeric;
---   alter table public.trading_sessions add column if not exists va_low numeric;
+-- Run this on an existing database to add the Open vs Prior VA column — the user's own
+-- Above/Inside/Below judgment of where a session's open traded relative to the relevant prior
+-- session's Value Area, entered directly (no numeric VA levels are stored or computed):
+--   alter table public.trading_sessions add column if not exists open_vs_va text check (open_vs_va in ('Above','Inside','Below') or open_vs_va is null);
 --
--- Run this on an existing database to add the Value Area *reference* columns — these mirror
--- prev_week_high/prev_day_high/prev_ny_high/london_high: a frozen snapshot of the relevant prior
--- session's Value Area, copied onto the record at entry time (and locked), NOT recomputed live.
--- This keeps already-saved sessions' Open-vs-VA classification stable even if the source
--- session's own va_high/va_low is edited later:
---   alter table public.trading_sessions add column if not exists prev_week_va_high numeric;
---   alter table public.trading_sessions add column if not exists prev_week_va_low numeric;
---   alter table public.trading_sessions add column if not exists prev_day_va_high numeric;
---   alter table public.trading_sessions add column if not exists prev_day_va_low numeric;
---   alter table public.trading_sessions add column if not exists prev_ny_va_high numeric;
---   alter table public.trading_sessions add column if not exists prev_ny_va_low numeric;
---   alter table public.trading_sessions add column if not exists london_va_high numeric;
---   alter table public.trading_sessions add column if not exists london_va_low numeric;
+-- If you previously ran an earlier version of this migration that added numeric VA columns
+-- (va_high, va_low, prev_week_va_high/low, prev_day_va_high/low, prev_ny_va_high/low,
+-- london_va_high/low), those are no longer used and can be dropped:
+--   alter table public.trading_sessions drop column if exists va_high;
+--   alter table public.trading_sessions drop column if exists va_low;
+--   alter table public.trading_sessions drop column if exists prev_week_va_high;
+--   alter table public.trading_sessions drop column if exists prev_week_va_low;
+--   alter table public.trading_sessions drop column if exists prev_day_va_high;
+--   alter table public.trading_sessions drop column if exists prev_day_va_low;
+--   alter table public.trading_sessions drop column if exists prev_ny_va_high;
+--   alter table public.trading_sessions drop column if exists prev_ny_va_low;
+--   alter table public.trading_sessions drop column if exists london_va_high;
+--   alter table public.trading_sessions drop column if exists london_va_low;
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -45,14 +45,7 @@ create table if not exists public.trading_sessions (
   london_high numeric,
   london_low numeric,
 
-  prev_week_va_high numeric,
-  prev_week_va_low numeric,
-  prev_day_va_high numeric,
-  prev_day_va_low numeric,
-  prev_ny_va_high numeric,
-  prev_ny_va_low numeric,
-  london_va_high numeric,
-  london_va_low numeric,
+  open_vs_va text check (open_vs_va in ('Above','Inside','Below') or open_vs_va is null),
 
   open_range_open numeric,
   open_range_close numeric,
@@ -65,8 +58,6 @@ create table if not exists public.trading_sessions (
   low_time text,
   poc numeric,
   vpoc numeric,
-  va_high numeric,
-  va_low numeric,
 
   ib_high numeric,
   ib_low numeric,
