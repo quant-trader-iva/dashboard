@@ -4,6 +4,16 @@
 --   alter table public.trading_sessions add column if not exists news_events jsonb default '[]'::jsonb;
 -- Skipping this breaks sync for ALL sessions (not just ones using the new
 -- field), since toDb() sends every column on every upsert.
+--
+-- Run this on an existing database to add the per-side FR/HR/QR/ER hit columns:
+--   alter table public.trading_sessions add column if not exists up_fr_hit text check (up_fr_hit in ('Yes','No') or up_fr_hit is null);
+--   alter table public.trading_sessions add column if not exists down_fr_hit text check (down_fr_hit in ('Yes','No') or down_fr_hit is null);
+--   alter table public.trading_sessions add column if not exists up_hr_hit text check (up_hr_hit in ('Yes','No') or up_hr_hit is null);
+--   alter table public.trading_sessions add column if not exists down_hr_hit text check (down_hr_hit in ('Yes','No') or down_hr_hit is null);
+--   alter table public.trading_sessions add column if not exists up_qr_hit text check (up_qr_hit in ('Yes','No') or up_qr_hit is null);
+--   alter table public.trading_sessions add column if not exists down_qr_hit text check (down_qr_hit in ('Yes','No') or down_qr_hit is null);
+--   alter table public.trading_sessions add column if not exists up_er_hit text check (up_er_hit in ('Yes','No') or up_er_hit is null);
+--   alter table public.trading_sessions add column if not exists down_er_hit text check (down_er_hit in ('Yes','No') or down_er_hit is null);
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -58,6 +68,14 @@ create table if not exists public.trading_sessions (
   er_hit text check (er_hit in ('Yes','No') or er_hit is null),
   up_total_hit text check (up_total_hit in ('Yes','No') or up_total_hit is null),
   down_total_hit text check (down_total_hit in ('Yes','No') or down_total_hit is null),
+  up_fr_hit text check (up_fr_hit in ('Yes','No') or up_fr_hit is null),
+  down_fr_hit text check (down_fr_hit in ('Yes','No') or down_fr_hit is null),
+  up_hr_hit text check (up_hr_hit in ('Yes','No') or up_hr_hit is null),
+  down_hr_hit text check (down_hr_hit in ('Yes','No') or down_hr_hit is null),
+  up_qr_hit text check (up_qr_hit in ('Yes','No') or up_qr_hit is null),
+  down_qr_hit text check (down_qr_hit in ('Yes','No') or down_qr_hit is null),
+  up_er_hit text check (up_er_hit in ('Yes','No') or up_er_hit is null),
+  down_er_hit text check (down_er_hit in ('Yes','No') or down_er_hit is null),
 
   news_events jsonb default '[]'::jsonb,
 
