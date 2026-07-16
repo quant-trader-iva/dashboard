@@ -4,6 +4,35 @@
 --   alter table public.trading_sessions add column if not exists news_events jsonb default '[]'::jsonb;
 -- Skipping this breaks sync for ALL sessions (not just ones using the new
 -- field), since toDb() sends every column on every upsert.
+--
+-- Run this on an existing database to add the per-side FR/HR/QR/ER hit columns:
+--   alter table public.trading_sessions add column if not exists up_fr_hit text check (up_fr_hit in ('Yes','No') or up_fr_hit is null);
+--   alter table public.trading_sessions add column if not exists down_fr_hit text check (down_fr_hit in ('Yes','No') or down_fr_hit is null);
+--   alter table public.trading_sessions add column if not exists up_hr_hit text check (up_hr_hit in ('Yes','No') or up_hr_hit is null);
+--   alter table public.trading_sessions add column if not exists down_hr_hit text check (down_hr_hit in ('Yes','No') or down_hr_hit is null);
+--   alter table public.trading_sessions add column if not exists up_qr_hit text check (up_qr_hit in ('Yes','No') or up_qr_hit is null);
+--   alter table public.trading_sessions add column if not exists down_qr_hit text check (down_qr_hit in ('Yes','No') or down_qr_hit is null);
+--   alter table public.trading_sessions add column if not exists up_er_hit text check (up_er_hit in ('Yes','No') or up_er_hit is null);
+--   alter table public.trading_sessions add column if not exists down_er_hit text check (down_er_hit in ('Yes','No') or down_er_hit is null);
+--
+-- Run this on an existing database to add the Value Area columns (manually-entered
+-- per session, used to check whether the next session's open traded above/inside/below it):
+--   alter table public.trading_sessions add column if not exists va_high numeric;
+--   alter table public.trading_sessions add column if not exists va_low numeric;
+--
+-- Run this on an existing database to add the Value Area *reference* columns — these mirror
+-- prev_week_high/prev_day_high/prev_ny_high/london_high: a frozen snapshot of the relevant prior
+-- session's Value Area, copied onto the record at entry time (and locked), NOT recomputed live.
+-- This keeps already-saved sessions' Open-vs-VA classification stable even if the source
+-- session's own va_high/va_low is edited later:
+--   alter table public.trading_sessions add column if not exists prev_week_va_high numeric;
+--   alter table public.trading_sessions add column if not exists prev_week_va_low numeric;
+--   alter table public.trading_sessions add column if not exists prev_day_va_high numeric;
+--   alter table public.trading_sessions add column if not exists prev_day_va_low numeric;
+--   alter table public.trading_sessions add column if not exists prev_ny_va_high numeric;
+--   alter table public.trading_sessions add column if not exists prev_ny_va_low numeric;
+--   alter table public.trading_sessions add column if not exists london_va_high numeric;
+--   alter table public.trading_sessions add column if not exists london_va_low numeric;
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -26,6 +55,15 @@ create table if not exists public.trading_sessions (
   london_high numeric,
   london_low numeric,
 
+  prev_week_va_high numeric,
+  prev_week_va_low numeric,
+  prev_day_va_high numeric,
+  prev_day_va_low numeric,
+  prev_ny_va_high numeric,
+  prev_ny_va_low numeric,
+  london_va_high numeric,
+  london_va_low numeric,
+
   open_range_open numeric,
   open_range_close numeric,
   close_range_open numeric,
@@ -37,6 +75,8 @@ create table if not exists public.trading_sessions (
   low_time text,
   poc numeric,
   vpoc numeric,
+  va_high numeric,
+  va_low numeric,
 
   ib_high numeric,
   ib_low numeric,
@@ -58,6 +98,14 @@ create table if not exists public.trading_sessions (
   er_hit text check (er_hit in ('Yes','No') or er_hit is null),
   up_total_hit text check (up_total_hit in ('Yes','No') or up_total_hit is null),
   down_total_hit text check (down_total_hit in ('Yes','No') or down_total_hit is null),
+  up_fr_hit text check (up_fr_hit in ('Yes','No') or up_fr_hit is null),
+  down_fr_hit text check (down_fr_hit in ('Yes','No') or down_fr_hit is null),
+  up_hr_hit text check (up_hr_hit in ('Yes','No') or up_hr_hit is null),
+  down_hr_hit text check (down_hr_hit in ('Yes','No') or down_hr_hit is null),
+  up_qr_hit text check (up_qr_hit in ('Yes','No') or up_qr_hit is null),
+  down_qr_hit text check (down_qr_hit in ('Yes','No') or down_qr_hit is null),
+  up_er_hit text check (up_er_hit in ('Yes','No') or up_er_hit is null),
+  down_er_hit text check (down_er_hit in ('Yes','No') or down_er_hit is null),
 
   news_events jsonb default '[]'::jsonb,
 
