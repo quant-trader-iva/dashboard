@@ -14,6 +14,11 @@
 --   alter table public.trading_sessions add column if not exists down_qr_hit text check (down_qr_hit in ('Yes','No') or down_qr_hit is null);
 --   alter table public.trading_sessions add column if not exists up_er_hit text check (up_er_hit in ('Yes','No') or up_er_hit is null);
 --   alter table public.trading_sessions add column if not exists down_er_hit text check (down_er_hit in ('Yes','No') or down_er_hit is null);
+--
+-- Run this on an existing database to add the Value Area columns (manually-entered
+-- per session, used to check whether the next session's open traded above/inside/below it):
+--   alter table public.trading_sessions add column if not exists va_high numeric;
+--   alter table public.trading_sessions add column if not exists va_low numeric;
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -47,6 +52,8 @@ create table if not exists public.trading_sessions (
   low_time text,
   poc numeric,
   vpoc numeric,
+  va_high numeric,
+  va_low numeric,
 
   ib_high numeric,
   ib_low numeric,

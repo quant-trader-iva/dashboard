@@ -137,6 +137,7 @@
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
     <div class="card span-12"><h2>Upside vs Downside Hit Analysis</h2><p class="hint">Per level, based on the Upside/Downside Hit selects in the Projection Grid above. "Upside Hit" and "Downside Hit" are independent rates (a session can count toward both) — each shows its own sample size (n). "Both Hit" is the share of sessions, among those with both sides answered, where price reached both the upside and downside target in the same session.</p><div class="tablewrap"><table id="bothSidesTable"></table></div></div>
+    <div class="card span-12"><h2>Session Open vs Prior Value Area</h2><p class="hint">Compares each session's Open Price (Open Range - Open Price) against the Value Area (Value Area High/Low, entered manually per session) of the relevant prior session — the same pairing already used for the Reference range above: Weekly &rarr; previous Weekly, Daily &rarr; previous Daily, London &rarr; previous New York day, New York &rarr; same-day London. Requires both sessions to have their Value Area / Open Price filled in.</p><div class="tablewrap"><table id="vaOpenTable"></table></div></div>
     <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session. "Timing" compares each session's High/Low Time (optional, entered on the session) against that event's release time — only counted when both a breach happened and both times are known.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
   </div>
 </section>
@@ -200,6 +201,8 @@
         <div><label>Low Time <span class="hint" style="font-weight:400">(optional)</span></label><input id="lowTime" type="time"/></div>
         <div><label>POC</label><input id="poc" type="number" step="0.01"/></div>
         <div><label>VPOC</label><input id="vpoc" type="number" step="0.01"/></div>
+        <div><label>Value Area High</label><input id="vaHigh" type="number" step="0.01"/></div>
+        <div><label>Value Area Low</label><input id="vaLow" type="number" step="0.01"/></div>
 
         <div><label>IB High</label><input id="ibHigh" type="number" step="0.01"/></div>
         <div><label>IB Low</label><input id="ibLow" type="number" step="0.01"/></div>
@@ -328,7 +331,7 @@ const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stringify(pendingDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","upFrHit","downFrHit","upHrHit","downHrHit","upQrHit","downQrHit","upErHit","downErHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","vaHigh","vaLow","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","upFrHit","downFrHit","upHrHit","downHrHit","upQrHit","downQrHit","upErHit","downErHit","notes"];
 
 function n(v){if(v===""||v==null)return null;const x=Number(v);return Number.isFinite(x)?x:null}
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
@@ -367,6 +370,29 @@ function referenceLabel(s){
   return "";
 }
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
+// Same session-pairing used by referenceHigh/referenceLow (and by updateReferenceFields' auto-fill),
+// reused here to find which *other* session's own Value Area a given session's open should be judged against.
+function vaRefSession(s){
+  if(!s.sessionType)return null;
+  if(s.sessionType==="Weekly") return findPriorSession(x=>x.sessionType==="Weekly"&&x.date&&x.date<s.date);
+  if(s.sessionType==="Daily") return findPriorSession(x=>x.sessionType==="Daily"&&x.date&&x.date<s.date);
+  if(s.sessionType==="London") return findPriorSession(x=>x.sessionType==="New York"&&x.date&&x.date<s.date);
+  if(s.sessionType==="New York") return sessions.find(x=>x.sessionType==="London"&&x.date===s.date)||null;
+  return null;
+}
+function vaRefLabel(s){
+  if(s.sessionType==="Weekly") return "Previous Weekly VA";
+  if(s.sessionType==="Daily") return "Previous Daily VA";
+  if(s.sessionType==="London") return "Previous NY Day VA";
+  if(s.sessionType==="New York") return "Current London VA";
+  return "";
+}
+function openVsVa(s,vaHigh,vaLow){
+  if(!Number.isFinite(s.openRangeOpen)||!Number.isFinite(vaHigh)||!Number.isFinite(vaLow))return null;
+  if(s.openRangeOpen>vaHigh)return"Above";
+  if(s.openRangeOpen<vaLow)return"Below";
+  return"Inside";
+}
 function comboRange(fr){const hr=fr/2, qr=fr/4, er=fr/8;return{hr,qr,er,total:fr+hr+qr+er}}
 function targets(s){
   const fr=referenceRange(s);
@@ -395,9 +421,13 @@ function enrich(arr){
     const upQrHit=s.upQrHit??s.qrHit??null, downQrHit=s.downQrHit??s.qrHit??null;
     const upErHit=s.upErHit??s.erHit??null, downErHit=s.downErHit??s.erHit??null;
     const down=s.bias==="Down";
+    const vaSrc=vaRefSession(s);
+    const vaRefHigh=vaSrc&&Number.isFinite(vaSrc.vaHigh)?vaSrc.vaHigh:null;
+    const vaRefLow=vaSrc&&Number.isFinite(vaSrc.vaLow)?vaSrc.vaLow:null;
     return{
       ...s,
       referenceLabel:referenceLabel(s), referenceHigh:referenceHigh(s), referenceLow:referenceLow(s), referenceRange:referenceRange(s),
+      vaRefLabel:vaRefLabel(s), vaRefHigh, vaRefLow, openVsVa:openVsVa(s,vaRefHigh,vaRefLow),
       fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
       currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
       ibRange:ibRange(s), londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
@@ -482,7 +512,7 @@ function setNewsEventsInForm(events){
   newsEventsList.innerHTML="";
   (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact,ev.time));
 }
-function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
+function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","vaHigh","vaLow","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
 function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();entryFormError.style.display="none";showTab("entry")}
 function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields();entryFormError.style.display="none"}
 
@@ -654,7 +684,9 @@ function renderProjectionGrid(){
   const rows=[
     ["SESSION",s=>s.sessionType||"","subhead"],
     ["Reference Source",s=>s.referenceLabel||"","ref"],["Reference High",s=>fmt(s.referenceHigh),"ref"],["Reference Low",s=>fmt(s.referenceLow),"ref"],["Reference FR Range",s=>fmt(s.referenceRange),"ref"],
+    ["Reference VA Source",s=>s.vaRefLabel||"","ref"],["Reference VA High",s=>fmt(s.vaRefHigh),"ref"],["Reference VA Low",s=>fmt(s.vaRefLow),"ref"],["Open vs VA",s=>s.openVsVa||"","ref"],
     ["Open Range - Open Price",s=>fmt(s.openRangeOpen),""],["Open Range - Close Price",s=>fmt(s.openRangeClose),""],["Closing Range",s=>fmt(s.closingRange),"yellow"],["POC",s=>fmt(s.poc),""],["VPOC",s=>fmt(s.vpoc),""],
+    ["Value Area High",s=>fmt(s.vaHigh),"cream","vaHigh"],["Value Area Low",s=>fmt(s.vaLow),"cream","vaLow"],
     ["Close Range - Open Price",s=>fmt(s.closeRangeOpen),""],["Close Range - Close Price",s=>fmt(s.closeRangeClose),""],["Total Volume",s=>fmt(s.volume,0),"yellow"],
     ["Current Session High",s=>fmt(s.high),""],["Current Session Low",s=>fmt(s.low),""],["Current Session Range",s=>fmt(s.currentRange),""],
     ["Current H-L Half Range",s=>fmt(s.currentHalfRange),"curr"],["Current H-L Quarter Range",s=>fmt(s.currentQuarterRange),"curr"],["Current H-L Eighth Range",s=>fmt(s.currentEighthRange),"curr"],
@@ -764,6 +796,39 @@ function renderBothSides(){
     return `<tr><td>${label}</td><td>${upPct!=null?pct(upPct):"—"} (n=${upAnswered.length})</td><td>${downPct!=null?pct(downPct):"—"} (n=${downAnswered.length})</td><td>${bothPct!=null?pct(bothPct):"—"} (n=${bothAnswered.length})</td></tr>`;
   }).join("")}</tbody>`;
 }
+function outcomeMix(arr){
+  const n=arr.length;
+  if(!n)return"—";
+  const order=["Up","Down","Balanced","Reversal"];
+  const counts=order.map(k=>[k,arr.filter(s=>s.outcome===k).length]).filter(([,c])=>c>0);
+  return counts.length?counts.map(([k,c])=>`${k} ${pct(c/n)}`).join(" · "):"—";
+}
+function vaBucketStats(arr){
+  const n=arr.length;
+  const hitCell=key=>{const answered=arr.filter(s=>s[key]==="Yes"||s[key]==="No");return answered.length?`${pct(hitRate(answered,key))} (n=${answered.length})`:"—"};
+  return{
+    n, outcomeStr:outcomeMix(arr),
+    fr:hitCell("frHitEff"), hr:hitCell("hrHitEff"), qr:hitCell("qrHitEff"), er:hitCell("erHitEff"),
+    avgR:arr.some(s=>Number.isFinite(s.resultR))?fmt(expectancy(arr))+"R":"—"
+  };
+}
+function renderVaOpen(){
+  const all=enrich(sessions).filter(s=>s.openVsVa);
+  const buckets=["Above","Inside","Below"];
+  const rows=[];
+  SESSION_ORDER.forEach(type=>{
+    const byType=all.filter(s=>s.sessionType===type);
+    if(!byType.length)return;
+    buckets.forEach(b=>{
+      const arr=byType.filter(s=>s.openVsVa===b);
+      if(arr.length)rows.push({type,bucket:b,...vaBucketStats(arr)});
+    });
+  });
+  vaOpenTable.innerHTML=`<thead><tr><th>Session</th><th>Open vs Prior VA</th><th>n</th><th>Outcome Mix</th><th>FR Hit</th><th>HR Hit</th><th>QR Hit</th><th>ER Hit</th><th>Avg Result R</th></tr></thead><tbody>${
+    rows.length?rows.map(r=>`<tr><td>${r.type}</td><td>${r.bucket}</td><td>${r.n}</td><td>${r.outcomeStr}</td><td>${r.fr}</td><td>${r.hr}</td><td>${r.qr}</td><td>${r.er}</td><td>${r.avgR}</td></tr>`).join("")
+    :'<tr><td colspan="9">No sessions yet have both an Open Price and a matching prior session\'s Value Area filled in.</td></tr>'
+  }</tbody>`;
+}
 function newsBreachStats(arr){
   const n=arr.length;
   return{
@@ -841,7 +906,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderBothSides,renderNewsImpact,applyDataFilters,applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderBothSides,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
@@ -953,8 +1018,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,up_fr_hit:s.upFrHit,down_fr_hit:s.downFrHit,up_hr_hit:s.upHrHit,down_hr_hit:s.downHrHit,up_qr_hit:s.upQrHit,down_qr_hit:s.downQrHit,up_er_hit:s.upErHit,down_er_hit:s.downErHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,upFrHit:r.up_fr_hit,downFrHit:r.down_fr_hit,upHrHit:r.up_hr_hit,downHrHit:r.down_hr_hit,upQrHit:r.up_qr_hit,downQrHit:r.down_qr_hit,upErHit:r.up_er_hit,downErHit:r.down_er_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,va_high:s.vaHigh,va_low:s.vaLow,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,up_fr_hit:s.upFrHit,down_fr_hit:s.downFrHit,up_hr_hit:s.upHrHit,down_hr_hit:s.downHrHit,up_qr_hit:s.upQrHit,down_qr_hit:s.downQrHit,up_er_hit:s.upErHit,down_er_hit:s.downErHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,vaHigh:r.va_high,vaLow:r.va_low,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,upFrHit:r.up_fr_hit,downFrHit:r.down_fr_hit,upHrHit:r.up_hr_hit,downHrHit:r.down_hr_hit,upQrHit:r.up_qr_hit,downQrHit:r.down_qr_hit,upErHit:r.up_er_hit,downErHit:r.down_er_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
