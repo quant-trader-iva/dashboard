@@ -136,7 +136,7 @@
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
-    <div class="card span-12"><h2>Upside vs Downside Hit Analysis</h2><p class="hint">Per level, how often price hit only the upside target, only the downside target, or both in the same session — based on the Upside/Downside Hit selects in the Projection Grid above.</p><div class="tablewrap"><table id="bothSidesTable"></table></div></div>
+    <div class="card span-12"><h2>Upside vs Downside Hit Analysis</h2><p class="hint">Per level, based on the Upside/Downside Hit selects in the Projection Grid above. "Upside Hit" and "Downside Hit" are independent rates (a session can count toward both) — each shows its own sample size (n). "Both Hit" is the share of sessions, among those with both sides answered, where price reached both the upside and downside target in the same session.</p><div class="tablewrap"><table id="bothSidesTable"></table></div></div>
     <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session. "Timing" compares each session's High/Low Time (optional, entered on the session) against that event's release time — only counted when both a breach happened and both times are known.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
   </div>
 </section>
@@ -215,11 +215,6 @@
 
         <div><label>TPOs</label><input id="tpos" type="number" step="1"/></div>
         <div><label>Confidence Score</label><input id="confidenceScore" type="number" min="0" max="100" step="1"/></div>
-        <div><label>FR Hit</label><select id="frHit"><option>Yes</option><option>No</option></select></div>
-        <div><label>HR Hit</label><select id="hrHit"><option>Yes</option><option>No</option></select></div>
-
-        <div><label>QR Hit</label><select id="qrHit"><option>Yes</option><option>No</option></select></div>
-        <div><label>ER Hit</label><select id="erHit"><option>Yes</option><option>No</option></select></div>
         <div style="grid-column:1/-1">
           <label>News Events (USD, High/Medium impact)</label>
           <div id="newsEventsList"></div>
@@ -341,7 +336,6 @@ function fmt(x,d=2){return Number.isFinite(x)?x.toLocaleString(undefined,{minimu
 function avg(a){const x=a.filter(Number.isFinite);return x.length?x.reduce((s,v)=>s+v,0)/x.length:0}
 function stdev(a){const x=a.filter(Number.isFinite);if(x.length<2)return 0;const m=avg(x);return Math.sqrt(x.reduce((s,v)=>s+(v-m)**2,0)/(x.length-1))}
 function hitRate(a,k){const x=a.filter(s=>s[k]==="Yes"||s[k]==="No");return x.length?x.filter(s=>s[k]==="Yes").length/x.length:0}
-function bothHitRate(a,upK,downK){const x=a.filter(s=>(s[upK]==="Yes"||s[upK]==="No")&&(s[downK]==="Yes"||s[downK]==="No"));return x.length?x.filter(s=>s[upK]==="Yes"&&s[downK]==="Yes").length/x.length:0}
 function expectancy(a){const x=a.filter(s=>Number.isFinite(s.resultR));return x.length?avg(x.map(s=>s.resultR)):0}
 function profitFactor(a){const x=a.filter(s=>Number.isFinite(s.resultR));const w=x.filter(s=>s.resultR>0).reduce((s,v)=>s+v.resultR,0);const l=Math.abs(x.filter(s=>s.resultR<0).reduce((s,v)=>s+v.resultR,0));return l?w/l:(w?999:0)}
 
@@ -393,14 +387,27 @@ function extremeProjections(s){
 function enrich(arr){
   const vols=arr.map(s=>s.volume).filter(Number.isFinite), deltas=arr.map(s=>s.deltaFinish).filter(Number.isFinite);
   const va=avg(vols),vs=stdev(vols),da=avg(deltas),ds=stdev(deltas);
-  return arr.map(s=>({
-    ...s,
-    referenceLabel:referenceLabel(s), referenceHigh:referenceHigh(s), referenceLow:referenceLow(s), referenceRange:referenceRange(s),
-    fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
-    currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
-    ibRange:ibRange(s), londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
-    volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s)
-  }))
+  return arr.map(s=>{
+    // Sessions saved before the Upside/Downside split only have the legacy shared frHit/hrHit/qrHit/erHit —
+    // fall back to that value on both sides so historical grid cells and stats keep showing what was recorded.
+    const upFrHit=s.upFrHit??s.frHit??null, downFrHit=s.downFrHit??s.frHit??null;
+    const upHrHit=s.upHrHit??s.hrHit??null, downHrHit=s.downHrHit??s.hrHit??null;
+    const upQrHit=s.upQrHit??s.qrHit??null, downQrHit=s.downQrHit??s.qrHit??null;
+    const upErHit=s.upErHit??s.erHit??null, downErHit=s.downErHit??s.erHit??null;
+    const down=s.bias==="Down";
+    return{
+      ...s,
+      referenceLabel:referenceLabel(s), referenceHigh:referenceHigh(s), referenceLow:referenceLow(s), referenceRange:referenceRange(s),
+      fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
+      currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
+      ibRange:ibRange(s), londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
+      volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s),
+      upFrHit,downFrHit,upHrHit,downHrHit,upQrHit,downQrHit,upErHit,downErHit,
+      // Aggregate FR/HR/QR/ER stats follow whichever side matches the session's Direction Bias —
+      // the same up/down convention targets() already uses to project a single-direction target.
+      frHitEff:down?downFrHit:upFrHit, hrHitEff:down?downHrHit:upHrHit, qrHitEff:down?downQrHit:upQrHit, erHitEff:down?downErHit:upErHit
+    }
+  })
 }
 function loadSessions(){
   try{
@@ -611,16 +618,16 @@ function line(l,v){return `<div class="statline"><span>${l}</span><b>${v}</b></d
 function sideStats(arr){
  const e=enrich(arr);
  return `<div class="sideinner"><div class="sidetitle">STATISTICS</div>
-${line("Sessions",e.length)}${line("FR",pct(hitRate(e,"frHit")))}${line("HR",pct(hitRate(e,"hrHit")))}${line("QR",pct(hitRate(e,"qrHit")))}${line("ER",pct(hitRate(e,"erHit")))}
+${line("Sessions",e.length)}${line("FR",pct(hitRate(e,"frHitEff")))}${line("HR",pct(hitRate(e,"hrHitEff")))}${line("QR",pct(hitRate(e,"qrHitEff")))}${line("ER",pct(hitRate(e,"erHitEff")))}
 ${line("Avg Ref FR",fmt(avg(e.map(s=>s.fullRange))))}${line("Avg Ref HR",fmt(avg(e.map(s=>s.halfRange))))}${line("Avg Ref QR",fmt(avg(e.map(s=>s.quarterRange))))}${line("Avg Ref ER",fmt(avg(e.map(s=>s.eighthRange))))}
 ${line("Avg Weekly Range",fmt(avg(e.filter(s=>s.sessionType==="Weekly").map(s=>s.currentRange))))}${line("Avg Daily Range",fmt(avg(e.filter(s=>s.sessionType==="Daily").map(s=>s.currentRange))))}${line("Avg Current Range",fmt(avg(e.map(s=>s.currentRange))))}${line("Avg London Range",fmt(avg(e.map(s=>s.londonRange))))}${line("Avg NY Range",fmt(avg(e.map(s=>s.nyRange))))}${line("Expectancy",fmt(expectancy(e))+"R")}${line("Profit Factor",fmt(profitFactor(e)))}
 ${line("Avg Upside Total Range",fmt(avg(e.map(s=>s.extremeProj?.combinedRange))))}${line("Avg Downside Total Range",fmt(avg(e.map(s=>s.extremeProj?.combinedRange))))}
 ${line("Upside Total Hit",pct(hitRate(e,"upTotalHit")))}${line("Downside Total Hit",pct(hitRate(e,"downTotalHit")))}
 <div class="sidetitle" style="margin-top:12px">FR BY SESSION</div>
-${line("Weekly",pct(hitRate(e.filter(s=>s.sessionType==="Weekly"),"frHit")))}
-${line("Daily",pct(hitRate(e.filter(s=>s.sessionType==="Daily"),"frHit")))}
-${line("London",pct(hitRate(e.filter(s=>s.sessionType==="London"),"frHit")))}
-${line("New York",pct(hitRate(e.filter(s=>s.sessionType==="New York"),"frHit")))}
+${line("Weekly",pct(hitRate(e.filter(s=>s.sessionType==="Weekly"),"frHitEff")))}
+${line("Daily",pct(hitRate(e.filter(s=>s.sessionType==="Daily"),"frHitEff")))}
+${line("London",pct(hitRate(e.filter(s=>s.sessionType==="London"),"frHitEff")))}
+${line("New York",pct(hitRate(e.filter(s=>s.sessionType==="New York"),"frHitEff")))}
 </div>`
 }
 function biasCls(s){return s.bias==="Up"?"bull":s.bias==="Down"?"bear":"neutral"}
@@ -683,8 +690,8 @@ function renderProjectionGrid(){
 }
 function renderMetrics(){
  const session=sessionFilter.value;const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
- mSessions.textContent=arr.length;mFR.textContent=pct(hitRate(arr,"frHit"));mHR.textContent=pct(hitRate(arr,"hrHit"));mQR.textContent=pct(hitRate(arr,"qrHit"));mER.textContent=pct(hitRate(arr,"erHit"));mExp.textContent=fmt(expectancy(arr))+"R";barFR.style.width=(hitRate(arr,"frHit")*100)+"%";
- sessionStats.innerHTML=["Weekly","Daily","London","New York"].map(x=>{const a=arr.filter(s=>s.sessionType===x);return line(x+" FR",pct(hitRate(a,"frHit")))+line(x+" HR",pct(hitRate(a,"hrHit")))+line(x+" QR",pct(hitRate(a,"qrHit")))+line(x+" ER",pct(hitRate(a,"erHit")))}).join("");
+ mSessions.textContent=arr.length;mFR.textContent=pct(hitRate(arr,"frHitEff"));mHR.textContent=pct(hitRate(arr,"hrHitEff"));mQR.textContent=pct(hitRate(arr,"qrHitEff"));mER.textContent=pct(hitRate(arr,"erHitEff"));mExp.textContent=fmt(expectancy(arr))+"R";barFR.style.width=(hitRate(arr,"frHitEff")*100)+"%";
+ sessionStats.innerHTML=["Weekly","Daily","London","New York"].map(x=>{const a=arr.filter(s=>s.sessionType===x);return line(x+" FR",pct(hitRate(a,"frHitEff")))+line(x+" HR",pct(hitRate(a,"hrHitEff")))+line(x+" QR",pct(hitRate(a,"qrHitEff")))+line(x+" ER",pct(hitRate(a,"erHitEff")))}).join("");
  projectionStats.innerHTML=line("Average Reference FR",fmt(avg(arr.map(s=>s.fullRange))))+line("Average Reference HR",fmt(avg(arr.map(s=>s.halfRange))))+line("Average Reference QR",fmt(avg(arr.map(s=>s.quarterRange))))+line("Average Reference ER",fmt(avg(arr.map(s=>s.eighthRange))))+line("Average Weekly Range",fmt(avg(arr.filter(s=>s.sessionType==="Weekly").map(s=>s.currentRange))))+line("Average Daily Range",fmt(avg(arr.filter(s=>s.sessionType==="Daily").map(s=>s.currentRange))))+line("Average Current Session Range",fmt(avg(arr.map(s=>s.currentRange))))+line("Average London Range",fmt(avg(arr.map(s=>s.londonRange))))+line("Average New York Range",fmt(avg(arr.map(s=>s.nyRange))))+line("Average Upside Total Range",fmt(avg(arr.map(s=>s.extremeProj?.combinedRange))))+line("Average Downside Total Range",fmt(avg(arr.map(s=>s.extremeProj?.combinedRange))))+line("Upside Total Hit Rate",pct(hitRate(arr,"upTotalHit")))+line("Downside Total Hit Rate",pct(hitRate(arr,"downTotalHit")))+line("Profit Factor",fmt(profitFactor(arr)));
 }
 refreshDash.addEventListener("click",renderAll);viewMode.addEventListener("change",renderAll);sessionFilter.addEventListener("change",()=>{document.querySelectorAll(".quick").forEach(b=>b.classList.toggle("active",b.dataset.session===sessionFilter.value));renderAll()});focusDate.addEventListener("change",renderAll);
@@ -747,9 +754,14 @@ function renderBothSides(){
   const rows=[
     ["FR","upFrHit","downFrHit"],["HR","upHrHit","downHrHit"],["QR","upQrHit","downQrHit"],["ER","upErHit","downErHit"],["Total (All Combined)","upTotalHit","downTotalHit"]
   ];
-  bothSidesTable.innerHTML=`<thead><tr><th>Level</th><th>Upside Hit</th><th>Downside Hit</th><th>Both Hit</th><th>n (both answered)</th></tr></thead><tbody>${rows.map(([label,upK,downK])=>{
-    const both=arr.filter(s=>(s[upK]==="Yes"||s[upK]==="No")&&(s[downK]==="Yes"||s[downK]==="No"));
-    return `<tr><td>${label}</td><td>${pct(hitRate(arr,upK))}</td><td>${pct(hitRate(arr,downK))}</td><td>${pct(bothHitRate(arr,upK,downK))}</td><td>${both.length}</td></tr>`;
+  bothSidesTable.innerHTML=`<thead><tr><th>Level</th><th>Upside Hit</th><th>Downside Hit</th><th>Both Hit</th></tr></thead><tbody>${rows.map(([label,upK,downK])=>{
+    const upAnswered=arr.filter(s=>s[upK]==="Yes"||s[upK]==="No");
+    const downAnswered=arr.filter(s=>s[downK]==="Yes"||s[downK]==="No");
+    const bothAnswered=upAnswered.filter(s=>s[downK]==="Yes"||s[downK]==="No");
+    const upPct=upAnswered.length?upAnswered.filter(s=>s[upK]==="Yes").length/upAnswered.length:null;
+    const downPct=downAnswered.length?downAnswered.filter(s=>s[downK]==="Yes").length/downAnswered.length:null;
+    const bothPct=bothAnswered.length?bothAnswered.filter(s=>s[upK]==="Yes"&&s[downK]==="Yes").length/bothAnswered.length:null;
+    return `<tr><td>${label}</td><td>${upPct!=null?pct(upPct):"—"} (n=${upAnswered.length})</td><td>${downPct!=null?pct(downPct):"—"} (n=${downAnswered.length})</td><td>${bothPct!=null?pct(bothPct):"—"} (n=${bothAnswered.length})</td></tr>`;
   }).join("")}</tbody>`;
 }
 function newsBreachStats(arr){
@@ -814,10 +826,10 @@ function renderNewsImpact(){
   })).sort((a,b)=>b.n-a.n);
   newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>High Timing</th><th>Breaks Prior Low</th><th>Low Timing</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td style="text-align:center">${impactBadge(r.impact)}</td><td>${r.n}</td><td>${r.avgRange!=null?fmt(r.avgRange):"—"}</td><td>${r.breaksHigh!=null?pct(r.breaksHigh):"—"}</td><td>${r.highTiming}</td><td>${r.breaksLow!=null?pct(r.breaksLow):"—"}</td><td>${r.lowTiming}</td></tr>`).join(""):'<tr><td colspan="8">No news events logged yet.</td></tr>'}</tbody>`;
 }
-function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
+function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHitEff||""}</td><td>${s.hrHitEff||""}</td><td>${s.qrHitEff||""}</td><td>${s.erHitEff||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
 window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s)}
 window.deleteSession=async id=>{if(!confirm("Delete this session?"))return;sessions=sessions.filter(x=>x.id!==id);saveSessions();await syncDelete(id);if(recordId.value===id)resetEntryForm();renderAll()}
-function applyResearch(){let arr=enrich(sessions);if(fSession.value)arr=arr.filter(s=>s.sessionType===fSession.value);if(fDayType.value)arr=arr.filter(s=>s.dayType===fDayType.value);if(fOpenType.value)arr=arr.filter(s=>s.openType===fOpenType.value);if(fBias.value)arr=arr.filter(s=>s.bias===fBias.value);const vz=n(fVolumeZ.value);if(Number.isFinite(vz))arr=arr.filter(s=>Number.isFinite(s.volumeZ)&&s.volumeZ>=vz);filtered=arr;rSessions.textContent=arr.length;rFR.textContent=pct(hitRate(arr,"frHit"));rHR.textContent=pct(hitRate(arr,"hrHit"));rQR.textContent=pct(hitRate(arr,"qrHit"));rER.textContent=pct(hitRate(arr,"erHit"));rExp.textContent=fmt(expectancy(arr))+"R";renderTable("researchTable",arr)}
+function applyResearch(){let arr=enrich(sessions);if(fSession.value)arr=arr.filter(s=>s.sessionType===fSession.value);if(fDayType.value)arr=arr.filter(s=>s.dayType===fDayType.value);if(fOpenType.value)arr=arr.filter(s=>s.openType===fOpenType.value);if(fBias.value)arr=arr.filter(s=>s.bias===fBias.value);const vz=n(fVolumeZ.value);if(Number.isFinite(vz))arr=arr.filter(s=>Number.isFinite(s.volumeZ)&&s.volumeZ>=vz);filtered=arr;rSessions.textContent=arr.length;rFR.textContent=pct(hitRate(arr,"frHitEff"));rHR.textContent=pct(hitRate(arr,"hrHitEff"));rQR.textContent=pct(hitRate(arr,"qrHitEff"));rER.textContent=pct(hitRate(arr,"erHitEff"));rExp.textContent=fmt(expectancy(arr))+"R";renderTable("researchTable",arr)}
 applyFilters.addEventListener("click",applyResearch);
 function applyDataFilters(){
   let arr=sessions;
