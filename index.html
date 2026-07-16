@@ -357,52 +357,30 @@ function londonRange(s){return Number.isFinite(s.londonHigh)&&Number.isFinite(s.
 function nyRange(s){return Number.isFinite(s.nyHigh)&&Number.isFinite(s.nyLow)?s.nyHigh-s.nyLow:null}
 function closingRange(s){return Number.isFinite(s.openRangeOpen)&&Number.isFinite(s.openRangeClose)?s.openRangeClose-s.openRangeOpen:null}
 
-function referenceHigh(s){
-  if(s.sessionType==="Weekly") return s.prevWeekHigh;
-  if(s.sessionType==="Daily") return s.prevDayHigh;
-  if(s.sessionType==="London") return s.prevNyHigh;
-  if(s.sessionType==="New York") return s.londonHigh;
-  return null;
-}
-function referenceLow(s){
-  if(s.sessionType==="Weekly") return s.prevWeekLow;
-  if(s.sessionType==="Daily") return s.prevDayLow;
-  if(s.sessionType==="London") return s.prevNyLow;
-  if(s.sessionType==="New York") return s.londonLow;
-  return null;
-}
-function referenceLabel(s){
-  if(s.sessionType==="Weekly") return "Previous Weekly H/L";
-  if(s.sessionType==="Daily") return "Previous Day H/L";
-  if(s.sessionType==="London") return "Previous NY Day H/L";
-  if(s.sessionType==="New York") return "Current London H/L";
-  return "";
-}
+// Single source of truth for "which prior/paired session backs this session type" — every place that
+// needs to find, read, or label that reference (H/L and VA alike) dispatches off this one table instead
+// of repeating its own sessionType if/else chain. fieldPrefix builds the frozen-snapshot field names
+// (e.g. "prevWeek" -> prevWeekHigh/prevWeekLow/prevWeekVaHigh/prevWeekVaLow).
+const SESSION_REF={
+  Weekly:{fieldPrefix:"prevWeek", hlLabel:"Previous Weekly H/L", vaLabel:"Previous Weekly VA", entryLabel:"previous Weekly",
+    findSrc:d=>findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d)},
+  Daily:{fieldPrefix:"prevDay", hlLabel:"Previous Day H/L", vaLabel:"Previous Daily VA", entryLabel:"previous Daily",
+    findSrc:d=>findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d)},
+  London:{fieldPrefix:"prevNy", hlLabel:"Previous NY Day H/L", vaLabel:"Previous NY Day VA", entryLabel:"previous New York",
+    findSrc:d=>findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d)},
+  "New York":{fieldPrefix:"london", hlLabel:"Current London H/L", vaLabel:"Current London VA", entryLabel:"same-day London",
+    findSrc:d=>sessions.find(s=>s.sessionType==="London"&&s.date===d)||null}
+};
+function referenceHigh(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"High"]:null}
+function referenceLow(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"Low"]:null}
+function referenceLabel(s){const c=SESSION_REF[s.sessionType];return c?c.hlLabel:""}
 function referenceRange(s){const h=referenceHigh(s), l=referenceLow(s);return Number.isFinite(h)&&Number.isFinite(l)?h-l:null}
 // Value Area reference is a frozen snapshot, same as referenceHigh/referenceLow above — it's filled in
 // (and locked) on the record itself at entry time by setVaRef()/updateReferenceFields(), not looked up
 // live, so editing a past session's own Value Area later never rewrites an already-saved session's stats.
-function referenceVaHigh(s){
-  if(s.sessionType==="Weekly") return s.prevWeekVaHigh;
-  if(s.sessionType==="Daily") return s.prevDayVaHigh;
-  if(s.sessionType==="London") return s.prevNyVaHigh;
-  if(s.sessionType==="New York") return s.londonVaHigh;
-  return null;
-}
-function referenceVaLow(s){
-  if(s.sessionType==="Weekly") return s.prevWeekVaLow;
-  if(s.sessionType==="Daily") return s.prevDayVaLow;
-  if(s.sessionType==="London") return s.prevNyVaLow;
-  if(s.sessionType==="New York") return s.londonVaLow;
-  return null;
-}
-function referenceVaLabel(s){
-  if(s.sessionType==="Weekly") return "Previous Weekly VA";
-  if(s.sessionType==="Daily") return "Previous Daily VA";
-  if(s.sessionType==="London") return "Previous NY Day VA";
-  if(s.sessionType==="New York") return "Current London VA";
-  return "";
-}
+function referenceVaHigh(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"VaHigh"]:null}
+function referenceVaLow(s){const c=SESSION_REF[s.sessionType];return c?s[c.fieldPrefix+"VaLow"]:null}
+function referenceVaLabel(s){const c=SESSION_REF[s.sessionType];return c?c.vaLabel:""}
 function openVsVa(s){
   const h=referenceVaHigh(s), l=referenceVaLow(s);
   if(!Number.isFinite(s.openRangeOpen)||!Number.isFinite(h)||!Number.isFinite(l))return null;
@@ -503,23 +481,11 @@ function updateReferenceFields(){
   const type=sessionType.value, d=date.value;
   document.querySelectorAll(".refgroup").forEach(g=>g.classList.toggle("hidden",g.dataset.type!==type));
   if(!d){refHint.textContent="";vaRefHint.textContent="";return}
-  if(type==="Weekly"){
-    const src=findPriorSession(s=>s.sessionType==="Weekly"&&s.date&&s.date<d);
-    setRef("prevWeekHigh","prevWeekLow",src,"previous Weekly");
-    setVaRef("prevWeekVaHigh","prevWeekVaLow",src,"previous Weekly");
-  }else if(type==="Daily"){
-    const src=findPriorSession(s=>s.sessionType==="Daily"&&s.date&&s.date<d);
-    setRef("prevDayHigh","prevDayLow",src,"previous Daily");
-    setVaRef("prevDayVaHigh","prevDayVaLow",src,"previous Daily");
-  }else if(type==="London"){
-    const src=findPriorSession(s=>s.sessionType==="New York"&&s.date&&s.date<d);
-    setRef("prevNyHigh","prevNyLow",src,"previous New York");
-    setVaRef("prevNyVaHigh","prevNyVaLow",src,"previous New York");
-  }else if(type==="New York"){
-    const src=sessions.find(s=>s.sessionType==="London"&&s.date===d)||null;
-    setRef("londonHigh","londonLow",src,"same-day London");
-    setVaRef("londonVaHigh","londonVaLow",src,"same-day London");
-  }
+  const c=SESSION_REF[type];
+  if(!c)return;
+  const src=c.findSrc(d);
+  setRef(c.fieldPrefix+"High",c.fieldPrefix+"Low",src,c.entryLabel);
+  setVaRef(c.fieldPrefix+"VaHigh",c.fieldPrefix+"VaLow",src,c.entryLabel);
 }
 sessionType.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
 date.addEventListener("change",()=>{updateReferenceFields();entryFormError.style.display="none"});
@@ -835,8 +801,10 @@ function outcomeMix(arr){
   const n=arr.length;
   if(!n)return"—";
   const order=["Up","Down","Balanced","Reversal"];
-  const counts=order.map(k=>[k,arr.filter(s=>s.outcome===k).length]).filter(([,c])=>c>0);
-  return counts.length?counts.map(([k,c])=>`${k} ${pct(c/n)}`).join(" · "):"—";
+  const counts=order.map(k=>[k,arr.filter(s=>s.outcome===k).length]);
+  const unset=n-counts.reduce((sum,[,c])=>sum+c,0);
+  if(unset>0)counts.push(["Unset",unset]);
+  return counts.filter(([,c])=>c>0).map(([k,c])=>`${k} ${pct(c/n)}`).join(" · ");
 }
 function vaBucketStats(arr){
   const n=arr.length;
