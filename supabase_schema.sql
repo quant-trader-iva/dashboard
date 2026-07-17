@@ -154,3 +154,124 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "delete own position sizing" on public.position_sizing
 for delete using (auth.uid() = user_id);
+
+-- Trade Entries — logs the mechanics of each individual entry you take (setup/trigger,
+-- timing vs the signal, distance from the reference level you were trading against,
+-- execution/slippage, and order-flow/footprint context), separate from the session-level
+-- price-direction data above.
+-- Existing databases: run this whole `create table` block once to add the table. If you
+-- already created this table before the order-flow columns (volume, volume_node, footprint,
+-- delta_divergence_30m, institutional_trades) existed, add them with:
+--   alter table public.trade_entries add column if not exists volume numeric;
+--   alter table public.trade_entries add column if not exists volume_node text check (volume_node in ('HVN','LVN') or volume_node is null);
+--   alter table public.trade_entries add column if not exists footprint text check (footprint in ('Volume','Absorption','Support','Resistance') or footprint is null);
+--   alter table public.trade_entries add column if not exists delta_divergence_30m text check (delta_divergence_30m in ('Yes','No','N/A') or delta_divergence_30m is null);
+--   alter table public.trade_entries add column if not exists institutional_trades jsonb default '[]'::jsonb;
+--
+-- If you already created the table before the Bookmap/order-book and footprint-context columns
+-- (book_imbalance, liquidity_at_level, stacked_imbalances, imbalance_side, absorption_side,
+-- exhaustion, delta_at_entry, cum_delta_trend, rotations_before_entry, poc_va_position) existed,
+-- add them with:
+--   alter table public.trade_entries add column if not exists book_imbalance numeric;
+--   alter table public.trade_entries add column if not exists liquidity_at_level text check (liquidity_at_level in ('Thin','Normal','Stacked') or liquidity_at_level is null);
+--   alter table public.trade_entries add column if not exists stacked_imbalances numeric;
+--   alter table public.trade_entries add column if not exists imbalance_side text check (imbalance_side in ('Buy','Sell') or imbalance_side is null);
+--   alter table public.trade_entries add column if not exists absorption_side text check (absorption_side in ('Buyers Absorbed (High)','Sellers Absorbed (Low)') or absorption_side is null);
+--   alter table public.trade_entries add column if not exists exhaustion text check (exhaustion in ('Yes','No') or exhaustion is null);
+--   alter table public.trade_entries add column if not exists delta_at_entry numeric;
+--   alter table public.trade_entries add column if not exists cum_delta_trend text check (cum_delta_trend in ('Rising','Falling','Flat') or cum_delta_trend is null);
+--   alter table public.trade_entries add column if not exists rotations_before_entry numeric;
+--   alter table public.trade_entries add column if not exists poc_va_position text check (poc_va_position in ('Inside Value','Outside Value','At VAL','At VAH','At POC') or poc_va_position is null);
+--
+-- If you already created the table before the indicator-context columns (vwap_level,
+-- bollinger_band, ema_6m, ema_30m, ema_1h) existed, add them with:
+--   alter table public.trade_entries add column if not exists vwap_level text check (vwap_level in ('Middle','Std1','Std2') or vwap_level is null);
+--   alter table public.trade_entries add column if not exists bollinger_band text check (bollinger_band in ('Middle','Below Lower Band','Above Lower Band','Upper Band','Lower Band') or bollinger_band is null);
+--   alter table public.trade_entries add column if not exists ema_6m text check (ema_6m in ('5','8') or ema_6m is null);
+--   alter table public.trade_entries add column if not exists ema_30m text check (ema_30m in ('21','60') or ema_30m is null);
+--   alter table public.trade_entries add column if not exists ema_1h text check (ema_1h in ('8','21','60') or ema_1h is null);
+--
+-- If you already created the table before the delta_absolute column existed, add it with:
+--   alter table public.trade_entries add column if not exists delta_absolute numeric;
+--
+-- If you already created the table before the screenshots column existed, add it with:
+--   alter table public.trade_entries add column if not exists screenshots jsonb default '[]'::jsonb;
+-- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
+-- approach as institutional_trades/news_events), not in Supabase Storage. That keeps setup to
+-- just this one table, but every save re-upserts the full row including all attached images —
+-- fine for a personal journal with a few compressed screenshots per entry, but if you start
+-- attaching many large images per entry this will bloat both the database and the browser's
+-- localStorage. Ask to switch to Supabase Storage (file bucket + a URL reference column here)
+-- if that becomes a problem.
+create table if not exists public.trade_entries (
+  id uuid primary key,
+  user_id uuid references auth.users(id),
+  date date,
+  session_type text check (session_type in ('Weekly','Daily','London','New York') or session_type is null),
+  market text,
+  direction text check (direction in ('Long','Short') or direction is null),
+  setup_type text,
+  order_type text check (order_type in ('Limit','Market','Stop') or order_type is null),
+
+  signal_time text,
+  entry_time text,
+  intended_price numeric,
+  entry_price numeric,
+
+  reference_label text,
+  reference_price numeric,
+  result_r numeric,
+
+  volume numeric,
+  volume_node text check (volume_node in ('HVN','LVN') or volume_node is null),
+  footprint text check (footprint in ('Volume','Absorption','Support','Resistance') or footprint is null),
+  delta_divergence_30m text check (delta_divergence_30m in ('Yes','No','N/A') or delta_divergence_30m is null),
+  institutional_trades jsonb default '[]'::jsonb,
+
+  book_imbalance numeric,
+  liquidity_at_level text check (liquidity_at_level in ('Thin','Normal','Stacked') or liquidity_at_level is null),
+  stacked_imbalances numeric,
+  imbalance_side text check (imbalance_side in ('Buy','Sell') or imbalance_side is null),
+  absorption_side text check (absorption_side in ('Buyers Absorbed (High)','Sellers Absorbed (Low)') or absorption_side is null),
+  exhaustion text check (exhaustion in ('Yes','No') or exhaustion is null),
+  delta_at_entry numeric,
+  delta_absolute numeric,
+  cum_delta_trend text check (cum_delta_trend in ('Rising','Falling','Flat') or cum_delta_trend is null),
+  rotations_before_entry numeric,
+  poc_va_position text check (poc_va_position in ('Inside Value','Outside Value','At VAL','At VAH','At POC') or poc_va_position is null),
+
+  vwap_level text check (vwap_level in ('Middle','Std1','Std2') or vwap_level is null),
+  bollinger_band text check (bollinger_band in ('Middle','Below Lower Band','Above Lower Band','Upper Band','Lower Band') or bollinger_band is null),
+  ema_6m text check (ema_6m in ('5','8') or ema_6m is null),
+  ema_30m text check (ema_30m in ('21','60') or ema_30m is null),
+  ema_1h text check (ema_1h in ('8','21','60') or ema_1h is null),
+
+  screenshots jsonb default '[]'::jsonb,
+
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.trade_entries enable row level security;
+
+drop policy if exists "select own trade entries" on public.trade_entries;
+drop policy if exists "insert own trade entries" on public.trade_entries;
+drop policy if exists "update own trade entries" on public.trade_entries;
+drop policy if exists "delete own trade entries" on public.trade_entries;
+
+create policy "select own trade entries" on public.trade_entries
+for select using (auth.uid() = user_id);
+
+create policy "insert own trade entries" on public.trade_entries
+for insert with check (auth.uid() = user_id);
+
+create policy "update own trade entries" on public.trade_entries
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own trade entries" on public.trade_entries
+for delete using (auth.uid() = user_id);
+
+create index if not exists trade_entries_date_idx on public.trade_entries(date);
+create index if not exists trade_entries_setup_type_idx on public.trade_entries(setup_type);
+create index if not exists trade_entries_user_id_idx on public.trade_entries(user_id);

@@ -55,6 +55,16 @@
     input.auto,input.auto:focus{background:#0b1220;color:#94a3b8;cursor:not-allowed;border-color:#334155}
     .cellinput{padding:4px 6px;text-align:center;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);border-radius:6px;color:white;font-size:13px}
     .newsrow{display:flex;gap:8px;margin-bottom:8px;align-items:center}.newsrow .newsName{flex:2}.newsrow .newsTime{flex:0 0 110px}.newsrow .newsImpact{flex:1}.newsrow .removeNewsEvent{flex:0 0 auto}
+    .checkrow{display:flex;flex-wrap:wrap;gap:10px}
+    .chk-item{display:inline-flex;align-items:center;gap:6px;background:#0b1220;border:1px solid #334155;border-radius:8px;padding:7px 10px;font-size:13px;color:#e5e7eb;font-weight:700;cursor:pointer}
+    .chk-item input{width:auto;accent-color:var(--orange)}
+    .shot-thumb{position:relative;display:inline-block;margin:0 8px 8px 0}
+    .shot-thumb img{width:90px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #334155;display:block;cursor:pointer}
+    .shot-remove{position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;border-radius:50%;background:var(--red);color:white;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center}
+    .modal-overlay{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.85);padding:20px}
+    .modal-overlay.hidden{display:none}
+    .modal-card{max-width:900px;width:100%;max-height:85vh;overflow:auto}
+    .modal-card img{max-width:100%;border-radius:10px;display:block;margin-bottom:12px}
     .impact-dot{display:inline-block;width:10px;height:10px;border-radius:50%}
     .impact-dot+.impact-dot{margin-left:3px}
     .impact-dot.impact-High{background:#ef4444}
@@ -93,7 +103,10 @@
   </div>
   <div class="tabs">
     <button class="tab active" data-tab="dashboard">Dashboard</button>
-    <button class="tab" data-tab="entry">New Entry</button>
+    <button class="tab" data-tab="entry">New Session</button>
+    <button class="tab" data-tab="teNew">New Entry</button>
+    <button class="tab" data-tab="teStats">Execution Stats</button>
+    <button class="tab" data-tab="teLog">Entry Log</button>
     <button class="tab" data-tab="research">Research</button>
     <button class="tab" data-tab="data">Data</button>
     <button class="tab" data-tab="settings">Settings</button>
@@ -261,6 +274,144 @@
   </div>
 </section>
 
+<section id="teNew" class="page hidden">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Log Trade Entry</h2>
+    <p class="hint">Tracks the mechanics of each entry you take — separate from the session-level price-direction data above — so you can see whether the leak is in your entries themselves: chasing price, hesitating after the signal, a bad fill, or a specific setup that quietly underperforms.</p>
+    <form id="teEntryForm">
+      <input type="hidden" id="teRecordId"/>
+      <div class="form-grid">
+        <div><label>Date</label><input id="teDate" type="date" required/></div>
+        <div><label>Session Type <span class="hint" style="font-weight:400">(optional)</span></label><select id="teSessionType"><option value="">—</option><option>Weekly</option><option>Daily</option><option>London</option><option>New York</option></select></div>
+        <div><label>Market</label><input id="teMarket" placeholder="GC / MGC / XAUUSD" value="GC"/></div>
+        <div><label>Direction</label><select id="teDirection"><option value="">—</option><option>Long</option><option>Short</option></select></div>
+
+        <div><label>Setup / Trigger</label><input id="teSetupType" list="setupTypeSuggestions" placeholder="Breakout, Retest, Fade..."/>
+          <datalist id="setupTypeSuggestions">
+            <option value="Breakout"></option>
+            <option value="Retest / Pullback"></option>
+            <option value="Fade / Reversal"></option>
+            <option value="Range Rotation"></option>
+            <option value="Trend Continuation"></option>
+            <option value="News Spike"></option>
+            <option value="Liquidity Sweep"></option>
+            <option value="VWAP Reclaim"></option>
+            <option value="Open Drive"></option>
+          </datalist>
+        </div>
+        <div><label>Order Type</label><select id="teOrderType"><option value="">—</option><option>Limit</option><option>Market</option><option>Stop</option></select></div>
+
+        <div><label>Signal Time <span class="hint" style="font-weight:400">(setup formed)</span></label><input id="teSignalTime" type="time"/></div>
+        <div><label>Entry Time <span class="hint" style="font-weight:400">(order filled)</span></label><input id="teEntryTime" type="time"/></div>
+        <div><label>Intended Entry Price</label><input id="teIntendedPrice" type="number" step="0.01"/></div>
+        <div><label>Actual Entry Price</label><input id="teEntryPrice" type="number" step="0.01"/></div>
+
+        <div><label>Reference Level <span class="hint" style="font-weight:400">(what you were entering against)</span></label><input id="teReferenceLabel" placeholder="Prior Day High, VAH, Open..."/></div>
+        <div><label>Reference Price</label><input id="teReferencePrice" type="number" step="0.01"/></div>
+        <div><label>Result R</label><input id="teResultR" type="number" step="0.01" placeholder="2.5 or -1"/></div>
+        <div><label>Volume</label><input id="teVolume" type="number" step="1"/></div>
+
+        <div><label>Volume Node</label><select id="teVolumeNode"><option value="">—</option><option>HVN</option><option>LVN</option></select></div>
+        <div><label>Footprint</label><select id="teFootprint"><option value="">—</option><option>Volume</option><option>Absorption</option><option>Support</option><option>Resistance</option></select></div>
+        <div><label>Delta Divergence (30m)</label><select id="teDeltaDivergence30m"><option value="">—</option><option>Yes</option><option>No</option><option>N/A</option></select></div>
+        <div><label>Book Imbalance at Entry <span class="hint" style="font-weight:400">(ratio, + bid heavy / − ask heavy)</span></label><input id="teBookImbalance" type="number" step="0.1"/></div>
+
+        <div><label>Liquidity Resting at Level</label><select id="teLiquidityAtLevel"><option value="">—</option><option>Thin</option><option>Normal</option><option>Stacked</option></select></div>
+        <div><label>Stacked Imbalances <span class="hint" style="font-weight:400">(count)</span></label><input id="teStackedImbalances" type="number" step="1"/></div>
+        <div><label>Imbalance Side</label><select id="teImbalanceSide"><option value="">—</option><option>Buy</option><option>Sell</option></select></div>
+        <div><label>Absorption Side</label><select id="teAbsorptionSide"><option value="">—</option><option>Buyers Absorbed (High)</option><option>Sellers Absorbed (Low)</option></select></div>
+
+        <div><label>Exhaustion <span class="hint" style="font-weight:400">(high volume, no follow-through)</span></label><select id="teExhaustion"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+        <div><label>Delta at Entry <span class="hint" style="font-weight:400">(reading on entry candle)</span></label><input id="teDeltaAtEntry" type="number" step="1"/></div>
+        <div><label>Delta Absolute</label><input id="teDeltaAbsolute" type="number" step="1"/></div>
+        <div><label>Cumulative Delta Trend</label><select id="teCumDeltaTrend"><option value="">—</option><option>Rising</option><option>Falling</option><option>Flat</option></select></div>
+        <div><label>Rotations Before Entry <span class="hint" style="font-weight:400">(times level tested first)</span></label><input id="teRotationsBeforeEntry" type="number" step="1"/></div>
+
+        <div><label>POC/Value Area Position at Entry</label><select id="tePocVaPosition"><option value="">—</option><option>Inside Value</option><option>Outside Value</option><option>At VAL</option><option>At VAH</option><option>At POC</option></select></div>
+
+        <div><label>VWAP</label><select id="teVwapLevel"><option value="">—</option><option>Middle</option><option>Std1</option><option>Std2</option></select></div>
+        <div><label>Bollinger Bands</label><select id="teBollingerBand"><option value="">—</option><option>Middle</option><option>Below Lower Band</option><option>Above Lower Band</option><option>Upper Band</option><option>Lower Band</option></select></div>
+        <div><label>EMA (6m Timeframe)</label><select id="teEma6m"><option value="">—</option><option>5</option><option>8</option></select></div>
+        <div><label>EMA (30m Timeframe)</label><select id="teEma30m"><option value="">—</option><option>21</option><option>60</option></select></div>
+
+        <div><label>EMA (1h Timeframe)</label><select id="teEma1h"><option value="">—</option><option>8</option><option>21</option><option>60</option></select></div>
+
+        <div style="grid-column:1/-1">
+          <label>Institutional Trades <span class="hint" style="font-weight:400">(select all that apply)</span></label>
+          <div id="teInstitutionalTrades" class="checkrow">
+            <label class="chk-item"><input type="checkbox" value="Iceberg"/> Iceberg</label>
+            <label class="chk-item"><input type="checkbox" value="Big Trades - Buy"/> Big Trades - Buy</label>
+            <label class="chk-item"><input type="checkbox" value="Big Trades - Sell"/> Big Trades - Sell</label>
+            <label class="chk-item"><input type="checkbox" value="Aggression to the Downside"/> Aggression to the Downside</label>
+            <label class="chk-item"><input type="checkbox" value="Aggression to the Upside"/> Aggression to the Upside</label>
+            <label class="chk-item"><input type="checkbox" value="Pull Liquidity"/> Pull Liquidity</label>
+            <label class="chk-item"><input type="checkbox" value="Spoofing / Layering"/> Spoofing / Layering</label>
+          </div>
+        </div>
+        <div style="grid-column:1/-1">
+          <label>Screenshots <span class="hint" style="font-weight:400">(chart, footprint, bookmap — compressed and saved with the entry)</span></label>
+          <input id="teScreenshotsInput" type="file" accept="image/*" multiple/>
+          <div id="teScreenshotsList" style="margin-top:8px"></div>
+        </div>
+        <div style="grid-column:1/-1"><label>Notes</label><textarea id="teNotes" placeholder="What made this entry good or bad — hesitation, chased, perfect level, jumped the gun..."></textarea></div>
+      </div>
+      <p id="teEntryFormError" class="hint" style="color:#f87171;font-weight:700;display:none"></p>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="primary" type="submit">Save Entry</button>
+        <button type="button" id="teClearForm">Clear Form</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section id="teStats" class="page hidden">
+  <div class="grid" style="margin-bottom:14px">
+    <div class="metric span-3"><div class="label">Entries Logged</div><div class="value" id="teMCount">0</div></div>
+    <div class="metric span-3"><div class="label">Win Rate</div><div class="value" id="teMWinRate">—</div></div>
+    <div class="metric span-3"><div class="label">Avg Result R</div><div class="value" id="teMAvgR">—</div></div>
+    <div class="metric span-3"><div class="label">Avg Slippage</div><div class="value" id="teMAvgSlip">—</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card span-12"><h2>By Setup Type</h2><p class="hint">Win rate and average result by what triggered the entry — the fastest way to see which setups you actually execute well. Avg Distance From Ref is direction-aware: positive means you chased further from the level in your trade's own direction.</p><div class="tablewrap"><table id="teSetupTable"></table></div></div>
+    <div class="card span-6"><h2>By Entry Delay</h2><p class="hint">Time between the setup forming (Signal Time) and your actual fill (Entry Time). Hesitation tends to show up as worse results in the slower buckets.</p><div class="tablewrap"><table id="teDelayTable"></table></div></div>
+    <div class="card span-6"><h2>By Order Type</h2><p class="hint">Compares execution method against average slippage from your intended price.</p><div class="tablewrap"><table id="teOrderTypeTable"></table></div></div>
+    <div class="card span-12"><h2>By Time of Day</h2><p class="hint">Entry Time grouped into 4-hour blocks, using your browser's local time.</p><div class="tablewrap"><table id="teHourTable"></table></div></div>
+
+    <div class="card span-6"><h2>By Direction</h2><div class="tablewrap"><table id="teDirectionTable"></table></div></div>
+    <div class="card span-6"><h2>By Session Type</h2><div class="tablewrap"><table id="teSessionTypeTable"></table></div></div>
+    <div class="card span-6"><h2>By Volume Node</h2><div class="tablewrap"><table id="teVolumeNodeTable"></table></div></div>
+    <div class="card span-6"><h2>By Footprint</h2><div class="tablewrap"><table id="teFootprintTable"></table></div></div>
+    <div class="card span-6"><h2>By Delta Divergence (30m)</h2><div class="tablewrap"><table id="teDeltaDivTable"></table></div></div>
+    <div class="card span-6"><h2>By Cumulative Delta Trend</h2><div class="tablewrap"><table id="teCumDeltaTable"></table></div></div>
+    <div class="card span-6"><h2>By Delta at Entry</h2><p class="hint">Positive = buy-side delta on the entry candle, Negative = sell-side.</p><div class="tablewrap"><table id="teDeltaDirTable"></table></div></div>
+    <div class="card span-6"><h2>By Liquidity at Level</h2><div class="tablewrap"><table id="teLiquidityTable"></table></div></div>
+    <div class="card span-6"><h2>By Book Imbalance</h2><p class="hint">Positive = bid-heavy book at entry, Negative = ask-heavy.</p><div class="tablewrap"><table id="teBookImbDirTable"></table></div></div>
+    <div class="card span-6"><h2>By Imbalance Side</h2><div class="tablewrap"><table id="teImbalanceSideTable"></table></div></div>
+    <div class="card span-6"><h2>By Absorption Side</h2><div class="tablewrap"><table id="teAbsorptionSideTable"></table></div></div>
+    <div class="card span-6"><h2>By Exhaustion</h2><div class="tablewrap"><table id="teExhaustionTable"></table></div></div>
+    <div class="card span-12"><h2>By POC/Value Area Position at Entry</h2><div class="tablewrap"><table id="tePocVaTable"></table></div></div>
+    <div class="card span-12"><h2>By Institutional Trade Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows.</p><div class="tablewrap"><table id="teInstTagTable"></table></div></div>
+  </div>
+</section>
+
+<section id="teLog" class="page hidden">
+  <div class="card">
+    <h2>Entry Log</h2>
+    <div class="tablewrap"><table id="teLogTable"></table></div>
+  </div>
+</section>
+
+<div id="screenshotModal" class="modal-overlay hidden">
+  <div class="card modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin:0">Screenshots</h2>
+      <button type="button" id="closeScreenshotModal">Close</button>
+    </div>
+    <div id="screenshotModalBody"></div>
+  </div>
+</div>
+
 <section id="research" class="page hidden">
   <div class="card">
     <h2>Research Filters</h2>
@@ -289,6 +440,7 @@
     <h2>All Data</h2>
     <div class="toolbar">
       <button id="exportCsv" class="good">Export CSV</button>
+      <button id="exportEntriesCsv" class="good">Export Entries CSV</button>
       <button id="downloadJson">Download Backup</button>
       <label style="display:inline-flex;align-items:center;gap:8px;margin:0;cursor:pointer"><input id="importJson" type="file" accept=".json" style="display:none"><span class="pill">Import Backup</span></label>
       <button id="clearAll" class="danger">Clear Local Data</button>
@@ -335,13 +487,109 @@ const STORAGE_KEY="trading_projection_sessions_v4";
 const SETTINGS_KEY="trading_projection_settings_v4";
 const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
 const POS_SIZING_KEY="trading_projection_position_sizing_v4";
+const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
+const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
 const LEGACY_STORAGE_KEY="trading_projection_sessions_v3";
 const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingDeletes(){localStorage.setItem(PENDING_DELETES_KEY,JSON.stringify(pendingDeletes))}
+function loadEntries(){try{return JSON.parse(localStorage.getItem(ENTRIES_STORAGE_KEY)||"[]")}catch{return[]}}
+function saveEntries(){
+  try{
+    localStorage.setItem(ENTRIES_STORAGE_KEY,JSON.stringify(tradeEntries));
+  }catch(err){
+    alert("Could not save locally — your browser's storage is full (likely from screenshot images). Delete some screenshots or entries, or use Download Backup to export first, then try again.");
+  }
+}
+function loadPendingEntryDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_ENTRY_DELETES_KEY)||"[]")}catch{return[]}}
+function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KEY,JSON.stringify(pendingEntryDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
+let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
 const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+// Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
+// (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
+// `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
+// never collide with the session form's ids (both live in the same document at once).
+const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","ReferenceLabel","ReferencePrice","ResultR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","Notes"];
+function teId(name){return "te"+name}
+function teKey(name){return name[0].toLowerCase()+name.slice(1)}
+// Institutional Trades is a fixed checkbox group (multiple selections), not a single-value
+// field, so it's handled separately from teFieldNames/teId's one-element-per-field mapping —
+// the checkboxes themselves (and their value list) live directly in the #teInstitutionalTrades
+// HTML markup, read back here via a live DOM query rather than a separate JS list.
+function getInstitutionalTradesFromForm(){return [...document.querySelectorAll("#teInstitutionalTrades input[type=checkbox]:checked")].map(cb=>cb.value)}
+function setInstitutionalTradesInForm(vals){const set=new Set(vals||[]);document.querySelectorAll("#teInstitutionalTrades input[type=checkbox]").forEach(cb=>cb.checked=set.has(cb.value))}
+// Screenshots are held as {name,dataUrl} objects, same array-in-record pattern as
+// Institutional Trades/News Events, but built up via file input + canvas compression instead
+// of a text field, so they're tracked in their own module-level array (teScreenshotsState)
+// rather than read straight off a form control at submit time.
+let teScreenshotsState=[];
+function compressImageFile(file,maxWidth=1280,quality=0.72){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(reader.error);
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error("Could not read image"));
+      img.onload=()=>{
+        const scale=Math.min(1,maxWidth/img.width);
+        const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+        const canvas=document.createElement("canvas");
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",quality));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function renderScreenshotThumbs(){
+  teScreenshotsList.innerHTML="";
+  teScreenshotsState.forEach((s,i)=>{
+    const wrap=document.createElement("div");wrap.className="shot-thumb";
+    const img=document.createElement("img");img.src=s.dataUrl;img.alt=s.name||"screenshot";
+    img.addEventListener("click",()=>openScreenshotModal(teScreenshotsState));
+    const rm=document.createElement("button");rm.type="button";rm.className="shot-remove";rm.textContent="✕";
+    rm.title="Remove";
+    rm.addEventListener("click",()=>{teScreenshotsState.splice(i,1);renderScreenshotThumbs()});
+    wrap.appendChild(img);wrap.appendChild(rm);
+    teScreenshotsList.appendChild(wrap);
+  });
+}
+teScreenshotsInput.addEventListener("change",async()=>{
+  const files=[...teScreenshotsInput.files];
+  teScreenshotsInput.value="";
+  // Snapshot the array reference for THIS form context. entryToForm/resetTradeEntryForm
+  // reassign teScreenshotsState to a brand-new array (not mutate the existing one) when the
+  // form switches to a different entry or clears, so if that happens while a compression is
+  // still in flight, teScreenshotsState!==targetState here and we discard rather than push the
+  // now-stale screenshot into whatever entry happens to be on screen when it resolves.
+  const targetState=teScreenshotsState;
+  for(const f of files){
+    if(teScreenshotsState!==targetState){
+      console.warn("Discarding a screenshot — the form moved to a different entry while it was still processing.");
+      break;
+    }
+    try{
+      const dataUrl=await compressImageFile(f);
+      if(teScreenshotsState!==targetState){
+        console.warn("Discarding a screenshot — the form moved to a different entry while it was still processing.");
+        break;
+      }
+      teScreenshotsState.push({name:f.name,dataUrl});
+    }catch(err){console.error("Failed to process screenshot:",err)}
+  }
+  if(teScreenshotsState===targetState)renderScreenshotThumbs();
+});
+function openScreenshotModal(shots){
+  screenshotModalBody.innerHTML=(shots||[]).map(s=>`<img src="${s.dataUrl}" alt="${escapeHtml(s.name||"")}"/>`).join("")||'<p class="hint">No screenshots.</p>';
+  screenshotModal.classList.remove("hidden");
+}
+closeScreenshotModal.addEventListener("click",()=>screenshotModal.classList.add("hidden"));
+screenshotModal.addEventListener("click",e=>{if(e.target===screenshotModal)screenshotModal.classList.add("hidden")});
+window.viewScreenshots=id=>{const e=tradeEntries.find(x=>x.id===id);if(e)openScreenshotModal(e.screenshots)}
 
 function n(v){if(v===""||v==null)return null;const x=Number(v);return Number.isFinite(x)?x:null}
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
@@ -462,6 +710,168 @@ function enrich(arr){
     volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s)
   }))
 }
+// --- Trade Entries: computed fields & grouping ---
+function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t);if(!m)return null;return Number(m[1])*60+Number(m[2])}
+// Wraps past midnight rather than discarding: a market like gold trades nearly 24h, so a
+// Signal Time of 23:52 and Entry Time of 00:04 is a real 12-minute delay, not invalid data.
+function entryDelayMin(e){const s=timeToMinutes(e.signalTime),t=timeToMinutes(e.entryTime);if(s==null||t==null)return null;let d=t-s;if(d<0)d+=1440;return d}
+// Direction-aware like slippagePts below (positive = chased further from the reference in the
+// trade's own direction) rather than a raw signed price diff — otherwise averaging this across a
+// setup used both Long and Short cancels toward zero even when every trade individually chased.
+function distanceFromRef(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.referencePrice))return null;return e.direction==="Short"?e.referencePrice-e.entryPrice:e.entryPrice-e.referencePrice}
+// Positive = worse fill (paid more on a Long, sold for less on a Short) than intended.
+function slippagePts(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.intendedPrice))return null;return e.direction==="Short"?e.intendedPrice-e.entryPrice:e.entryPrice-e.intendedPrice}
+function enrichEntries(arr){return arr.map(e=>({...e,entryDelayMin:entryDelayMin(e),distanceFromRef:distanceFromRef(e),slippagePts:slippagePts(e)}))}
+const DELAY_BUCKETS=[{label:"<1 min",test:d=>d<1},{label:"1-5 min",test:d=>d>=1&&d<5},{label:"5-15 min",test:d=>d>=5&&d<15},{label:"15-60 min",test:d=>d>=15&&d<60},{label:"60+ min",test:d=>d>=60}];
+function delayBucketOf(d){if(!Number.isFinite(d))return null;const b=DELAY_BUCKETS.find(b=>b.test(d));return b?b.label:null}
+const HOUR_BUCKETS=[{label:"00:00–04:00",lo:0,hi:4},{label:"04:00–08:00",lo:4,hi:8},{label:"08:00–12:00",lo:8,hi:12},{label:"12:00–16:00",lo:12,hi:16},{label:"16:00–20:00",lo:16,hi:20},{label:"20:00–24:00",lo:20,hi:24}];
+function hourBucketOf(entryTime){const m=timeToMinutes(entryTime);if(m==null)return null;const h=Math.floor(m/60);const b=HOUR_BUCKETS.find(b=>h>=b.lo&&h<b.hi);return b?b.label:null}
+function avgOrNull(nums){const x=nums.filter(Number.isFinite);return x.length?avg(x):null}
+function entryWinRate(arr){const x=arr.filter(e=>Number.isFinite(e.resultR));return x.length?x.filter(e=>e.resultR>0).length/x.length:null}
+function entryAvgR(arr){return avgOrNull(arr.map(e=>e.resultR))}
+function entryAvgSlip(arr){return avgOrNull(arr.map(e=>e.slippagePts))}
+function entryGroupStats(arr){
+  return{
+    n:arr.length,
+    winRate:entryWinRate(arr),
+    avgR:entryAvgR(arr),
+    avgDelay:avgOrNull(arr.map(e=>e.entryDelayMin)),
+    avgDist:avgOrNull(arr.map(e=>e.distanceFromRef)),
+    avgSlip:entryAvgSlip(arr)
+  };
+}
+// Same "collect column values, tint each cell against that column's own range" idea as heatCol,
+// but also renders the <table> markup so each of the four entry-stat tables (Setup/Delay/Order
+// Type/Hour) can be built from just its rows + a column spec instead of hand-writing the HTML.
+function renderEntryStatTable(id,rows,headers,rowToCells,colSpecs){
+  const table=document.getElementById(id);
+  if(!rows.length){table.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody><tr><td colspan="${headers.length}">No entries logged yet.</td></tr></tbody>`;return}
+  const colStyles=colSpecs.map(spec=>spec?heatCol(rows,r=>{const v=r[spec.key];return Number.isFinite(v)?{value:v,n:r.n}:null},spec.diverge):null);
+  table.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r,i)=>`<tr>${rowToCells(r).map((c,ci)=>`<td style="${colStyles[ci]?colStyles[ci][i]:""}">${c}</td>`).join("")}</tr>`).join("")
+  }</tbody>`;
+}
+function renderEntryStats(){
+  const e=enrichEntries(tradeEntries);
+  teMCount.textContent=e.length;
+  const wr=entryWinRate(e), ar=entryAvgR(e), as=entryAvgSlip(e);
+  teMWinRate.textContent=wr!=null?pct(wr):"—";
+  teMAvgR.textContent=ar!=null?fmt(ar)+"R":"—";
+  teMAvgSlip.textContent=as!=null?fmt(as):"—";
+
+  const setupMap=new Map();
+  e.forEach(x=>{const key=(x.setupType||"").trim()||"Unspecified";if(!setupMap.has(key))setupMap.set(key,[]);setupMap.get(key).push(x)});
+  const setupRows=[...setupMap.entries()].map(([label,arr])=>({label,...entryGroupStats(arr)})).sort((a,b)=>b.n-a.n);
+  renderEntryStatTable("teSetupTable",setupRows,["Setup","n","Win Rate","Avg R","Avg Delay (min)","Avg Distance From Ref"],
+    r=>[escapeHtml(r.label),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—",r.avgDelay!=null?fmt(r.avgDelay,1):"—",r.avgDist!=null?fmt(r.avgDist):"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true},{key:"avgDelay"},{key:"avgDist",diverge:true}]);
+
+  const delayMap=new Map();
+  e.forEach(x=>{const b=delayBucketOf(x.entryDelayMin);if(!b)return;if(!delayMap.has(b))delayMap.set(b,[]);delayMap.get(b).push(x)});
+  const delayRows=DELAY_BUCKETS.map(b=>({label:b.label,...entryGroupStats(delayMap.get(b.label)||[])})).filter(r=>r.n>0);
+  renderEntryStatTable("teDelayTable",delayRows,["Delay","n","Win Rate","Avg R"],
+    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+
+  const otMap=new Map();
+  e.forEach(x=>{const key=x.orderType||"Unspecified";if(!otMap.has(key))otMap.set(key,[]);otMap.get(key).push(x)});
+  const otRows=[...otMap.entries()].map(([label,arr])=>({label,...entryGroupStats(arr)})).sort((a,b)=>b.n-a.n);
+  renderEntryStatTable("teOrderTypeTable",otRows,["Order Type","n","Win Rate","Avg R","Avg Slippage"],
+    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—",r.avgSlip!=null?fmt(r.avgSlip):"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true},{key:"avgSlip",diverge:true}]);
+
+  const hourMap=new Map();
+  e.forEach(x=>{const b=hourBucketOf(x.entryTime);if(!b)return;if(!hourMap.has(b))hourMap.set(b,[]);hourMap.get(b).push(x)});
+  const hourRows=HOUR_BUCKETS.map(b=>({label:b.label,...entryGroupStats(hourMap.get(b.label)||[])})).filter(r=>r.n>0);
+  renderEntryStatTable("teHourTable",hourRows,["Hour","n","Win Rate","Avg R"],
+    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+
+  renderCategoricalEntryTable("teDirectionTable","Direction",e,x=>x.direction||null);
+  renderCategoricalEntryTable("teSessionTypeTable","Session",e,x=>x.sessionType||null);
+  renderCategoricalEntryTable("teVolumeNodeTable","Volume Node",e,x=>x.volumeNode||null);
+  renderCategoricalEntryTable("teFootprintTable","Footprint",e,x=>x.footprint||null);
+  renderCategoricalEntryTable("teDeltaDivTable","Delta Divergence (30m)",e,x=>x.deltaDivergence30m||null);
+  renderCategoricalEntryTable("teCumDeltaTable","Cumulative Delta Trend",e,x=>x.cumDeltaTrend||null);
+  renderCategoricalEntryTable("teDeltaDirTable","Delta at Entry",e,x=>signBucket(x.deltaAtEntry));
+  renderCategoricalEntryTable("teLiquidityTable","Liquidity at Level",e,x=>x.liquidityAtLevel||null);
+  renderCategoricalEntryTable("teBookImbDirTable","Book Imbalance",e,x=>signBucket(x.bookImbalance));
+  renderCategoricalEntryTable("teImbalanceSideTable","Imbalance Side",e,x=>x.imbalanceSide||null);
+  renderCategoricalEntryTable("teAbsorptionSideTable","Absorption Side",e,x=>x.absorptionSide||null);
+  renderCategoricalEntryTable("teExhaustionTable","Exhaustion",e,x=>x.exhaustion||null);
+  renderCategoricalEntryTable("tePocVaTable","POC/VA Position",e,x=>x.pocVaPosition||null);
+  renderInstitutionalTagTable("teInstTagTable",e);
+}
+// Generic groupBy + win-rate/avg-R table for any single-value categorical entry field.
+// getLabel returning null/undefined skips that entry entirely (rather than lumping it into
+// an "Unspecified" bucket), so a table only shows the values you actually logged — appropriate
+// for a discretionary trader who fills in a different subset of fields on every trade.
+function renderCategoricalEntryTable(tableId,headerLabel,arr,getLabel){
+  const map=new Map();
+  arr.forEach(x=>{
+    const label=getLabel(x);
+    if(label==null)return;
+    if(!map.has(label))map.set(label,[]);
+    map.get(label).push(x);
+  });
+  const rows=[...map.entries()].map(([label,a])=>({label,...entryGroupStats(a)})).sort((a,b)=>b.n-a.n);
+  renderEntryStatTable(tableId,rows,[headerLabel,"n","Win Rate","Avg R"],
+    r=>[escapeHtml(String(r.label)),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+}
+// Institutional Trades is multi-value (an entry can have several tags checked), so unlike
+// renderCategoricalEntryTable an entry can contribute to more than one row here — same
+// counted-once-per-tag convention as the News Impact "By Event Type" table on the dashboard.
+function renderInstitutionalTagTable(tableId,arr){
+  const map=new Map();
+  arr.forEach(x=>(x.institutionalTrades||[]).forEach(tag=>{
+    if(!map.has(tag))map.set(tag,[]);
+    map.get(tag).push(x);
+  }));
+  const rows=[...map.entries()].map(([label,a])=>({label,...entryGroupStats(a)})).sort((a,b)=>b.n-a.n);
+  renderEntryStatTable(tableId,rows,["Institutional Trade Tag","n","Win Rate","Avg R"],
+    r=>[escapeHtml(r.label),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+}
+// v===0 is a real, meaningful reading (flat delta / perfectly balanced book), not "unset" —
+// only a genuinely missing value (non-finite) should be excluded from the bucketed tables.
+function signBucket(v){if(!Number.isFinite(v))return null;if(v>0)return"Positive (+)";if(v<0)return"Negative (−)";return"Neutral (0)"}
+function renderEntryLogTable(){
+  const e=enrichEntries(tradeEntries).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Photos</th><th>Result R</th><th>Actions</th></tr></thead><tbody>${
+    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
+  }</tbody>`;
+}
+function formToEntry(){
+  let o={};
+  teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
+  ["entryPrice","referencePrice","intendedPrice","resultR","volume","bookImbalance","stackedImbalances","deltaAtEntry","deltaAbsolute","rotationsBeforeEntry"].forEach(k=>o[k]=n(o[k]));
+  o.institutionalTrades=getInstitutionalTradesFromForm();
+  o.screenshots=teScreenshotsState.slice();
+  o.id=teRecordId.value||crypto.randomUUID();
+  o.updatedAt=new Date().toISOString();
+  return o;
+}
+function entryToForm(e){
+  teRecordId.value=e.id||"";
+  teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)el.value=e[teKey(name)]??""});
+  setInstitutionalTradesInForm(e.institutionalTrades);
+  teScreenshotsState=(e.screenshots||[]).slice();
+  renderScreenshotThumbs();
+  teEntryFormError.style.display="none";
+  showTab("teNew");
+}
+function resetTradeEntryForm(){
+  teEntryForm.reset();
+  teRecordId.value="";
+  if(!teDate.value)teDate.value=new Date().toISOString().slice(0,10);
+  teScreenshotsState=[];
+  renderScreenshotThumbs();
+  teEntryFormError.style.display="none";
+}
+window.editEntry=id=>{const e=tradeEntries.find(x=>x.id===id);if(e)entryToForm(e)}
+window.deleteEntry=async id=>{if(!confirm("Delete this trade entry?"))return;tradeEntries=tradeEntries.filter(x=>x.id!==id);saveEntries();await syncEntryDelete(id);if(teRecordId.value===id)resetTradeEntryForm();renderAll()}
+
 function loadSessions(){
   try{
     const cur=localStorage.getItem(STORAGE_KEY);
@@ -473,7 +883,16 @@ function loadSessions(){
 }
 function saveSessions(){localStorage.setItem(STORAGE_KEY,JSON.stringify(sessions))}
 function showTab(name){document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(name).classList.remove("hidden");document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));renderAll()}
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="entry"&&entryFormError.style.display!=="block")resetEntryForm();showTab(b.dataset.tab)}));
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
+  // Only auto-reset when actually navigating INTO the tab from elsewhere — re-clicking a tab
+  // you're already on (e.g. after jumping here via Edit) must not silently wipe an in-progress
+  // edit. classList still reflects the PREVIOUS active tab here, since showTab() below is what
+  // updates it.
+  const alreadyActive=b.classList.contains("active");
+  if(!alreadyActive&&b.dataset.tab==="entry"&&entryFormError.style.display!=="block")resetEntryForm();
+  if(!alreadyActive&&b.dataset.tab==="teNew"&&teEntryFormError.style.display!=="block")resetTradeEntryForm();
+  showTab(b.dataset.tab);
+}));
 function formatDMY(iso){if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}/${m}/${y.slice(2)}`}
 function syncFocusDateDisplay(){focusDateDisplay.value=formatDMY(focusDate.value)}
 focusDateDisplay.addEventListener("click",()=>{if(focusDate.showPicker){focusDate.showPicker()}else{focusDate.focus();focusDate.click()}});
@@ -612,6 +1031,55 @@ loadPosSizingIntoForm();
 renderPosSizing();
 entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const original=sessions.find(x=>x.id===s.id);const keyChanged=!original||original.date!==s.date||original.sessionType!==s.sessionType;const dup=keyChanged?sessions.find(x=>x.date===s.date&&x.sessionType===s.sessionType&&x.id!==s.id):null;if(dup){entryFormError.textContent=`An entry for ${s.sessionType} session on ${s.date} already exists. Edit that entry instead, or change the Date/Session Type.`;entryFormError.style.display="block";return}entryFormError.style.display="none";const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
 clearForm.addEventListener("click",resetEntryForm);
+if(!teDate.value)teDate.value=new Date().toISOString().slice(0,10);
+// Trade entries have no natural one-per-day key the way sessions do (you can take many trades
+// in a day), so "duplicate" here means the same trade logged twice by accident — same day, same
+// instrument, same direction, filled at the same price at the same clock time. Requires both
+// Entry Time and Entry Price to be set, otherwise there isn't enough signal to flag it without
+// false-positiving on a legitimate multi-entry day (e.g. two trades with times/prices left blank).
+// Market is trimmed/lowercased before comparing since it's a free-text field ("GC" vs "gc" vs
+// " GC" is still the same instrument) — shared by findDuplicateEntry and the backup-import
+// duplicate scan so both use the exact same notion of "same trade".
+function entryDupKey(rec){
+  if(!rec.date||!rec.entryTime||!Number.isFinite(rec.entryPrice))return null;
+  return [rec.date,(rec.market||"").trim().toLowerCase(),rec.direction||"",rec.entryTime,rec.entryPrice].join("|");
+}
+function findDuplicateEntry(rec){
+  const key=entryDupKey(rec);
+  if(key==null)return null;
+  return tradeEntries.find(x=>x.id!==rec.id&&entryDupKey(x)===key)||null;
+}
+let teSavedMsgTimer=null;
+teEntryForm.addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const rec=formToEntry();
+  const dup=findDuplicateEntry(rec);
+  if(dup){
+    teEntryFormError.textContent=`This looks like a duplicate of an entry already logged on ${rec.date} (${rec.direction||"?"} @ ${rec.entryPrice}, ${rec.entryTime}). Edit that entry instead, or adjust the Entry Time/Price if this is genuinely a separate trade.`;
+    teEntryFormError.style.color="";
+    teEntryFormError.style.display="block";
+    return;
+  }
+  teEntryFormError.style.display="none";
+  const isNewEntry=!teRecordId.value;
+  const i=tradeEntries.findIndex(x=>x.id===rec.id);
+  if(i>=0)tradeEntries[i]={...tradeEntries[i],...rec};else tradeEntries.push(rec);
+  tradeEntries.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  saveEntries();
+  await syncEntryUpsert([rec]);
+  resetTradeEntryForm();
+  renderAll();
+  // Trade entries are logged one after another in a row, so — unlike the session form, which
+  // navigates to Dashboard on save — this stays on the form and gives a transient confirmation
+  // instead, so the user isn't left wondering whether the save actually went through.
+  teEntryFormError.textContent=isNewEntry?"✓ Entry saved.":"✓ Entry updated.";
+  teEntryFormError.style.color="var(--green)";
+  teEntryFormError.style.display="block";
+  clearTimeout(teSavedMsgTimer);
+  teSavedMsgTimer=setTimeout(()=>{teEntryFormError.style.display="none";teEntryFormError.style.color="";},2500);
+});
+[teDate,teMarket,teDirection,teEntryTime,teEntryPrice].forEach(el=>el.addEventListener("input",()=>{teEntryFormError.style.display="none"}));
+teClearForm.addEventListener("click",resetTradeEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
 function editableCell(s,field,cls=""){
@@ -946,26 +1414,36 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryLogTable].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.csv",[[...fields,"newsEvents"].join(",")].concat(sessions.map(s=>[...fields.map(f=>csvEscape(s[f])),csvEscape(JSON.stringify(s.newsEvents||[]))].join(","))).join("\n"),"text/csv"));
-downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,posSizing:getPosSizing()},null,2),"application/json"));
+// Screenshots are exported as a count only (not the image data itself) — base64 image data
+// doesn't belong in a CSV row; use Download Backup (JSON) to get the actual images out.
+exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entries_v1.csv",[[...teFieldNames.map(teKey),"institutionalTrades","screenshotCount"].join(",")].concat(tradeEntries.map(e=>[...teFieldNames.map(name=>csvEscape(e[teKey(name)])),csvEscape(JSON.stringify(e.institutionalTrades||[])),csvEscape((e.screenshots||[]).length)].join(","))).join("\n"),"text/csv"));
+downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing()},null,2),"application/json"));
 importJson.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
   const data=JSON.parse(await f.text());
   if(Array.isArray(data)){sessions=data}
   else if(data&&Array.isArray(data.sessions)){
     sessions=data.sessions;
+    if(Array.isArray(data.tradeEntries))tradeEntries=data.tradeEntries;
     if(data.posSizing){localStorage.setItem(POS_SIZING_KEY,JSON.stringify(data.posSizing));applyPosSizingToForm(data.posSizing);renderPosSizingSummary(data.posSizing)}
   }else{return alert("Invalid file")}
-  saveSessions();renderAll();
+  saveSessions();saveEntries();renderAll();
   const seen=new Set(),dupKeys=new Set();
   sessions.forEach(s=>{const k=s.date+"|"+s.sessionType;if(seen.has(k))dupKeys.add(k);else seen.add(k)});
   if(dupKeys.size)alert(`Warning: this backup has ${dupKeys.size} Date+Session Type combination(s) with more than one entry (e.g. ${[...dupKeys][0]}). Delete the extra entries in the Data tab to avoid duplicate rows.`);
+  // Same check as findDuplicateEntry (same key, same market normalization), run once over the
+  // whole imported set — the form-level check only ever sees one save at a time, so importing
+  // two overlapping backups (or the same backup twice) would otherwise slip past it silently.
+  const seenEntries=new Set(),dupEntryKeys=new Set();
+  tradeEntries.forEach(x=>{const k=entryDupKey(x);if(k==null)return;if(seenEntries.has(k))dupEntryKeys.add(k);else seenEntries.add(k)});
+  if(dupEntryKeys.size)alert(`Warning: this backup has ${dupEntryKeys.size} trade entry combination(s) (same Date+Market+Direction+Entry Time+Entry Price) with more than one entry. Delete the extra entries in the Entry Log tab to avoid duplicate rows.`);
 });
-clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data?"))return;sessions=[];saveSessions();renderAll()});
+clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data (sessions and trade entries)?"))return;sessions=[];tradeEntries=[];saveSessions();saveEntries();renderAll()});
 
 function readSettings(){
   try{
@@ -1060,6 +1538,24 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
+function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
+async function syncEntryUpsert(records){
+  if(!supabaseClient||!authUser||!records.length)return false;
+  const key=records.length===1?"entryupsert:"+records[0].id:"entryupsert:bulk";
+  return runSyncOp(key,
+    ()=>supabaseClient.from("trade_entries").upsert(records.map(toEntryDb),{onConflict:"id"}),
+    msg=>`Failed to sync ${records.length} trade entr${records.length>1?"ies":"y"} to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+}
+async function syncEntryDelete(id){
+  if(!supabaseClient||!authUser)return false;
+  const ok=await runSyncOp("entrydelete:"+id,
+    ()=>supabaseClient.from("trade_entries").delete().eq("id",id),
+    msg=>`Failed to sync a trade entry deletion to the cloud: ${msg}. The entry was removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+  if(ok){pendingEntryDeletes=pendingEntryDeletes.filter(x=>x!==id)}else if(!pendingEntryDeletes.includes(id)){pendingEntryDeletes.push(id)}
+  savePendingEntryDeletes();
+  return ok;
+}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
@@ -1093,24 +1589,60 @@ async function syncDelete(id){
   savePendingDeletes();
   return ok;
 }
+// Split into two independent halves (sessions vs trade entries) so a failure fetching one
+// table can never prevent the other from being attempted — each catches its own errors and
+// reports false rather than throwing/returning out of fullSync.
+async function syncSessionsFromCloud(){
+  try{
+    const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});
+    if(error){showSyncError("fullsync:select","Sync failed: "+error.message);return false}
+    clearSyncError("fullsync:select");
+    const map=new Map();
+    [...sessions,...data.map(fromDb)].filter(s=>!pendingDeletes.includes(s.id)).forEach(s=>{
+      const existing=map.get(s.id);
+      if(!existing||(s.updatedAt||"")>=(existing.updatedAt||""))map.set(s.id,s);
+    });
+    sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    saveSessions();
+    return await syncUpsert(sessions);
+  }catch(err){
+    showSyncError("fullsync:select","Sync failed: "+errMsg(err));
+    return false;
+  }
+}
+async function syncEntriesFromCloud(){
+  try{
+    const {data,error}=await supabaseClient.from("trade_entries").select("*").order("date",{ascending:true});
+    if(error){showSyncError("fullsync:entries:select","Failed to load trade entries: "+error.message);return false}
+    clearSyncError("fullsync:entries:select");
+    const emap=new Map();
+    [...tradeEntries,...data.map(fromEntryDb)].filter(e=>!pendingEntryDeletes.includes(e.id)).forEach(e=>{
+      const existing=emap.get(e.id);
+      if(!existing||(e.updatedAt||"")>=(existing.updatedAt||""))emap.set(e.id,e);
+    });
+    tradeEntries=[...emap.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    saveEntries();
+    return await syncEntryUpsert(tradeEntries);
+  }catch(err){
+    showSyncError("fullsync:entries:select","Failed to load trade entries: "+errMsg(err));
+    return false;
+  }
+}
 async function fullSync(){
   if(!supabaseClient){syncStatus.textContent="Supabase is not configured.";return}
   if(!authUser){syncStatus.textContent="Log in first to sync.";return}
   syncStatus.textContent="Syncing...";
   await fetchPosSizing();
   for(const id of [...pendingDeletes]){await syncDelete(id)}
-  const {data,error}=await supabaseClient.from("trading_sessions").select("*").order("date",{ascending:true});
-  if(error){syncStatus.textContent="Sync failed: "+error.message;showSyncError("fullsync:select","Sync failed: "+error.message);return}
-  clearSyncError("fullsync:select");
-  const map=new Map();
-  [...sessions,...data.map(fromDb)].filter(s=>!pendingDeletes.includes(s.id)).forEach(s=>{
-    const existing=map.get(s.id);
-    if(!existing||(s.updatedAt||"")>=(existing.updatedAt||""))map.set(s.id,s);
-  });
-  sessions=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-  saveSessions();
-  const ok=await syncUpsert(sessions);
-  syncStatus.textContent=ok?`Synced ${sessions.length} sessions.`:"Some sessions failed to sync — see the banner above.";
+  for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
+  const ok=await syncSessionsFromCloud();
+  const entryOk=await syncEntriesFromCloud();
+  if(ok&&entryOk){
+    syncStatus.textContent=`Synced ${sessions.length} sessions and ${tradeEntries.length} trade entries.`;
+  }else{
+    const failed=[!ok&&"sessions",!entryOk&&"trade entries"].filter(Boolean).join(" and ");
+    syncStatus.textContent=`Sync failed for ${failed} — see the banner above for details.`;
+  }
   renderAll();
 }
 bootAuth();
