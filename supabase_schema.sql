@@ -194,6 +194,12 @@ for delete using (auth.uid() = user_id);
 -- If you already created the table before the delta_absolute column existed, add it with:
 --   alter table public.trade_entries add column if not exists delta_absolute numeric;
 --
+-- If you already created the table before the stop_loss_price/exit_price columns existed
+-- (used to auto-calculate result_r as P&L / entry-to-stop risk, and to flag exit slippage vs
+-- the planned stop), add them with:
+--   alter table public.trade_entries add column if not exists stop_loss_price numeric;
+--   alter table public.trade_entries add column if not exists exit_price numeric;
+--
 -- If you already created the table before the screenshots column existed, add it with:
 --   alter table public.trade_entries add column if not exists screenshots jsonb default '[]'::jsonb;
 -- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
@@ -217,6 +223,8 @@ create table if not exists public.trade_entries (
   entry_time text,
   intended_price numeric,
   entry_price numeric,
+  stop_loss_price numeric,
+  exit_price numeric,
 
   reference_label text,
   reference_price numeric,
