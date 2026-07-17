@@ -347,6 +347,59 @@ function n(v){if(v===""||v==null)return null;const x=Number(v);return Number.isF
 function pct(x){return Number.isFinite(x)?`${(x*100).toFixed(1)}%`:"0%"}
 function fmt(x,d=2){return Number.isFinite(x)?x.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):""}
 function avg(a){const x=a.filter(Number.isFinite);return x.length?x.reduce((s,v)=>s+v,0)/x.length:0}
+// Reads a hue straight off the page's own CSS custom properties so the heatmap always matches the
+// current theme instead of carrying a second, hand-copied set of RGB literals that can drift from it.
+function cssVarRgb(varName,fallback){
+  const hex=getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  const m=/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex);
+  if(!m)return fallback;
+  let h=m[1];
+  if(h.length===3)h=[...h].map(c=>c+c).join("");
+  const num=parseInt(h,16);
+  return`${(num>>16)&255},${(num>>8)&255},${num&255}`;
+}
+const HEAT_SEQ_RGB=cssVarRgb("--cyan","56,189,248");
+const HEAT_POS_RGB=cssVarRgb("--green","34,197,94");
+const HEAT_NEG_RGB=cssVarRgb("--red","239,68,68");
+const HEAT_MIN_N=5; // rows backed by fewer samples than this get a dampened, non-bold tint
+
+// Per-column heatmap tint: value's position between that column's own min/max, one hue (--cyan), light->dark.
+// The current top value in the column also gets bolded so it reads as the standout at a glance — unless
+// rowN says this row's own value rests on a thin sample, in which case both the tint and the bold are
+// dampened so a n=1 "biggest of two" doesn't read as confidently as one backed by a real sample size.
+function heatSeq(value,values,rowN){
+  if(!Number.isFinite(value))return"";
+  const x=values.filter(Number.isFinite);
+  if(!x.length)return"";
+  const lo=Math.min(...x),hi=Math.max(...x);
+  if(hi<=lo)return"";
+  const t=Math.max(0,Math.min(1,(value-lo)/(hi-lo)));
+  const conf=Number.isFinite(rowN)?Math.min(1,rowN/HEAT_MIN_N):1;
+  const bold=value===hi&&conf>=1?"font-weight:900;":"";
+  return`background:rgba(${HEAT_SEQ_RGB},${(0.08+t*0.42*conf).toFixed(2)});${bold}`;
+}
+// Diverging variant for signed values (e.g. Result R): --green for positive, --red for negative,
+// intensity scaled by magnitude relative to the largest absolute value in the column, same rowN dampening.
+function heatDiverge(value,values,rowN){
+  if(!Number.isFinite(value)||value===0)return"";
+  const x=values.filter(Number.isFinite);
+  if(!x.length)return"";
+  const maxAbs=Math.max(...x.map(Math.abs),1e-9);
+  const t=Math.min(1,Math.abs(value)/maxAbs);
+  const conf=Number.isFinite(rowN)?Math.min(1,rowN/HEAT_MIN_N):1;
+  const bold=Math.abs(value)===maxAbs&&conf>=1?"font-weight:900;":"";
+  const rgb=value>0?HEAT_POS_RGB:HEAT_NEG_RGB;
+  return`background:rgba(${rgb},${(0.08+t*0.42*conf).toFixed(2)});${bold}`;
+}
+// Builds one style string per row for a heat-tinted column. `getter(row)` returns {value,n} to tint
+// that row (n optional, for confidence dampening) or a falsy value to leave it untinted. Centralizes
+// the "collect this column's values, then look up each cell's style" wiring so every table wires a
+// heat column in one line instead of hand-rolling a values array + inline ternary per column.
+function heatCol(rows,getter,diverge){
+  const entries=rows.map(getter);
+  const values=entries.map(e=>e&&Number.isFinite(e.value)?e.value:NaN);
+  return entries.map(e=>!e||!Number.isFinite(e.value)?"":(diverge?heatDiverge(e.value,values,e.n):heatSeq(e.value,values,e.n)));
+}
 function stdev(a){const x=a.filter(Number.isFinite);if(x.length<2)return 0;const m=avg(x);return Math.sqrt(x.reduce((s,v)=>s+(v-m)**2,0)/(x.length-1))}
 function hitRate(a,k){const x=a.filter(s=>s[k]==="Yes"||s[k]==="No");return x.length?x.filter(s=>s[k]==="Yes").length/x.length:0}
 function expectancy(a){const x=a.filter(s=>Number.isFinite(s.resultR));return x.length?avg(x.map(s=>s.resultR)):0}
@@ -710,7 +763,11 @@ function renderEdgeDecay(){
   const rows=days.map(d=>({day:d,...newsBreachStats(daily.filter(s=>s.day===d))}));
   const total=rows.reduce((s,r)=>s+r.n,0);
   edgeDecayNote.textContent=`Daily High/Low breach rate vs. the previous day, split by weekday (n=${total} total${total&&total<40?" — small samples, read directionally only":""}).`;
-  edgeDecayTable.innerHTML=`<thead><tr><th>Day</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.day}</td><td>${r.n}</td><td>${r.n?fmt(r.avgRange):""}</td><td>${r.n?pct(r.breaksHigh):""}</td><td>${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
+  const edgeNStyles=heatCol(rows,r=>({value:r.n}));
+  const edgeAvgStyles=heatCol(rows,r=>r.n?{value:r.avgRange,n:r.n}:null);
+  const edgeHighStyles=heatCol(rows,r=>r.n?{value:r.breaksHigh,n:r.n}:null);
+  const edgeLowStyles=heatCol(rows,r=>r.n?{value:r.breaksLow,n:r.n}:null);
+  edgeDecayTable.innerHTML=`<thead><tr><th>Day</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.day}</td><td style="${edgeNStyles[i]}">${r.n}</td><td style="${edgeAvgStyles[i]}">${r.n?fmt(r.avgRange):""}</td><td style="${edgeHighStyles[i]}">${r.n?pct(r.breaksHigh):""}</td><td style="${edgeLowStyles[i]}">${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
 }
 function pearsonR(pairs){
   const n=pairs.length;
@@ -754,7 +811,10 @@ function renderRangeCorr(){
     ["London beyond Previous NY Day High",london.high],
     ["London beyond Previous NY Day Low",london.low]
   ];
-  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachRows.map(([label,arr])=>`<tr><td>${label}</td><td>${arr.length?fmt(avg(arr)):""}</td><td>${arr.length}</td></tr>`).join("")}</tbody>`;
+  const breachStats=breachRows.map(([label,arr])=>({label,avgExt:arr.length?avg(arr):null,n:arr.length}));
+  const breachAvgStyles=heatCol(breachStats,r=>r.avgExt!=null?{value:r.avgExt,n:r.n}:null);
+  const breachNStyles=heatCol(breachStats,r=>({value:r.n}));
+  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachStats.map((r,i)=>`<tr><td>${r.label}</td><td style="${breachAvgStyles[i]}">${r.avgExt!=null?fmt(r.avgExt):""}</td><td style="${breachNStyles[i]}">${r.n}</td></tr>`).join("")}</tbody>`;
 }
 function outcomeMix(arr){
   const n=arr.length;
@@ -790,8 +850,14 @@ function renderVaOpen(){
     });
   });
   const fmtHit=h=>h.n?`${pct(h.rate)} (n=${h.n})`:"—";
+  const vaNStyles=heatCol(rows,r=>({value:r.n}));
+  const vaFrStyles=heatCol(rows,r=>r.fr.n?{value:r.fr.rate,n:r.fr.n}:null);
+  const vaHrStyles=heatCol(rows,r=>r.hr.n?{value:r.hr.rate,n:r.hr.n}:null);
+  const vaQrStyles=heatCol(rows,r=>r.qr.n?{value:r.qr.rate,n:r.qr.n}:null);
+  const vaErStyles=heatCol(rows,r=>r.er.n?{value:r.er.rate,n:r.er.n}:null);
+  const vaAvgRStyles=heatCol(rows,r=>r.avgR!=null?{value:r.avgR,n:r.n}:null,true);
   vaOpenTable.innerHTML=`<thead><tr><th>Session</th><th>Open vs Prior VA</th><th>n</th><th>Outcome Mix</th><th>FR Hit</th><th>HR Hit</th><th>QR Hit</th><th>ER Hit</th><th>Avg Result R</th></tr></thead><tbody>${
-    rows.length?rows.map(r=>`<tr><td>${r.type}</td><td>${r.bucket}</td><td>${r.n}</td><td>${r.outcomeStr}</td><td>${fmtHit(r.fr)}</td><td>${fmtHit(r.hr)}</td><td>${fmtHit(r.qr)}</td><td>${fmtHit(r.er)}</td><td>${r.avgR!=null?fmt(r.avgR)+"R":"—"}</td></tr>`).join("")
+    rows.length?rows.map((r,i)=>`<tr><td>${r.type}</td><td>${r.bucket}</td><td style="${vaNStyles[i]}">${r.n}</td><td>${r.outcomeStr}</td><td style="${vaFrStyles[i]}">${fmtHit(r.fr)}</td><td style="${vaHrStyles[i]}">${fmtHit(r.hr)}</td><td style="${vaQrStyles[i]}">${fmtHit(r.qr)}</td><td style="${vaErStyles[i]}">${fmtHit(r.er)}</td><td style="${vaAvgRStyles[i]}">${r.avgR!=null?fmt(r.avgR)+"R":"—"}</td></tr>`).join("")
     :'<tr><td colspan="9">No sessions yet have the Open vs Prior VA field filled in.</td></tr>'
   }</tbody>`;
 }
@@ -832,8 +898,12 @@ function renderNewsImpact(){
   const daily=dailyAll.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
   const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
   const noNews=daily.filter(s=>!(s.newsEvents||[]).length);
-  const nd=newsBreachStats(newsDay), nn=newsBreachStats(noNews);
-  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody><tr><td>News Day</td><td>${nd.n}</td><td>${nd.n?fmt(nd.avgRange):""}</td><td>${nd.n?pct(nd.breaksHigh):""}</td><td>${nd.n?pct(nd.breaksLow):""}</td></tr><tr><td>No News</td><td>${nn.n}</td><td>${nn.n?fmt(nn.avgRange):""}</td><td>${nn.n?pct(nn.breaksHigh):""}</td><td>${nn.n?pct(nn.breaksLow):""}</td></tr></tbody>`;
+  const ndnn=[{label:"News Day",...newsBreachStats(newsDay)},{label:"No News",...newsBreachStats(noNews)}];
+  const ndnnNStyles=heatCol(ndnn,r=>({value:r.n}));
+  const ndnnAvgStyles=heatCol(ndnn,r=>r.n?{value:r.avgRange,n:r.n}:null);
+  const ndnnHighStyles=heatCol(ndnn,r=>r.n?{value:r.breaksHigh,n:r.n}:null);
+  const ndnnLowStyles=heatCol(ndnn,r=>r.n?{value:r.breaksLow,n:r.n}:null);
+  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${ndnn.map((r,i)=>`<tr><td>${r.label}</td><td style="${ndnnNStyles[i]}">${r.n}</td><td style="${ndnnAvgStyles[i]}">${r.n?fmt(r.avgRange):""}</td><td style="${ndnnHighStyles[i]}">${r.n?pct(r.breaksHigh):""}</td><td style="${ndnnLowStyles[i]}">${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
   const byType=new Map();
   dailyAll.forEach(s=>{
     const seenKeys=new Set();
@@ -855,7 +925,11 @@ function renderNewsImpact(){
     highTiming:timingBreakdown(t.entries,"highTime",s=>s.high>s.referenceHigh),
     lowTiming:timingBreakdown(t.entries,"lowTime",s=>s.low<s.referenceLow)
   })).sort((a,b)=>b.n-a.n);
-  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>High Timing</th><th>Breaks Prior Low</th><th>Low Timing</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${r.name}</td><td style="text-align:center">${impactBadge(r.impact)}</td><td>${r.n}</td><td>${r.avgRange!=null?fmt(r.avgRange):"—"}</td><td>${r.breaksHigh!=null?pct(r.breaksHigh):"—"}</td><td>${r.highTiming}</td><td>${r.breaksLow!=null?pct(r.breaksLow):"—"}</td><td>${r.lowTiming}</td></tr>`).join(""):'<tr><td colspan="8">No news events logged yet.</td></tr>'}</tbody>`;
+  const eventNStyles=heatCol(rows,r=>({value:r.n}));
+  const eventAvgStyles=heatCol(rows,r=>r.avgRange!=null?{value:r.avgRange,n:r.n}:null);
+  const eventHighStyles=heatCol(rows,r=>r.breaksHigh!=null?{value:r.breaksHigh,n:r.n}:null);
+  const eventLowStyles=heatCol(rows,r=>r.breaksLow!=null?{value:r.breaksLow,n:r.n}:null);
+  newsTypeTable.innerHTML=`<thead><tr><th>Event</th><th>Impact</th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>High Timing</th><th>Breaks Prior Low</th><th>Low Timing</th></tr></thead><tbody>${rows.length?rows.map((r,i)=>`<tr><td>${r.name}</td><td style="text-align:center">${impactBadge(r.impact)}</td><td style="${eventNStyles[i]}">${r.n}</td><td style="${eventAvgStyles[i]}">${r.avgRange!=null?fmt(r.avgRange):"—"}</td><td style="${eventHighStyles[i]}">${r.breaksHigh!=null?pct(r.breaksHigh):"—"}</td><td>${r.highTiming}</td><td style="${eventLowStyles[i]}">${r.breaksLow!=null?pct(r.breaksLow):"—"}</td><td>${r.lowTiming}</td></tr>`).join(""):'<tr><td colspan="8">No news events logged yet.</td></tr>'}</tbody>`;
 }
 function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
 window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s)}
