@@ -310,7 +310,11 @@
 
         <div><label>Reference Level <span class="hint" style="font-weight:400">(what you were entering against)</span></label><input id="teReferenceLabel" placeholder="Prior Day High, VAH, Open..."/></div>
         <div><label>Reference Price</label><input id="teReferencePrice" type="number" step="0.01"/></div>
-        <div><label>Result R <span class="hint" style="font-weight:400">(auto-fills from Stop/Exit, or type your own)</span></label><input id="teResultR" type="number" step="0.01" placeholder="2.5 or -1"/></div>
+        <div>
+          <label>Result R <span class="hint" style="font-weight:400">(always yours to type — never auto-overwritten)</span></label>
+          <input id="teResultR" type="number" step="0.01" placeholder="2.5 or -1"/>
+          <div class="hint" id="teComputedRHint" style="margin-top:5px;min-height:16px"></div>
+        </div>
         <div><label>Volume</label><input id="teVolume" type="number" step="1"/></div>
 
         <div><label>Volume Node</label><select id="teVolumeNode"><option value="">—</option><option>HVN</option><option>LVN</option></select></div>
@@ -717,20 +721,32 @@ function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t)
 // Wraps past midnight rather than discarding: a market like gold trades nearly 24h, so a
 // Signal Time of 23:52 and Entry Time of 00:04 is a real 12-minute delay, not invalid data.
 function entryDelayMin(e){const s=timeToMinutes(e.signalTime),t=timeToMinutes(e.entryTime);if(s==null||t==null)return null;let d=t-s;if(d<0)d+=1440;return d}
+// Shared "flip the sign for a Short vs a Long" primitive — every direction-aware price-distance
+// metric below (distanceFromRef, slippagePts, computeResultR, stopSlippagePts) is one call to
+// this with a different (worse-side, better-side) price pair, instead of five hand-written copies
+// of the same ternary. Returns null for anything other than exactly "Long"/"Short" — notably the
+// default blank Direction — rather than silently treating an unset Direction as "Long".
+function directional(direction,a,b){
+  if(direction==="Short")return a-b;
+  if(direction==="Long")return b-a;
+  return null;
+}
 // Direction-aware like slippagePts below (positive = chased further from the reference in the
 // trade's own direction) rather than a raw signed price diff — otherwise averaging this across a
 // setup used both Long and Short cancels toward zero even when every trade individually chased.
-function distanceFromRef(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.referencePrice))return null;return e.direction==="Short"?e.referencePrice-e.entryPrice:e.entryPrice-e.referencePrice}
+function distanceFromRef(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.referencePrice))return null;return directional(e.direction,e.referencePrice,e.entryPrice)}
 // Positive = worse fill (paid more on a Long, sold for less on a Short) than intended.
-function slippagePts(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.intendedPrice))return null;return e.direction==="Short"?e.intendedPrice-e.entryPrice:e.entryPrice-e.intendedPrice}
+function slippagePts(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.intendedPrice))return null;return directional(e.direction,e.intendedPrice,e.entryPrice)}
 // R = P&L / initial risk, where risk is the entry-to-stop distance. A stop that isn't genuinely
-// on the other side of entry (risk<=0) can't define a risk unit, so that's "can't compute"
-// rather than a divide-by-zero or a nonsense sign.
-function computeResultR(entryPrice,stopLossPrice,exitPrice,direction){
-  if(!Number.isFinite(entryPrice)||!Number.isFinite(stopLossPrice)||!Number.isFinite(exitPrice))return null;
-  const risk=direction==="Short"?stopLossPrice-entryPrice:entryPrice-stopLossPrice;
-  if(!(risk>0))return null;
-  const pnl=direction==="Short"?entryPrice-exitPrice:exitPrice-entryPrice;
+// on the other side of entry (risk<=0) can't define a risk unit, so that's "can't compute" rather
+// than a divide-by-zero or a nonsense sign — same for a Direction that isn't Long/Short yet.
+// Takes an entry-shaped object like its siblings above (not positional args) so it composes the
+// same way they do.
+function computeResultR(e){
+  if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.stopLossPrice)||!Number.isFinite(e.exitPrice))return null;
+  const risk=directional(e.direction,e.stopLossPrice,e.entryPrice);
+  if(risk==null||risk<=0)return null;
+  const pnl=directional(e.direction,e.entryPrice,e.exitPrice);
   return pnl/risk;
 }
 // How far your actual exit landed from your planned stop, same "positive = worse" convention as
@@ -739,7 +755,7 @@ function computeResultR(entryPrice,stopLossPrice,exitPrice,direction){
 // than your worst case, not that anything is wrong).
 function stopSlippagePts(e){
   if(!Number.isFinite(e.stopLossPrice)||!Number.isFinite(e.exitPrice))return null;
-  return e.direction==="Short"?e.exitPrice-e.stopLossPrice:e.stopLossPrice-e.exitPrice;
+  return directional(e.direction,e.exitPrice,e.stopLossPrice);
 }
 function enrichEntries(arr){return arr.map(e=>({...e,entryDelayMin:entryDelayMin(e),distanceFromRef:distanceFromRef(e),slippagePts:slippagePts(e),stopSlippagePts:stopSlippagePts(e)}))}
 const DELAY_BUCKETS=[{label:"<1 min",test:d=>d<1},{label:"1-5 min",test:d=>d>=1&&d<5},{label:"5-15 min",test:d=>d>=5&&d<15},{label:"15-60 min",test:d=>d>=15&&d<60},{label:"60+ min",test:d=>d>=60}];
@@ -879,6 +895,7 @@ function entryToForm(e){
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
+  renderComputedR();
   showTab("teNew");
 }
 function resetTradeEntryForm(){
@@ -888,6 +905,7 @@ function resetTradeEntryForm(){
   teScreenshotsState=[];
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
+  renderComputedR();
 }
 window.editEntry=id=>{const e=tradeEntries.find(x=>x.id===id);if(e)entryToForm(e)}
 window.deleteEntry=async id=>{if(!confirm("Delete this trade entry?"))return;tradeEntries=tradeEntries.filter(x=>x.id!==id);saveEntries();await syncEntryDelete(id);if(teRecordId.value===id)resetTradeEntryForm();renderAll()}
@@ -1099,14 +1117,22 @@ teEntryForm.addEventListener("submit",async ev=>{
   teSavedMsgTimer=setTimeout(()=>{teEntryFormError.style.display="none";teEntryFormError.style.color="";},2500);
 });
 [teDate,teMarket,teDirection,teEntryTime,teEntryPrice].forEach(el=>el.addEventListener("input",()=>{teEntryFormError.style.display="none"}));
-// Live-recomputes Result R from Entry/Stop/Exit whenever any of those three (or Direction)
-// changes, but only OVERWRITES the field — it never clears a value the user already typed by
-// hand, so entering Stop/Exit purely for record-keeping on a trade you managed differently
-// (partial exits, scaled out, discretionary close) won't clobber a manually-entered R.
-[teEntryPrice,teStopLossPrice,teExitPrice,teDirection].forEach(el=>el.addEventListener("input",()=>{
-  const r=computeResultR(n(teEntryPrice.value),n(teStopLossPrice.value),n(teExitPrice.value),teDirection.value);
-  if(r!=null)teResultR.value=Math.round(r*100)/100;
-}));
+// Shows what Result R WOULD be from Entry/Stop/Exit/Direction as a separate, purely informational
+// display next to the field — it never writes into Result R itself. Result R stays 100% yours:
+// type it directly, or click "Use this" to copy the computed value in as a one-off explicit
+// action. This is deliberate: an earlier version auto-wrote into Result R on every keystroke,
+// which silently overwrote a manually-entered value (e.g. a hand-adjusted R for a partial-exit
+// trade) the moment you touched Stop/Exit afterward for record-keeping — a real bug, not a
+// hypothetical one. `+Number.EPSILON` before rounding avoids the classic float trap where an
+// exact value like 1.005 would otherwise round down to 1.00 instead of 1.01.
+function renderComputedR(){
+  const r=computeResultR({entryPrice:n(teEntryPrice.value),stopLossPrice:n(teStopLossPrice.value),exitPrice:n(teExitPrice.value),direction:teDirection.value});
+  if(r==null){teComputedRHint.innerHTML="";return}
+  const rounded=Math.round((r+Number.EPSILON)*100)/100;
+  teComputedRHint.innerHTML=`Computed from Stop/Exit: <b>${rounded}R</b> — <button type="button" id="teUseComputedR" style="padding:2px 8px;font-size:12px">Use this</button>`;
+  document.getElementById("teUseComputedR").addEventListener("click",()=>{teResultR.value=rounded});
+}
+[teEntryPrice,teStopLossPrice,teExitPrice,teDirection].forEach(el=>el.addEventListener("input",renderComputedR));
 teClearForm.addEventListener("click",resetTradeEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
