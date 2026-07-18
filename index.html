@@ -624,13 +624,15 @@ const HEAT_MIN_N=5; // rows backed by fewer samples than this get a dampened, no
 // The current top value in the column also gets bolded so it reads as the standout at a glance — unless
 // rowN says this row's own value rests on a thin sample, in which case both the tint and the bold are
 // dampened so a n=1 "biggest of two" doesn't read as confidently as one backed by a real sample size.
+// When every real value in the column ties (hi<=lo, e.g. two session types both at 100%), there's no
+// spread to scale against — treat that as full intensity (t=1) instead of leaving them blank, so a tie
+// at the top still reads as "hot" rather than looking indistinguishable from "no data".
 function heatSeq(value,values,rowN){
   if(!Number.isFinite(value))return"";
   const x=values.filter(Number.isFinite);
   if(!x.length)return"";
   const lo=Math.min(...x),hi=Math.max(...x);
-  if(hi<=lo)return"";
-  const t=Math.max(0,Math.min(1,(value-lo)/(hi-lo)));
+  const t=hi>lo?Math.max(0,Math.min(1,(value-lo)/(hi-lo))):1;
   const conf=Number.isFinite(rowN)?Math.min(1,rowN/HEAT_MIN_N):1;
   const bold=value===hi&&conf>=1?"font-weight:900;":"";
   return`background:rgba(${HEAT_SEQ_RGB},${(0.08+t*0.42*conf).toFixed(2)});${bold}`;
