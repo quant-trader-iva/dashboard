@@ -47,6 +47,7 @@
     .side{grid-row:span 40;background:#0f172a;align-items:stretch;justify-content:flex-start;padding:0}
     .sideinner{width:100%;padding:12px}.sidetitle{background:var(--blue);padding:10px;border-radius:10px;text-align:center;font-weight:900;margin-bottom:8px}
     .statline{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline b{color:white}
+    .statline3{display:grid;grid-template-columns:1fr 60px 195px;align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline3 b{color:white;text-align:right}.statline3 .bestday{font-size:12px;color:#94a3b8;white-space:nowrap;text-align:left;border-left:1px solid #334155;padding-left:10px}
     table{width:100%;border-collapse:collapse} th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-size:13px} th{background:#1f2937;position:sticky;top:0;z-index:1}.tablewrap{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:12px}
     .pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:900;background:#334155;color:white}
     .bar{height:9px;background:#334155;border-radius:999px;overflow:hidden;margin-top:7px}.bar>div{height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e)}
@@ -147,6 +148,7 @@
 
     <div class="card span-6"><h2>Session Hit Rates</h2><div id="sessionStats"></div></div>
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
+    <div class="card span-12"><h2>Session Hit Rates by Day of Week</h2><div id="sessionStatsByDay"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
     <div class="card span-12"><h2>Session Open vs Prior Value Area</h2><p class="hint">Breaks down sessions by the "Open vs Prior VA" field entered on each session — your own Above/Inside/Below judgment of where that session opened relative to the relevant prior session's Value Area (Weekly &rarr; previous Weekly, Daily &rarr; previous Daily, London &rarr; previous New York day, New York &rarr; same-day London). Requires that field to be filled in.</p><div class="tablewrap"><table id="vaOpenTable"></table></div></div>
@@ -1206,6 +1208,22 @@ function editableSelectCell(s,hitField,cls=""){
   return d;
 }
 function line(l,v,style){return `<div class="statline" style="${style||""}"><span>${l}</span><b>${v}</b></div>`}
+function line3(l,v,extra,style){return `<div class="statline3" style="${style||""}"><span>${l}</span><b>${v}</b><span class="bestday">${extra}</span></div>`}
+// Which weekday has the best hit rate for this session-type+range combo. Requires at least one
+// answered (Yes/No) session on that weekday; ties keep the earlier weekday (Mon-first order).
+function bestDayStat(arr,key){
+  const days=["Monday","Tuesday","Wednesday","Thursday","Friday"];
+  const perDay=days.map(d=>({day:d,...hitStat(arr.filter(s=>s.day===d),key)})).filter(d=>d.n>0);
+  return perDay.length?perDay.reduce((best,d)=>d.rate>best.rate?d:best):null;
+}
+// Same confidence dampening as the heatmap (HEAT_MIN_N) so a "best day" backed by n=1 reads as
+// less certain than one backed by a real sample, instead of both looking equally confident.
+function bestDayLabel(stat){
+  if(!stat)return "—";
+  const conf=Math.min(1,stat.n/HEAT_MIN_N);
+  const style=conf<1?`opacity:${(0.55+0.45*conf).toFixed(2)}`:"";
+  return `<span style="${style}">${stat.day} ${pct(stat.rate)} (n=${stat.n})</span>`;
+}
 function sideStats(arr){
  const e=enrich(arr);
  return `<div class="sideinner"><div class="sidetitle">STATISTICS</div>
@@ -1288,6 +1306,10 @@ function renderMetrics(){
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key])=>[key,hitStat(byType[x],key)])));
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
  sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line(x+" "+label,pct(sessionRows[i][key].rate),sessionStyles[key][i])).join("")).join("");
+ // Weekly sessions are excluded from the best-day callout: a Weekly session's day field reflects
+ // when the user happened to log it, not a real per-weekday pattern, so a "best day" there would
+ // just reward logging habit.
+ sessionStatsByDay.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line3(x+" "+label,pct(sessionRows[i][key].rate),bestDayLabel(x==="Weekly"?null:bestDayStat(byType[x],key)),sessionStyles[key][i])).join("")).join("");
 
  // Not heat-tinted: HR/QR/ER are always exactly FR/2, FR/4, FR/8 for every session, so comparing
  // them against each other would just always highlight FR and never reflect the underlying data.
