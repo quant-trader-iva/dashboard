@@ -149,6 +149,8 @@
     <div class="card span-6"><h2>Session Hit Rates</h2><div id="sessionStats"></div></div>
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-6"><h2>Session Hit Rates by Day of Week</h2><div id="sessionStatsByDay"></div></div>
+    <div class="card span-6"><h2>Execution Win/Loss by Day of Week</h2><div id="entryDayBars"></div><h2 style="margin-top:16px">Execution Win/Loss by Session</h2><div id="entrySessionBars"></div></div>
+    <div class="card span-12"><h2>Execution Win/Loss by Time of Day</h2><div id="entryHourBars"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
     <div class="card span-12"><h2>Session Open vs Prior Value Area</h2><p class="hint">Breaks down sessions by the "Open vs Prior VA" field entered on each session — your own Above/Inside/Below judgment of where that session opened relative to the relevant prior session's Value Area (Weekly &rarr; previous Weekly, Daily &rarr; previous Daily, London &rarr; previous New York day, New York &rarr; same-day London). Requires that field to be filled in.</p><div class="tablewrap"><table id="vaOpenTable"></table></div></div>
@@ -498,6 +500,9 @@ const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
+// The two intraday sessions, derived from SESSION_ORDER (not a separate hardcoded literal) so a
+// future rename/reorder of session types can't silently leave this stale.
+const INTRADAY_SESSIONS=SESSION_ORDER.filter(s=>s==="London"||s==="New York");
 const LEGACY_STORAGE_KEY="trading_projection_sessions_v3";
 const LEGACY_SETTINGS_KEY="trading_projection_settings_v3";
 function loadPendingDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)||"[]")}catch{return[]}}
@@ -621,6 +626,11 @@ const HEAT_SEQ_RGB=cssVarRgb("--cyan","56,189,248");
 const HEAT_POS_RGB=cssVarRgb("--green","34,197,94");
 const HEAT_NEG_RGB=cssVarRgb("--red","239,68,68");
 const HEAT_MIN_N=5; // rows backed by fewer samples than this get a dampened, non-bold tint
+// Single source of truth for "how confident is a row/mark backed by n samples" — every place that
+// dampens a tint, a bold, or a mark's opacity by sample size computes this fraction the same way,
+// so tuning HEAT_MIN_N (or this curve) updates every consumer instead of only the ones someone
+// remembered to touch.
+function confFrac(n){return Number.isFinite(n)?Math.min(1,n/HEAT_MIN_N):1}
 
 // Per-column heatmap tint: value's position between that column's own min/max, one hue (--cyan), light->dark.
 // The current top value in the column also gets bolded so it reads as the standout at a glance — unless
@@ -635,7 +645,7 @@ function heatSeq(value,values,rowN){
   if(!x.length)return"";
   const lo=Math.min(...x),hi=Math.max(...x);
   const t=hi>lo?Math.max(0,Math.min(1,(value-lo)/(hi-lo))):1;
-  const conf=Number.isFinite(rowN)?Math.min(1,rowN/HEAT_MIN_N):1;
+  const conf=confFrac(rowN);
   const bold=value===hi&&conf>=1?"font-weight:900;":"";
   return`background:rgba(${HEAT_SEQ_RGB},${(0.08+t*0.42*conf).toFixed(2)});${bold}`;
 }
@@ -652,7 +662,7 @@ function heatDiverge(value,values,rowN){
   if(!x.length)return"";
   const maxAbs=Math.max(...x.map(Math.abs),1e-9);
   const t=Math.min(1,Math.abs(value)/maxAbs);
-  const conf=Number.isFinite(rowN)?Math.min(1,rowN/HEAT_MIN_N):1;
+  const conf=confFrac(rowN);
   const bold=Math.abs(value)===maxAbs&&conf>=1?"font-weight:900;":"";
   const rgb=value>0?HEAT_POS_RGB:HEAT_NEG_RGB;
   return`background:rgba(${rgb},${(0.08+t*0.42*conf).toFixed(2)});${bold}`;
@@ -776,6 +786,15 @@ const HOUR_BUCKETS=[{label:"00:00–04:00",lo:0,hi:4},{label:"04:00–08:00",lo:
 function hourBucketOf(entryTime){const m=timeToMinutes(entryTime);if(m==null)return null;const h=Math.floor(m/60);const b=HOUR_BUCKETS.find(b=>h>=b.lo&&h<b.hi);return b?b.label:null}
 function avgOrNull(nums){const x=nums.filter(Number.isFinite);return x.length?avg(x):null}
 function entryWinRate(arr){const x=arr.filter(e=>Number.isFinite(e.resultR));return x.length?x.filter(e=>e.resultR>0).length/x.length:null}
+const JS_WEEKDAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+// Trade entries have no manually-picked Day field like sessions do — weekday is derived from the
+// entry's Date. Parsed with an explicit local midnight time so this doesn't shift a day backward
+// in timezones behind UTC (a bare `new Date("2026-07-18")` parses as UTC midnight).
+function entryWeekday(e){
+  if(!e.date)return null;
+  const d=new Date(e.date+"T00:00:00");
+  return Number.isNaN(d.getTime())?null:JS_WEEKDAY_NAMES[d.getDay()];
+}
 function entryAvgR(arr){return avgOrNull(arr.map(e=>e.resultR))}
 function entryAvgSlip(arr){return avgOrNull(arr.map(e=>e.slippagePts))}
 function entryGroupStats(arr){
@@ -849,6 +868,117 @@ function renderEntryStats(){
   renderCategoricalEntryTable("teExhaustionTable","Exhaustion",e,x=>x.exhaustion||null);
   renderCategoricalEntryTable("tePocVaTable","POC/VA Position",e,x=>x.pocVaPosition||null);
   renderInstitutionalTagTable("teInstTagTable",e);
+}
+// Shared renderer for a "diverging mark per bucket" chart: mark sits at zero-to-avgR (bar) or right
+// at avgR (dot), green=net-winning bucket, red=net-losing. Pass {markShape:"dot",slotW} for a dense
+// per-hour dot plot; bars are the default. A group with n===0 still reserves its axis slot (so the
+// axis stays continuous/complete) but draws no mark, just a dimmed label — currently only exercised
+// by the time-of-day chart, since the day-of-week/session callers filter empty groups out first.
+// Sizes itself to the card's actual rendered width (`clientWidth`, falling back to a fixed guess only
+// if the card is hidden/unlaid-out, e.g. behind the sign-in gate) so the SVG fills the card
+// edge-to-edge at its true pixel size instead of being CSS-stretched/scaled, which would distort
+// dots and text. Re-measured on window resize (see the resize listener near renderAll below) since
+// a size baked in once at render time would otherwise go stale on the next layout change.
+function renderDivergingChart(elId,groups,opts={}){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  if(!groups.some(g=>g.n>0)){el.innerHTML=`<p class="hint">No trade entries with a Result R logged yet.</p>`;return}
+
+  const dot=opts.markShape==="dot";
+  const barW=36,dotR=7;
+  const plotTop=14,plotBottom=176,marginLeft=34,marginRight=14;
+  const zeroY=(plotTop+plotBottom)/2,halfH=(plotBottom-plotTop)/2;
+  const fallbackWidth=marginLeft+groups.length*(opts.slotW||60)+marginRight;
+  const width=el.clientWidth>0?el.clientWidth:fallbackWidth;
+  const slotW=(width-marginLeft-marginRight)/groups.length;
+  const maxAbs=Math.max(1e-9,...groups.filter(g=>g.n>0).map(g=>Math.abs(g.avgR)));
+  const y=v=>zeroY-(v/maxAbs)*halfH;
+
+  const marks=groups.map((g,i)=>{
+    const cx=marginLeft+i*slotW+slotW/2;
+    const labelY=plotBottom+16;
+    if(!(g.n>0)){
+      return `<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="10" fill="#475569">${g.label}</text>`;
+    }
+    const color=g.avgR>0?"#16a34a":g.avgR<0?"#dc2626":"#64748b";
+    const opacity=(0.55+0.45*confFrac(g.n)).toFixed(2);
+    let mark;
+    if(dot){
+      mark=`<circle cx="${cx}" cy="${y(g.avgR)}" r="${dotR}" fill="${color}"/>`;
+    }else{
+      const yTop=Math.min(y(0),y(g.avgR)),yBot=Math.max(y(0),y(g.avgR));
+      mark=`<rect x="${cx-barW/2}" y="${yTop}" width="${barW}" height="${Math.max(2,yBot-yTop)}" rx="4" fill="${color}"/>`;
+    }
+    const labelText=dot
+      ?`<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="10" fill="#94a3b8">${g.label}</text>`
+      :`<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="12" font-weight="700" fill="#e5e7eb">${g.label}</text>`;
+    const detail=dot?"":`
+        <text x="${cx}" y="${plotBottom+34}" text-anchor="middle" font-size="11" fill="${color}">${g.avgR>0?"+":""}${fmt(g.avgR)}R</text>
+        <text x="${cx}" y="${plotBottom+48}" text-anchor="middle" font-size="10" fill="#94a3b8">${pct(g.winRate)} (n=${g.n})</text>`;
+    return `<g opacity="${opacity}"><title>${g.title}</title>${mark}${labelText}${detail}</g>`;
+  }).join("");
+
+  const chartHeight=dot?204:236;
+  el.innerHTML=`<p class="hint">Green = net-winning bucket (positive average Result R), red = net-losing.</p>
+    <svg viewBox="0 0 ${width} ${chartHeight}" style="width:100%;height:${chartHeight}px;display:block">
+      <line x1="${marginLeft-8}" y1="${zeroY}" x2="${width-marginRight+8}" y2="${zeroY}" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="${marginLeft-14}" y="${zeroY+4}" text-anchor="end" font-size="16" fill="#94a3b8">0R</text>
+      ${marks}
+    </svg>`;
+}
+function entryBarGroup(label,arr){return{label,n:arr.length,avgR:entryAvgR(arr),winRate:entryWinRate(arr)}}
+function renderEntryDayBars(){
+  const e=enrichEntries(tradeEntries).filter(x=>Number.isFinite(x.resultR));
+  const DAY_ORDER_FULL=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  const groups=DAY_ORDER_FULL.map(day=>{
+    const arr=e.filter(x=>entryWeekday(x)===day);
+    if(!arr.length)return null;
+    const g=entryBarGroup(DAY_ABBR[day]||day.slice(0,3),arr);
+    g.title=`${day}: ${g.n} trade${g.n===1?"":"s"}, ${pct(g.winRate)} win rate, avg ${g.avgR>0?"+":""}${fmt(g.avgR)}R`;
+    return g;
+  }).filter(Boolean);
+  renderDivergingChart("entryDayBars",groups);
+}
+// Weekly and Daily entries are intentionally excluded — this compares the two intraday sessions
+// specifically, not a stand-in for the full By Session breakdown already on Execution Stats
+// (teSessionTypeTable). Session names come from INTRADAY_SESSIONS (derived from SESSION_ORDER)
+// rather than a separate literal so this can't silently drift from the canonical session list.
+function renderEntrySessionBars(){
+  const e=enrichEntries(tradeEntries).filter(x=>Number.isFinite(x.resultR));
+  const groups=INTRADAY_SESSIONS.map(session=>{
+    const arr=e.filter(x=>x.sessionType===session);
+    if(!arr.length)return null;
+    const g=entryBarGroup(session,arr);
+    g.title=`${session}: ${g.n} trade${g.n===1?"":"s"}, ${pct(g.winRate)} win rate, avg ${g.avgR>0?"+":""}${fmt(g.avgR)}R`;
+    return g;
+  }).filter(Boolean);
+  renderDivergingChart("entrySessionBars",groups);
+}
+// Time-of-day is a dot per half-hour slot (00:00, 00:30, 01:00, ...), not the coarser 4-hour
+// HOUR_BUCKETS used by the "By Time of Day" table on Execution Stats — the point of this chart is
+// seeing every half hour, so it deliberately uses finer granularity than that table rather than
+// reusing its buckets. Slots with no logged entries still get an axis slot (dimmed label, no dot)
+// so the 24-hour timeline reads as continuous instead of only showing the slots that have data.
+// Bucketed in one pass (not 48 separate array scans) and bounds-checked against a malformed
+// 24:00-or-later time (timeToMinutes doesn't reject it) so such an entry is treated as unparseable
+// rather than silently matching no slot at all.
+function renderEntryHourDots(){
+  const e=enrichEntries(tradeEntries).filter(x=>Number.isFinite(x.resultR));
+  const buckets=Array.from({length:48},()=>[]);
+  e.forEach(x=>{
+    const m=timeToMinutes(x.entryTime);
+    if(m!=null&&m<1440)buckets[Math.floor(m/30)].push(x);
+  });
+  const groups=buckets.map((arr,slot)=>{
+    const hour=String(Math.floor(slot/2)).padStart(2,"0"),half=slot%2===1;
+    const label=half?`${hour}:30`:`${hour}:00`;
+    if(!arr.length)return{label,n:0};
+    const g=entryBarGroup(label,arr);
+    const rangeEnd=half?`${hour}:59`:`${hour}:29`;
+    g.title=`${label}–${rangeEnd}: ${g.n} trade${g.n===1?"":"s"}, ${pct(g.winRate)} win rate, avg ${g.avgR>0?"+":""}${fmt(g.avgR)}R`;
+    return g;
+  });
+  renderDivergingChart("entryHourBars",groups,{markShape:"dot",slotW:22});
 }
 // Generic groupBy + win-rate/avg-R table for any single-value categorical entry field.
 // getLabel returning null/undefined skips that entry entirely (rather than lumping it into
@@ -1220,7 +1350,7 @@ function bestDayStat(arr,key){
   const tied=perDay.filter(d=>d.rate===maxRate);
   return{days:tied.map(d=>d.day),rate:maxRate,n:tied.reduce((sum,d)=>sum+d.n,0)};
 }
-const DAY_ABBR={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri"};
+const DAY_ABBR={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"};
 // Collapses a set of tied weekdays into a compact label: a single day keeps its full name (matches
 // the existing non-tied format), a contiguous run becomes "Mon–Fri", and a non-contiguous set is
 // listed out ("Mon, Wed, Fri") since there's no single range that describes it.
@@ -1235,7 +1365,7 @@ function dayRangeLabel(days){
 // less certain than one backed by a real sample, instead of both looking equally confident.
 function bestDayLabel(stat){
   if(!stat)return "—";
-  const conf=Math.min(1,stat.n/HEAT_MIN_N);
+  const conf=confFrac(stat.n);
   const style=conf<1?`opacity:${(0.55+0.45*conf).toFixed(2)}`:"";
   return `<span style="${style}">${dayRangeLabel(stat.days)} ${pct(stat.rate)} (n=${stat.n})</span>`;
 }
@@ -1549,7 +1679,15 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryLogTable].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+// The execution charts size themselves from clientWidth at render time, so without this they'd
+// only fill the card at the moment they were drawn — a later window resize/zoom would leave them
+// stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
+let entryChartsResizeTimer=null;
+window.addEventListener("resize",()=>{
+  clearTimeout(entryChartsResizeTimer);
+  entryChartsResizeTimer=setTimeout(()=>{[renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots].forEach(fn=>{try{fn()}catch(err){console.error("resize re-render failed:",err)}})},150);
+});
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
