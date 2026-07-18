@@ -739,14 +739,15 @@ function enrich(arr){
     totalRangeHit:totalRangeHit(s)
   }))
 }
-// Upside Total Hit and Downside Total Hit are tracked as separate Yes/No fields (the extreme-low
-// and extreme-high total-range targets are different price levels), but they project the same
-// combinedRange magnitude in both directions, so for a single "Total Range" hit-rate stat this
-// counts a session as a hit if either direction reached it, rather than showing the same range
-// twice as two separate percentages.
+// Upside/Downside Total Hit project the same combinedRange magnitude in both directions, so this
+// combines them into one "Total Range" stat instead of showing that range twice. Counts as a hit
+// if either side is "Yes", a miss if either side is "No" (a user commonly only grades the side
+// relevant to that session and leaves the other blank — requiring *both* sides answered before
+// counting a miss would silently exclude every such session from the stat), and unanswered only
+// when neither side has been graded at all.
 function totalRangeHit(s){
   if(s.upTotalHit==="Yes"||s.downTotalHit==="Yes")return"Yes";
-  if(s.upTotalHit==="No"&&s.downTotalHit==="No")return"No";
+  if(s.upTotalHit==="No"||s.downTotalHit==="No")return"No";
   return undefined;
 }
 // --- Trade Entries: computed fields & grouping ---
