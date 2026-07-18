@@ -735,8 +735,19 @@ function enrich(arr){
     fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
     currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
     ibRange:ibRange(s), londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
-    volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s)
+    volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s),
+    totalRangeHit:totalRangeHit(s)
   }))
+}
+// Upside Total Hit and Downside Total Hit are tracked as separate Yes/No fields (the extreme-low
+// and extreme-high total-range targets are different price levels), but they project the same
+// combinedRange magnitude in both directions, so for a single "Total Range" hit-rate stat this
+// counts a session as a hit if either direction reached it, rather than showing the same range
+// twice as two separate percentages.
+function totalRangeHit(s){
+  if(s.upTotalHit==="Yes"||s.downTotalHit==="Yes")return"Yes";
+  if(s.upTotalHit==="No"&&s.downTotalHit==="No")return"No";
+  return undefined;
 }
 // --- Trade Entries: computed fields & grouping ---
 function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t);if(!m)return null;return Number(m[1])*60+Number(m[2])}
@@ -1447,7 +1458,7 @@ function renderMetrics(){
  const session=sessionFilter.value;const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
  mSessions.textContent=arr.length;mFR.textContent=pct(hitRate(arr,"frHit"));mHR.textContent=pct(hitRate(arr,"hrHit"));mQR.textContent=pct(hitRate(arr,"qrHit"));mER.textContent=pct(hitRate(arr,"erHit"));mExp.textContent=fmt(expectancy(arr))+"R";barFR.style.width=(hitRate(arr,"frHit")*100)+"%";barHR.style.width=(hitRate(arr,"hrHit")*100)+"%";barQR.style.width=(hitRate(arr,"qrHit")*100)+"%";barER.style.width=(hitRate(arr,"erHit")*100)+"%";
  const byType=Object.fromEntries(SESSION_ORDER.map(x=>[x,arr.filter(s=>s.sessionType===x)]));
- const hitKeys=[["FR","frHit"],["HR","hrHit"],["QR","qrHit"],["ER","erHit"]];
+ const hitKeys=[["Total Range","totalRangeHit"],["FR","frHit"],["HR","hrHit"],["QR","qrHit"],["ER","erHit"]];
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key])=>[key,hitStat(byType[x],key)])));
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
  sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line(x+" "+label,pct(sessionRows[i][key].rate),sessionStyles[key][i])).join("")).join("");
