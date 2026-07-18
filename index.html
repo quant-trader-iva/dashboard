@@ -1209,12 +1209,27 @@ function editableSelectCell(s,hitField,cls=""){
 }
 function line(l,v,style){return `<div class="statline" style="${style||""}"><span>${l}</span><b>${v}</b></div>`}
 function line3(l,v,extra,style){return `<div class="statline3" style="${style||""}"><span>${l}</span><b>${v}</b><span class="bestday">${extra}</span></div>`}
-// Which weekday has the best hit rate for this session-type+range combo. Requires at least one
-// answered (Yes/No) session on that weekday; ties keep the earlier weekday (Mon-first order).
+// Which weekday(s) have the best hit rate for this session-type+range combo. Requires at least one
+// answered (Yes/No) session on that weekday. Returns every weekday tied at the top rate (not just the
+// earliest) so e.g. a 100% rate shared by all five weekdays reads as "every day", not "Monday only".
 function bestDayStat(arr,key){
   const days=["Monday","Tuesday","Wednesday","Thursday","Friday"];
   const perDay=days.map(d=>({day:d,...hitStat(arr.filter(s=>s.day===d),key)})).filter(d=>d.n>0);
-  return perDay.length?perDay.reduce((best,d)=>d.rate>best.rate?d:best):null;
+  if(!perDay.length)return null;
+  const maxRate=Math.max(...perDay.map(d=>d.rate));
+  const tied=perDay.filter(d=>d.rate===maxRate);
+  return{days:tied.map(d=>d.day),rate:maxRate,n:tied.reduce((sum,d)=>sum+d.n,0)};
+}
+const DAY_ABBR={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri"};
+// Collapses a set of tied weekdays into a compact label: a single day keeps its full name (matches
+// the existing non-tied format), a contiguous run becomes "Mon–Fri", and a non-contiguous set is
+// listed out ("Mon, Wed, Fri") since there's no single range that describes it.
+function dayRangeLabel(days){
+  if(days.length===1)return days[0];
+  const order=["Monday","Tuesday","Wednesday","Thursday","Friday"];
+  const idxs=days.map(d=>order.indexOf(d)).sort((a,b)=>a-b);
+  const contiguous=idxs.every((v,i)=>i===0||v===idxs[i-1]+1);
+  return contiguous?`${DAY_ABBR[order[idxs[0]]]}–${DAY_ABBR[order[idxs[idxs.length-1]]]}`:idxs.map(i=>DAY_ABBR[order[i]]).join(", ");
 }
 // Same confidence dampening as the heatmap (HEAT_MIN_N) so a "best day" backed by n=1 reads as
 // less certain than one backed by a real sample, instead of both looking equally confident.
@@ -1222,7 +1237,7 @@ function bestDayLabel(stat){
   if(!stat)return "—";
   const conf=Math.min(1,stat.n/HEAT_MIN_N);
   const style=conf<1?`opacity:${(0.55+0.45*conf).toFixed(2)}`:"";
-  return `<span style="${style}">${stat.day} ${pct(stat.rate)} (n=${stat.n})</span>`;
+  return `<span style="${style}">${dayRangeLabel(stat.days)} ${pct(stat.rate)} (n=${stat.n})</span>`;
 }
 function sideStats(arr){
  const e=enrich(arr);
@@ -1306,10 +1321,7 @@ function renderMetrics(){
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key])=>[key,hitStat(byType[x],key)])));
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
  sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line(x+" "+label,pct(sessionRows[i][key].rate),sessionStyles[key][i])).join("")).join("");
- // Weekly sessions are excluded from the best-day callout: a Weekly session's day field reflects
- // when the user happened to log it, not a real per-weekday pattern, so a "best day" there would
- // just reward logging habit.
- sessionStatsByDay.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line3(x+" "+label,pct(sessionRows[i][key].rate),bestDayLabel(x==="Weekly"?null:bestDayStat(byType[x],key)),sessionStyles[key][i])).join("")).join("");
+ sessionStatsByDay.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line3(x+" "+label,pct(sessionRows[i][key].rate),bestDayLabel(bestDayStat(byType[x],key)),sessionStyles[key][i])).join("")).join("");
 
  // Not heat-tinted: HR/QR/ER are always exactly FR/2, FR/4, FR/8 for every session, so comparing
  // them against each other would just always highlight FR and never reflect the underlying data.
