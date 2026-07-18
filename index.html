@@ -637,6 +637,11 @@ function heatSeq(value,values,rowN){
   const bold=value===hi&&conf>=1?"font-weight:900;":"";
   return`background:rgba(${HEAT_SEQ_RGB},${(0.08+t*0.42*conf).toFixed(2)});${bold}`;
 }
+// Absolute-scale variant for values that are already a natural 0-1 fraction (e.g. a hit rate):
+// tints against a fixed [0,1] range instead of the column's own min/max, so e.g. 83.3% always
+// reads as 83% of full intensity and only a literal 100% gets bolded — unlike heatSeq, where
+// whatever happens to be the biggest value in a column gets full intensity even if it's 60%.
+function heatAbs(value,rowN){return heatSeq(value,[0,1],rowN)}
 // Diverging variant for signed values (e.g. Result R): --green for positive, --red for negative,
 // intensity scaled by magnitude relative to the largest absolute value in the column, same rowN dampening.
 function heatDiverge(value,values,rowN){
@@ -1281,7 +1286,7 @@ function renderMetrics(){
  const byType=Object.fromEntries(SESSION_ORDER.map(x=>[x,arr.filter(s=>s.sessionType===x)]));
  const hitKeys=[["FR","frHit"],["HR","hrHit"],["QR","qrHit"],["ER","erHit"]];
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key])=>[key,hitStat(byType[x],key)])));
- const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,heatCol(sessionRows,r=>r[key].rate!=null?{value:r[key].rate,n:r[key].n}:null)]));
+ const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
  sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line(x+" "+label,pct(sessionRows[i][key].rate),sessionStyles[key][i])).join("")).join("");
 
  // Not heat-tinted: HR/QR/ER are always exactly FR/2, FR/4, FR/8 for every session, so comparing
