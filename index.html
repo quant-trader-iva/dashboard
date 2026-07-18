@@ -1338,9 +1338,10 @@ function renderRangeCorr(){
     ["London beyond Previous NY Day Low",london.low,london.lowTotal]
   ];
   const breachStats=breachRows.map(([label,arr,total])=>({label,avgExt:arr.length?avg(arr):null,n:arr.length,total,freq:total?arr.length/total:null}));
+  const breachFreqStyles=heatCol(breachStats,r=>r.freq!=null?{value:r.freq,n:r.total}:null);
   const breachAvgStyles=heatCol(breachStats,r=>r.avgExt!=null?{value:r.avgExt,n:r.n}:null);
-  const breachNStyles=heatCol(breachStats,r=>r.freq!=null?{value:r.freq,n:r.total}:null);
-  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachStats.map((r,i)=>`<tr><td>${r.label}</td><td style="${breachAvgStyles[i]}">${r.avgExt!=null?fmt(r.avgExt):""}</td><td style="${breachNStyles[i]}">${r.freq!=null?`${r.n} (${pct(r.freq)})`:r.n}</td></tr>`).join("")}</tbody>`;
+  const breachNStyles=heatCol(breachStats,r=>({value:r.n}));
+  rangeCorrTable.innerHTML=`<thead><tr><th>Breach</th><th>Frequency</th><th>Avg Extension</th><th>n</th></tr></thead><tbody>${breachStats.map((r,i)=>`<tr><td>${r.label}</td><td style="${breachFreqStyles[i]}">${r.freq!=null?pct(r.freq):""}</td><td style="${breachAvgStyles[i]}">${r.avgExt!=null?fmt(r.avgExt):""}</td><td style="${breachNStyles[i]}">${r.n}</td></tr>`).join("")}</tbody>`;
 }
 function outcomeMix(arr){
   const n=arr.length;
