@@ -305,10 +305,16 @@
         <div><label>Entry Time <span class="hint" style="font-weight:400">(order filled)</span></label><input id="teEntryTime" type="time"/></div>
         <div><label>Intended Entry Price</label><input id="teIntendedPrice" type="number" step="0.01"/></div>
         <div><label>Actual Entry Price</label><input id="teEntryPrice" type="number" step="0.01"/></div>
+        <div><label>Stop Loss Price <span class="hint" style="font-weight:400">(sets your risk unit)</span></label><input id="teStopLossPrice" type="number" step="0.01"/></div>
+        <div><label>Exit Price <span class="hint" style="font-weight:400">(where you actually got out)</span></label><input id="teExitPrice" type="number" step="0.01"/></div>
 
         <div><label>Reference Level <span class="hint" style="font-weight:400">(what you were entering against)</span></label><input id="teReferenceLabel" placeholder="Prior Day High, VAH, Open..."/></div>
         <div><label>Reference Price</label><input id="teReferencePrice" type="number" step="0.01"/></div>
-        <div><label>Result R</label><input id="teResultR" type="number" step="0.01" placeholder="2.5 or -1"/></div>
+        <div>
+          <label>Result R <span class="hint" style="font-weight:400">(always yours to type — never auto-overwritten)</span></label>
+          <input id="teResultR" type="number" step="0.01" placeholder="2.5 or -1"/>
+          <div class="hint" id="teComputedRHint" style="margin-top:5px;min-height:16px"></div>
+        </div>
         <div><label>Volume</label><input id="teVolume" type="number" step="1"/></div>
 
         <div><label>Volume Node</label><select id="teVolumeNode"><option value="">—</option><option>HVN</option><option>LVN</option></select></div>
@@ -511,7 +517,7 @@ const fields=["date","day","sessionType","market","dayType","openType","bias","o
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
 // never collide with the session form's ids (both live in the same document at once).
-const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","ReferenceLabel","ReferencePrice","ResultR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","Notes"];
+const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","StopLossPrice","ExitPrice","ReferenceLabel","ReferencePrice","ResultR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","Notes"];
 function teId(name){return "te"+name}
 function teKey(name){return name[0].toLowerCase()+name.slice(1)}
 // Institutional Trades is a fixed checkbox group (multiple selections), not a single-value
@@ -715,13 +721,43 @@ function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t)
 // Wraps past midnight rather than discarding: a market like gold trades nearly 24h, so a
 // Signal Time of 23:52 and Entry Time of 00:04 is a real 12-minute delay, not invalid data.
 function entryDelayMin(e){const s=timeToMinutes(e.signalTime),t=timeToMinutes(e.entryTime);if(s==null||t==null)return null;let d=t-s;if(d<0)d+=1440;return d}
+// Shared "flip the sign for a Short vs a Long" primitive — every direction-aware price-distance
+// metric below (distanceFromRef, slippagePts, computeResultR, stopSlippagePts) is one call to
+// this with a different (worse-side, better-side) price pair, instead of five hand-written copies
+// of the same ternary. Returns null for anything other than exactly "Long"/"Short" — notably the
+// default blank Direction — rather than silently treating an unset Direction as "Long".
+function directional(direction,a,b){
+  if(direction==="Short")return a-b;
+  if(direction==="Long")return b-a;
+  return null;
+}
 // Direction-aware like slippagePts below (positive = chased further from the reference in the
 // trade's own direction) rather than a raw signed price diff — otherwise averaging this across a
 // setup used both Long and Short cancels toward zero even when every trade individually chased.
-function distanceFromRef(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.referencePrice))return null;return e.direction==="Short"?e.referencePrice-e.entryPrice:e.entryPrice-e.referencePrice}
+function distanceFromRef(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.referencePrice))return null;return directional(e.direction,e.referencePrice,e.entryPrice)}
 // Positive = worse fill (paid more on a Long, sold for less on a Short) than intended.
-function slippagePts(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.intendedPrice))return null;return e.direction==="Short"?e.intendedPrice-e.entryPrice:e.entryPrice-e.intendedPrice}
-function enrichEntries(arr){return arr.map(e=>({...e,entryDelayMin:entryDelayMin(e),distanceFromRef:distanceFromRef(e),slippagePts:slippagePts(e)}))}
+function slippagePts(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.intendedPrice))return null;return directional(e.direction,e.intendedPrice,e.entryPrice)}
+// R = P&L / initial risk, where risk is the entry-to-stop distance. A stop that isn't genuinely
+// on the other side of entry (risk<=0) can't define a risk unit, so that's "can't compute" rather
+// than a divide-by-zero or a nonsense sign — same for a Direction that isn't Long/Short yet.
+// Takes an entry-shaped object like its siblings above (not positional args) so it composes the
+// same way they do.
+function computeResultR(e){
+  if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.stopLossPrice)||!Number.isFinite(e.exitPrice))return null;
+  const risk=directional(e.direction,e.stopLossPrice,e.entryPrice);
+  if(risk==null||risk<=0)return null;
+  const pnl=directional(e.direction,e.entryPrice,e.exitPrice);
+  return pnl/risk;
+}
+// How far your actual exit landed from your planned stop, same "positive = worse" convention as
+// slippagePts above. Doesn't assume the exit WAS a stop-out — a winner exiting nowhere near the
+// stop just shows a large negative number, which is expected (it means you got out much better
+// than your worst case, not that anything is wrong).
+function stopSlippagePts(e){
+  if(!Number.isFinite(e.stopLossPrice)||!Number.isFinite(e.exitPrice))return null;
+  return directional(e.direction,e.exitPrice,e.stopLossPrice);
+}
+function enrichEntries(arr){return arr.map(e=>({...e,entryDelayMin:entryDelayMin(e),distanceFromRef:distanceFromRef(e),slippagePts:slippagePts(e),stopSlippagePts:stopSlippagePts(e)}))}
 const DELAY_BUCKETS=[{label:"<1 min",test:d=>d<1},{label:"1-5 min",test:d=>d>=1&&d<5},{label:"5-15 min",test:d=>d>=5&&d<15},{label:"15-60 min",test:d=>d>=15&&d<60},{label:"60+ min",test:d=>d>=60}];
 function delayBucketOf(d){if(!Number.isFinite(d))return null;const b=DELAY_BUCKETS.find(b=>b.test(d));return b?b.label:null}
 const HOUR_BUCKETS=[{label:"00:00–04:00",lo:0,hi:4},{label:"04:00–08:00",lo:4,hi:8},{label:"08:00–12:00",lo:8,hi:12},{label:"12:00–16:00",lo:12,hi:16},{label:"16:00–20:00",lo:16,hi:20},{label:"20:00–24:00",lo:20,hi:24}];
@@ -838,14 +874,14 @@ function renderInstitutionalTagTable(tableId,arr){
 function signBucket(v){if(!Number.isFinite(v))return null;if(v>0)return"Positive (+)";if(v<0)return"Negative (−)";return"Neutral (0)"}
 function renderEntryLogTable(){
   const e=enrichEntries(tradeEntries).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Photos</th><th>Result R</th><th>Actions</th></tr></thead><tbody>${
-    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
+  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Stop</th><th>Exit</th><th>Stop Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Photos</th><th>Result R</th><th>Actions</th></tr></thead><tbody>${
+    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${x.stopSlippagePts!=null?fmt(x.stopSlippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
   }</tbody>`;
 }
 function formToEntry(){
   let o={};
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
-  ["entryPrice","referencePrice","intendedPrice","resultR","volume","bookImbalance","stackedImbalances","deltaAtEntry","deltaAbsolute","rotationsBeforeEntry"].forEach(k=>o[k]=n(o[k]));
+  ["entryPrice","stopLossPrice","exitPrice","referencePrice","intendedPrice","resultR","volume","bookImbalance","stackedImbalances","deltaAtEntry","deltaAbsolute","rotationsBeforeEntry"].forEach(k=>o[k]=n(o[k]));
   o.institutionalTrades=getInstitutionalTradesFromForm();
   o.screenshots=teScreenshotsState.slice();
   o.id=teRecordId.value||crypto.randomUUID();
@@ -859,6 +895,7 @@ function entryToForm(e){
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
+  renderComputedR();
   showTab("teNew");
 }
 function resetTradeEntryForm(){
@@ -868,6 +905,7 @@ function resetTradeEntryForm(){
   teScreenshotsState=[];
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
+  renderComputedR();
 }
 window.editEntry=id=>{const e=tradeEntries.find(x=>x.id===id);if(e)entryToForm(e)}
 window.deleteEntry=async id=>{if(!confirm("Delete this trade entry?"))return;tradeEntries=tradeEntries.filter(x=>x.id!==id);saveEntries();await syncEntryDelete(id);if(teRecordId.value===id)resetTradeEntryForm();renderAll()}
@@ -1079,6 +1117,22 @@ teEntryForm.addEventListener("submit",async ev=>{
   teSavedMsgTimer=setTimeout(()=>{teEntryFormError.style.display="none";teEntryFormError.style.color="";},2500);
 });
 [teDate,teMarket,teDirection,teEntryTime,teEntryPrice].forEach(el=>el.addEventListener("input",()=>{teEntryFormError.style.display="none"}));
+// Shows what Result R WOULD be from Entry/Stop/Exit/Direction as a separate, purely informational
+// display next to the field — it never writes into Result R itself. Result R stays 100% yours:
+// type it directly, or click "Use this" to copy the computed value in as a one-off explicit
+// action. This is deliberate: an earlier version auto-wrote into Result R on every keystroke,
+// which silently overwrote a manually-entered value (e.g. a hand-adjusted R for a partial-exit
+// trade) the moment you touched Stop/Exit afterward for record-keeping — a real bug, not a
+// hypothetical one. `+Number.EPSILON` before rounding avoids the classic float trap where an
+// exact value like 1.005 would otherwise round down to 1.00 instead of 1.01.
+function renderComputedR(){
+  const r=computeResultR({entryPrice:n(teEntryPrice.value),stopLossPrice:n(teStopLossPrice.value),exitPrice:n(teExitPrice.value),direction:teDirection.value});
+  if(r==null){teComputedRHint.innerHTML="";return}
+  const rounded=Math.round((r+Number.EPSILON)*100)/100;
+  teComputedRHint.innerHTML=`Computed from Stop/Exit: <b>${rounded}R</b> — <button type="button" id="teUseComputedR" style="padding:2px 8px;font-size:12px">Use this</button>`;
+  document.getElementById("teUseComputedR").addEventListener("click",()=>{teResultR.value=rounded});
+}
+[teEntryPrice,teStopLossPrice,teExitPrice,teDirection].forEach(el=>el.addEventListener("input",renderComputedR));
 teClearForm.addEventListener("click",resetTradeEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
@@ -1538,8 +1592,8 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
-function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
-function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
+function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
+function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
   if(!supabaseClient||!authUser||!records.length)return false;
   const key=records.length===1?"entryupsert:"+records[0].id:"entryupsert:bulk";
