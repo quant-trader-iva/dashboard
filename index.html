@@ -49,6 +49,14 @@
     .statline{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline b{color:white}
     .statline3{display:grid;grid-template-columns:1fr 60px 195px;align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline3 b{color:white;text-align:right}.statline3 .bestday{font-size:12px;color:#94a3b8;white-space:nowrap;text-align:left;border-left:1px solid #334155;padding-left:10px}
     table{width:100%;border-collapse:collapse} th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-size:13px} th{background:#1f2937;position:sticky;top:0;z-index:1}.tablewrap{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+    .chart-hoverline{stroke:#64748b;stroke-width:1;stroke-dasharray:3,3;opacity:0;pointer-events:none}
+    .chart-hoverdot{opacity:0;pointer-events:none}
+    .chart-overlay{position:absolute;inset:0}
+    .chart-tooltip{position:absolute;pointer-events:none;background:#020617;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;white-space:nowrap;box-shadow:0 10px 24px rgba(0,0,0,.4);opacity:0;transform:translate(-50%,calc(-100% - 10px));transition:opacity .08s ease;z-index:5}
+    .chart-tooltip .t-date{color:var(--muted);font-weight:700;margin-bottom:3px}
+    .chart-tooltip .t-row{display:flex;align-items:center;gap:6px}
+    .chart-tooltip .t-dot{width:7px;height:7px;border-radius:999px;display:inline-block}
+    .chart-tooltip b{font-weight:900}
     .pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:900;background:#334155;color:white}
     .bar{height:9px;background:#334155;border-radius:999px;overflow:hidden;margin-top:7px}.bar>div{height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e)}
     .curr{background:#2563eb;color:white}
@@ -109,6 +117,7 @@
     <button class="tab" data-tab="teStats">Execution Stats</button>
     <button class="tab" data-tab="teLog">Entry Log</button>
     <button class="tab" data-tab="research">Research</button>
+    <button class="tab" data-tab="macro">Macro</button>
     <button class="tab" data-tab="data">Data</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
@@ -445,6 +454,88 @@
   </div>
 </section>
 
+<section id="macro" class="page hidden">
+  <div class="card">
+    <h2>Macro — 10Y Real Yield (TIPS)</h2>
+    <p class="hint">Pulled live from the Treasury.gov daily yield curve feed &mdash; the macro driver most correlated with gold: real yields up historically pressures gold down, and vice versa. Free, official, no API key required.</p>
+    <p class="hint" id="macroStatus"></p>
+  </div>
+  <div class="grid" style="margin-top:14px">
+    <div class="metric span-6">
+      <div class="label">Latest 10Y Real Yield</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px">
+        <div style="text-align:left">
+          <div class="hint" style="margin:0">2 sessions ago</div>
+          <div style="font-size:18px;font-weight:800" id="macroPrev2">&mdash;</div>
+        </div>
+        <div style="text-align:center">
+          <div class="value" id="macroLatest">&mdash;</div>
+          <div class="hint" id="macroAsOf"></div>
+        </div>
+        <div style="text-align:right">
+          <div class="hint" style="margin:0">1 session ago</div>
+          <div style="font-size:18px;font-weight:800" id="macroPrev1">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="metric span-6">
+      <div class="label">Dollar Index (DXY)</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px">
+        <div style="text-align:left">
+          <div class="hint" style="margin:0">2 sessions ago</div>
+          <div style="font-size:18px;font-weight:800" id="dxyPrev2">&mdash;</div>
+        </div>
+        <div style="text-align:center">
+          <div class="value" id="dxyLatest">&mdash;</div>
+          <div class="hint" id="dxyAsOf"></div>
+        </div>
+        <div style="text-align:right">
+          <div class="hint" style="margin:0">1 session ago</div>
+          <div style="font-size:18px;font-weight:800" id="dxyPrev1">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="metric span-6">
+      <div class="label">Change &amp; Regime <span style="font-weight:400">(rising real yields = historically a headwind for gold)</span></div>
+      <div id="macroChangeRows"></div>
+    </div>
+    <div class="metric span-6">
+      <div class="label">DXY Change &amp; Regime <span style="font-weight:400">(rising dollar = historically a headwind for gold)</span></div>
+      <div id="dxyChangeRows"></div>
+    </div>
+
+    <div class="card span-12">
+      <h2 id="macroChartTitle">10Y Real Yield &mdash; last 21 sessions</h2>
+      <div class="session-buttons" id="macroWindowButtons">
+        <button type="button" class="quick active" data-window="21">21 sessions</button>
+        <button type="button" class="quick" data-window="63">63 sessions</button>
+        <button type="button" class="quick" data-window="126">126 sessions</button>
+        <button type="button" class="quick" data-window="252">252 sessions</button>
+      </div>
+      <div class="chartwrap" id="macroChartWrap" style="position:relative"></div>
+      <p class="hint" id="macroBreakevenNote"></p>
+    </div>
+
+    <div class="card span-12">
+      <h2 id="dxyChartTitle">Dollar Index (DXY) &mdash; last 21 sessions</h2>
+      <div class="session-buttons" id="dxyWindowButtons">
+        <button type="button" class="quick active" data-window="21">21 sessions</button>
+        <button type="button" class="quick" data-window="63">63 sessions</button>
+        <button type="button" class="quick" data-window="126">126 sessions</button>
+        <button type="button" class="quick" data-window="252">252 sessions</button>
+      </div>
+      <div class="chartwrap" id="dxyChartWrap" style="position:relative"></div>
+      <p class="hint" id="dxyChartNote"></p>
+    </div>
+
+    <div class="card span-12">
+      <h2>Total Range Hit Rate by 5-Session Real-Yield Regime</h2>
+      <p class="hint">Buckets your own sessions (dated within the current or prior calendar year, since that's what the free Treasury feed covers) by whether the 10Y real yield was rising, flat, or falling over the prior 5 sessions into that session's date — the same 5-session definition as the first row of the Change &amp; Regime table above, not the longer 8/21/63/126/252-session windows also shown there — then shows your existing Total Range hit rate inside each bucket.</p>
+      <div id="macroRegimeStats"></div>
+    </div>
+  </div>
+</section>
+
 <section id="data" class="page hidden">
   <div class="card">
     <h2>All Data</h2>
@@ -750,6 +841,433 @@ function totalRangeHit(s){
   if(s.upTotalHit==="No"||s.downTotalHit==="No")return"No";
   return undefined;
 }
+// --- Macro: 10Y Real Yield (TIPS) from Treasury.gov's free daily yield curve XML feeds ---
+// Fetched once per day (cached in localStorage) for the current AND prior calendar year — a
+// single year alone tops out around 251 trading days, always less than the 252-session window
+// option, so the prior year is included to give the longer lookback windows enough history to
+// resolve. Real yield is the strongest single macro driver of gold (real yields up -> historically
+// a headwind), so it's the primary series; nominal is fetched alongside only to surface implied
+// breakeven inflation as context on the Macro tab.
+const MACRO_CACHE_KEY="macroYieldCache_v2";
+let macroCache=loadMacroCache();
+function loadMacroCache(){try{return JSON.parse(localStorage.getItem(MACRO_CACHE_KEY)||"null")}catch{return null}}
+function saveMacroCache(c){try{localStorage.setItem(MACRO_CACHE_KEY,JSON.stringify(c))}catch{}}
+// Treasury's XML uses namespaced tags (d:NEW_DATE, d:TC_10YEAR, d:BC_10YEAR) inside Atom
+// <entry> elements. getElementsByTagName matches the literal "d:..." qualified name as written,
+// which is sufficient here without full namespace-aware querying.
+function parseTreasuryFeed(xmlText,valueTag){
+  const doc=new DOMParser().parseFromString(xmlText,"text/xml");
+  const out=[];
+  [...doc.getElementsByTagName("entry")].forEach(entry=>{
+    const dateNode=entry.getElementsByTagName("d:NEW_DATE")[0];
+    const valNode=entry.getElementsByTagName(valueTag)[0];
+    if(!dateNode||!valNode)return;
+    const date=(dateNode.textContent||"").slice(0,10);
+    const val=parseFloat(valNode.textContent);
+    if(date&&Number.isFinite(val))out.push({date,val});
+  });
+  return out;
+}
+// Bounds every macro-data fetch so a network that drops packets rather than erroring quickly
+// (common behind restrictive corporate proxies/firewalls) can't hang the caller forever — this
+// matters most for the entryForm submit handler, which awaits this indirectly via
+// macroFetchPromise before it can save a session at all.
+function fetchWithTimeout(url,ms=10000){
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),ms);
+  return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(timer));
+}
+// Shared by fetchMacroYields and fetchDxy: once a fetch attempt fails, don't retry on every
+// single trigger (hourly tick, tab focus, every session save) — wait at least this long between
+// attempts so a Treasury.gov/Frankfurter outage doesn't turn into a retry storm.
+const MACRO_RETRY_BACKOFF_MS=5*60*1000;
+async function fetchMacroYields(force){
+  const today=new Date().toISOString().slice(0,10);
+  const year=today.slice(0,4);
+  // The `!macroCache.error` check matters: without it, a cache that's fresh (fetchedDate is
+  // today) but flagged from an earlier failed attempt would short-circuit here forever without
+  // ever clearing the flag — this guarantees a real retry attempt as long as an error is set.
+  if(!force&&macroCache&&!macroCache.error&&macroCache.fetchedDate===today&&macroCache.year===year)return macroCache;
+  if(!force&&macroCache&&macroCache.error&&macroCache.lastAttemptAt&&Date.now()-macroCache.lastAttemptAt<MACRO_RETRY_BACKOFF_MS)return macroCache;
+  try{
+    const base="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml";
+    // Fetches this year AND the prior year so the 63/126/252-session windows have enough
+    // trading days to resolve even in January — a single year alone tops out around 251 trading
+    // days, always less than the 252-session window, so that row could otherwise never populate.
+    const prevYear=String(Number(year)-1);
+    const urls=[prevYear,year].flatMap(y=>[
+      `${base}?data=daily_treasury_real_yield_curve&field_tdr_date_value=${y}`,
+      `${base}?data=daily_treasury_yield_curve&field_tdr_date_value=${y}`
+    ]);
+    const responses=await Promise.all(urls.map(u=>fetchWithTimeout(u)));
+    if(responses.some(r=>!r.ok))throw new Error("Treasury.gov returned an error response");
+    const [realPrevXml,nomPrevXml,realCurXml,nomCurXml]=await Promise.all(responses.map(r=>r.text()));
+    const realSeries=[...parseTreasuryFeed(realPrevXml,"d:TC_10YEAR"),...parseTreasuryFeed(realCurXml,"d:TC_10YEAR")];
+    const nomMap=new Map([...parseTreasuryFeed(nomPrevXml,"d:BC_10YEAR"),...parseTreasuryFeed(nomCurXml,"d:BC_10YEAR")].map(d=>[d.date,d.val]));
+    const series=realSeries.map(d=>({date:d.date,real:d.val,nominal:nomMap.has(d.date)?nomMap.get(d.date):null})).sort((a,b)=>a.date.localeCompare(b.date));
+    macroCache={fetchedDate:today,year,series,lastAttemptAt:Date.now()};
+    saveMacroCache(macroCache);
+  }catch(err){
+    // Keep whatever cache we already had (even if stale/last year) so the tab still shows
+    // something; only fall back to an empty+error state if we've never fetched successfully.
+    if(!macroCache)macroCache={fetchedDate:null,year,series:[]};
+    macroCache.error=errMsg(err);
+    macroCache.lastAttemptAt=Date.now();
+  }
+  return macroCache;
+}
+function macroSeries(){return(macroCache&&macroCache.series)||[]}
+// Exact date match if the feed has one (trading day); otherwise the most recent prior trading
+// day within a week, so weekend/holiday session dates still resolve to a sensible reading.
+function macroIndexForDate(dateStr){
+  const s=macroSeries();
+  if(!s.length)return-1;
+  const exact=s.findIndex(d=>d.date===dateStr);
+  if(exact>=0)return exact;
+  for(let i=s.length-1;i>=0;i--){if(s[i].date<=dateStr)return i}
+  return-1;
+}
+function macroForDate(dateStr){
+  const idx=macroIndexForDate(dateStr);
+  if(idx<0)return null;
+  const s=macroSeries()[idx];
+  if((new Date(dateStr)-new Date(s.date))/86400000>7)return null;
+  return s;
+}
+// The actual real-yield level `lookback` trading days before dateStr (as opposed to
+// macroRegimeForDate, which returns the change over that span) — used by the Latest 10Y Real
+// Yield card to show the level at each of the same windows the Change & Regime card uses.
+function macroYieldNSessionsAgo(dateStr,lookback){
+  const s=macroSeries();
+  const idx=macroIndexForDate(dateStr);
+  if(idx<lookback)return null;
+  if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
+  return s[idx-lookback].real;
+}
+// Regime = change in real yield over the prior `lookback` trading days in the Treasury series
+// (not the user's own session cadence), classified the same way everywhere it's read so the
+// metric cards and the regime-stat breakdown never disagree. Defaults to 5 (the regime-stat
+// breakdown's definition of "regime"); the Change & Regime card calls this once per window.
+const MACRO_WINDOWS=[5,8,21,63,126,252];
+function macroRegimeForDate(dateStr,lookback=5){
+  const s=macroSeries();
+  const idx=macroIndexForDate(dateStr);
+  if(idx<lookback)return null;
+  if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
+  const deltaBps=Math.round((s[idx].real-s[idx-lookback].real)*100);
+  return{deltaBps,label:deltaBps>3?"Rising":deltaBps<-3?"Falling":"Flat"};
+}
+function macroRegimeBadgeColor(label){return label==="Rising"?["#dc2626","white"]:label==="Falling"?["#16a34a","white"]:["#334155","white"]}
+// Small inline up/down/flat marker for the "N sessions ago" stat rows — same red=rising/
+// green=falling color convention as the regime badges (rising = historically a headwind for
+// gold, falling = tailwind), just as a compact arrow next to a single number instead of a pill.
+// `diff` is null when there isn't a prior point to compare against yet.
+const MACRO_TREND_THRESHOLD=0.005;
+function trendArrowHtml(diff,threshold){
+  if(diff==null)return"";
+  const up=diff>threshold,down=diff<-threshold;
+  const symbol=up?"&#9650;":down?"&#9660;":"&#8212;";
+  const color=up?"#dc2626":down?"#16a34a":"#94a3b8";
+  return ` <span style="color:${color};font-size:12px">${symbol}</span>`;
+}
+function fmtMacroDate(d){const[,m,dd]=d.split("-");const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return months[parseInt(m,10)-1]+" "+parseInt(dd,10)}
+// Shared by renderMacroChart and renderDxyChart: wires a crosshair + tooltip over an already-
+// rendered chart SVG (which must already contain a .chart-hoverline and one .chart-hoverdot per
+// point, in the same order as `data`). Kept generic on `valueKey`/`formatVal`/`seriesLabel` so
+// both charts reuse one implementation instead of two near-identical copies.
+function attachChartHover(wrap,data,valueKey,x,y,W,H,padL,padR,formatVal,seriesLabel,dotColor){
+  const svgEl=wrap.querySelector("svg");
+  const overlay=document.createElement("div");overlay.className="chart-overlay";
+  const tooltip=document.createElement("div");tooltip.className="chart-tooltip";
+  wrap.appendChild(overlay);wrap.appendChild(tooltip);
+  const n=data.length;
+  const hoverline=svgEl.querySelector(".chart-hoverline");
+  const dots=svgEl.querySelectorAll(".chart-hoverdot");
+  overlay.addEventListener("mousemove",e=>{
+    const rect=overlay.getBoundingClientRect();
+    const relX=(e.clientX-rect.left)/rect.width*W;
+    let idx=Math.round((relX-padL)/(W-padL-padR)*(n-1));
+    idx=Math.max(0,Math.min(n-1,idx));
+    const px=x(idx),v=data[idx][valueKey];
+    hoverline.setAttribute("x1",px);hoverline.setAttribute("x2",px);hoverline.style.opacity=1;
+    dots.forEach((el,i)=>{el.style.opacity=i===idx?1:0});
+    tooltip.innerHTML=`<div class="t-date">${fmtMacroDate(data[idx].date)}</div><div class="t-row"><span class="t-dot" style="background:${dotColor}"></span>${seriesLabel} <b>${formatVal(v)}</b></div>`;
+    tooltip.style.left=(px/W*100)+"%";
+    tooltip.style.top=(y(v)/H*100)+"%";
+    tooltip.style.opacity=1;
+  });
+  overlay.addEventListener("mouseleave",()=>{
+    hoverline.style.opacity=0;
+    dots.forEach(el=>el.style.opacity=0);
+    tooltip.style.opacity=0;
+  });
+}
+let macroChartWindow=21;
+function renderMacroChart(series,windowSize){
+  const wrap=document.getElementById("macroChartWrap");
+  if(!wrap)return;
+  const data=series.slice(-windowSize);
+  if(data.length<2){wrap.innerHTML="";return}
+  const W=1120,H=260,padL=42,padR=14,padT=14,padB=26;
+  const vals=data.map(d=>d.real);
+  const vMin=Math.floor(Math.min(...vals)*20)/20-0.04,vMax=Math.ceil(Math.max(...vals)*20)/20+0.04;
+  const n=data.length;
+  const x=i=>padL+(W-padL-padR)*(i/(n-1));
+  const y=v=>padT+(H-padT-padB)*(1-(v-vMin)/(vMax-vMin));
+  const path=data.map((d,i)=>(i===0?"M":"L")+x(i).toFixed(2)+","+y(d.real).toFixed(2)).join(" ");
+  const area=path+` L${x(n-1).toFixed(2)},${(H-padB).toFixed(2)} L${x(0).toFixed(2)},${(H-padB).toFixed(2)} Z`;
+  let gridSvg="";
+  for(let t=0;t<=5;t++){
+    const v=vMin+(vMax-vMin)*(t/5),yy=y(v);
+    gridSvg+=`<line x1="${padL}" x2="${W-padR}" y1="${yy.toFixed(2)}" y2="${yy.toFixed(2)}" stroke="#334155" stroke-width="1" opacity=".5"/>`;
+    gridSvg+=`<text x="${padL-6}" y="${(yy+3).toFixed(2)}" text-anchor="end" font-size="10" fill="#94a3b8">${v.toFixed(2)}%</text>`;
+  }
+  let xLabels="";
+  [0,Math.round((n-1)*0.25),Math.round((n-1)*0.5),Math.round((n-1)*0.75),n-1].forEach(i=>{
+    xLabels+=`<text x="${x(i).toFixed(2)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#94a3b8">${fmtMacroDate(data[i].date)}</text>`;
+  });
+  const hoverDots=data.map((d,i)=>`<circle class="chart-hoverdot" cx="${x(i).toFixed(2)}" cy="${y(d.real).toFixed(2)}" r="3.5" fill="#38bdf8"/>`).join("");
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" preserveAspectRatio="none">
+    <defs><linearGradient id="macroFillGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity=".22"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${gridSvg}${xLabels}
+    <path d="${area}" fill="url(#macroFillGrad)" stroke="none"/>
+    <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="${x(n-1).toFixed(2)}" cy="${y(data[n-1].real).toFixed(2)}" r="4" fill="#38bdf8"/>
+    <line class="chart-hoverline" x1="0" x2="0" y1="${padT}" y2="${H-padB}"/>
+    ${hoverDots}
+  </svg>`;
+  attachChartHover(wrap,data,"real",x,y,W,H,padL,padR,v=>v.toFixed(2)+"%","Real 10Y","#38bdf8");
+}
+// --- Dollar Index (DXY) ---
+// There's no free/CORS-enabled feed for the official ICE-licensed DXY figure, so this
+// reconstructs it from live ECB reference rates (Frankfurter — free, no key, CORS-enabled,
+// confirmed via curl before using it) using the same six-currency basket and weights ICE
+// publishes. It tracks the real DXY closely but is a synthetic approximation, not the licensed
+// number — the "as of" line says so. Kept as its own cache/fetch, independent of the Treasury
+// yield fetch above, so a failure in one never blocks or corrupts the other.
+const DXY_CACHE_KEY="macroDxyCache_v3";
+let dxyCache=loadDxyCache();
+function loadDxyCache(){try{return JSON.parse(localStorage.getItem(DXY_CACHE_KEY)||"null")}catch{return null}}
+function saveDxyCache(c){try{localStorage.setItem(DXY_CACHE_KEY,JSON.stringify(c))}catch{}}
+function computeDxy(r){return 50.14348112*Math.pow(1/r.EUR,-0.576)*Math.pow(r.JPY,0.136)*Math.pow(1/r.GBP,-0.119)*Math.pow(r.CAD,0.091)*Math.pow(r.SEK,0.042)*Math.pow(r.CHF,0.036)}
+// Fetches the whole current-year PLUS prior-year daily time series (same shape/cadence as
+// fetchMacroYields — once per day, cached) rather than just "latest", so the DXY table can show
+// the same 5/8/21/63/126/252-session change/regime breakdown the real-yield table shows — a
+// single year alone tops out around 251 trading days, always less than the 252-session window.
+async function fetchDxy(force){
+  const today=new Date().toISOString().slice(0,10);
+  const year=today.slice(0,4);
+  if(!force&&dxyCache&&!dxyCache.error&&dxyCache.fetchedDate===today&&dxyCache.year===year)return dxyCache;
+  if(!force&&dxyCache&&dxyCache.error&&dxyCache.lastAttemptAt&&Date.now()-dxyCache.lastAttemptAt<MACRO_RETRY_BACKOFF_MS)return dxyCache;
+  try{
+    const prevYear=Number(year)-1;
+    const res=await fetchWithTimeout(`https://api.frankfurter.dev/v1/${prevYear}-01-01..?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF`);
+    if(!res.ok)throw new Error("Frankfurter FX feed returned an error response");
+    const data=await res.json();
+    const rates=data.rates||{};
+    const series=Object.keys(rates).sort().map(date=>{
+      const r=rates[date];
+      if(!["EUR","JPY","GBP","CAD","SEK","CHF"].every(k=>Number.isFinite(r[k])))return null;
+      return{date,value:computeDxy(r)};
+    }).filter(Boolean);
+    if(!series.length)throw new Error("Frankfurter FX feed returned no usable data");
+    dxyCache={fetchedDate:today,year,series,lastAttemptAt:Date.now()};
+    saveDxyCache(dxyCache);
+  }catch(err){
+    if(!dxyCache)dxyCache={fetchedDate:null,year,series:[]};
+    dxyCache.error=errMsg(err);
+    dxyCache.lastAttemptAt=Date.now();
+  }
+  return dxyCache;
+}
+function dxySeries(){return(dxyCache&&dxyCache.series)||[]}
+function dxyIndexForDate(dateStr){
+  const s=dxySeries();
+  if(!s.length)return-1;
+  const exact=s.findIndex(d=>d.date===dateStr);
+  if(exact>=0)return exact;
+  for(let i=s.length-1;i>=0;i--){if(s[i].date<=dateStr)return i}
+  return-1;
+}
+function dxyValueNSessionsAgo(dateStr,lookback){
+  const s=dxySeries();
+  const idx=dxyIndexForDate(dateStr);
+  if(idx<lookback)return null;
+  if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
+  return s[idx-lookback].value;
+}
+// Same "same absolute threshold at every window" approach as macroRegimeForDate — 0.15 index
+// points is a deliberately small bar (typical daily DXY moves are a few tenths of a point), so
+// "Flat" only shows for genuinely quiet stretches rather than most of the table reading Flat.
+const DXY_REGIME_THRESHOLD=0.15;
+// The single-session trend arrows (next to the latest/prev1 numbers) are meant to be more
+// sensitive than the regime pill — same relationship real yield has between its arrow threshold
+// (0.005) and its regime threshold (0.03, i.e. 3bps) — but scaled to DXY's own ~100-point range
+// instead of reusing yield's raw-percentage threshold, which was too small to mean anything here.
+const DXY_TREND_THRESHOLD=0.03;
+function dxyRegimeForDate(dateStr,lookback){
+  const s=dxySeries();
+  const idx=dxyIndexForDate(dateStr);
+  if(idx<lookback)return null;
+  if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
+  const deltaPts=Math.round((s[idx].value-s[idx-lookback].value)*100)/100;
+  return{deltaPts,label:deltaPts>DXY_REGIME_THRESHOLD?"Rising":deltaPts<-DXY_REGIME_THRESHOLD?"Falling":"Flat"};
+}
+let dxyChartWindow=21;
+// Same SVG generator as renderMacroChart (gridlines, gradient fill, hover dots wired up
+// separately below), just plotting the DXY level instead of the real-yield %.
+function renderDxyChart(series,windowSize){
+  const wrap=document.getElementById("dxyChartWrap");
+  if(!wrap)return;
+  const data=series.slice(-windowSize);
+  if(data.length<2){wrap.innerHTML="";return}
+  const W=1120,H=260,padL=42,padR=14,padT=14,padB=26;
+  const vals=data.map(d=>d.value);
+  const vMin=Math.floor(Math.min(...vals)*10)/10-0.3,vMax=Math.ceil(Math.max(...vals)*10)/10+0.3;
+  const n=data.length;
+  const x=i=>padL+(W-padL-padR)*(i/(n-1));
+  const y=v=>padT+(H-padT-padB)*(1-(v-vMin)/(vMax-vMin));
+  const path=data.map((d,i)=>(i===0?"M":"L")+x(i).toFixed(2)+","+y(d.value).toFixed(2)).join(" ");
+  const area=path+` L${x(n-1).toFixed(2)},${(H-padB).toFixed(2)} L${x(0).toFixed(2)},${(H-padB).toFixed(2)} Z`;
+  let gridSvg="";
+  for(let t=0;t<=5;t++){
+    const v=vMin+(vMax-vMin)*(t/5),yy=y(v);
+    gridSvg+=`<line x1="${padL}" x2="${W-padR}" y1="${yy.toFixed(2)}" y2="${yy.toFixed(2)}" stroke="#334155" stroke-width="1" opacity=".5"/>`;
+    gridSvg+=`<text x="${padL-6}" y="${(yy+3).toFixed(2)}" text-anchor="end" font-size="10" fill="#94a3b8">${v.toFixed(1)}</text>`;
+  }
+  let xLabels="";
+  [0,Math.round((n-1)*0.25),Math.round((n-1)*0.5),Math.round((n-1)*0.75),n-1].forEach(i=>{
+    xLabels+=`<text x="${x(i).toFixed(2)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#94a3b8">${fmtMacroDate(data[i].date)}</text>`;
+  });
+  const hoverDots=data.map((d,i)=>`<circle class="chart-hoverdot" cx="${x(i).toFixed(2)}" cy="${y(d.value).toFixed(2)}" r="3.5" fill="#38bdf8"/>`).join("");
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" preserveAspectRatio="none">
+    <defs><linearGradient id="dxyFillGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity=".22"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${gridSvg}${xLabels}
+    <path d="${area}" fill="url(#dxyFillGrad)" stroke="none"/>
+    <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="${x(n-1).toFixed(2)}" cy="${y(data[n-1].value).toFixed(2)}" r="4" fill="#38bdf8"/>
+    <line class="chart-hoverline" x1="0" x2="0" y1="${padT}" y2="${H-padB}"/>
+    ${hoverDots}
+  </svg>`;
+  attachChartHover(wrap,data,"value",x,y,W,H,padL,padR,v=>v.toFixed(2),"DXY","#38bdf8");
+}
+function renderDxy(){
+  const valueEl=document.getElementById("dxyLatest"),asOfEl=document.getElementById("dxyAsOf");
+  const prev1El=document.getElementById("dxyPrev1"),prev2El=document.getElementById("dxyPrev2");
+  const changeRowsEl=document.getElementById("dxyChangeRows");
+  const chartTitleEl=document.getElementById("dxyChartTitle"),chartNoteEl=document.getElementById("dxyChartNote");
+  if(!valueEl)return;
+  const series=dxySeries();
+  if(!series.length){
+    valueEl.textContent="—";
+    if(prev1El)prev1El.textContent="—";
+    if(prev2El)prev2El.textContent="—";
+    asOfEl.textContent=dxyCache&&dxyCache.error?`Couldn't load: ${dxyCache.error}`:"Loading…";
+    if(changeRowsEl)changeRowsEl.innerHTML="";
+    if(chartTitleEl)chartTitleEl.textContent="Dollar Index (DXY)";
+    document.getElementById("dxyChartWrap").innerHTML="";
+    if(chartNoteEl)chartNoteEl.textContent="";
+    return;
+  }
+  const latest=series[series.length-1];
+  const p1=dxyValueNSessionsAgo(latest.date,1),p2=dxyValueNSessionsAgo(latest.date,2);
+  valueEl.innerHTML=latest.value.toFixed(2)+trendArrowHtml(p1==null?null:latest.value-p1,DXY_TREND_THRESHOLD);
+  if(prev1El)prev1El.innerHTML=(p1==null?"—":p1.toFixed(2))+trendArrowHtml(p1==null||p2==null?null:p1-p2,DXY_TREND_THRESHOLD);
+  if(prev2El)prev2El.textContent=p2==null?"—":p2.toFixed(2);
+  asOfEl.textContent=`as of ${fmtMacroDate(latest.date)} — synthetic, from ECB reference rates`+(dxyCache.error?` (most recent refresh failed: ${dxyCache.error})`:"");
+  if(chartTitleEl)chartTitleEl.textContent=`Dollar Index (DXY) — last ${Math.min(dxyChartWindow,series.length)} sessions`;
+  renderDxyChart(series,dxyChartWindow);
+  if(chartNoteEl)chartNoteEl.textContent="Synthetic index computed from live ECB reference rates (EUR, JPY, GBP, CAD, SEK, CHF basket) using the same weights the official ICE Dollar Index uses — not the licensed feed itself.";
+  if(!changeRowsEl)return;
+  const rows=MACRO_WINDOWS.map(w=>{
+    const v=dxyValueNSessionsAgo(latest.date,w);
+    const r=dxyRegimeForDate(latest.date,w);
+    const valText=v==null?"—":v.toFixed(2);
+    const deltaText=r?(r.deltaPts>0?"+":"")+r.deltaPts.toFixed(2):"—";
+    const badge=r?(()=>{const[bg,fg]=macroRegimeBadgeColor(r.label);return `<span class="pill" style="background:${bg};color:${fg}">${r.label}</span>`})():`<span class="hint" style="margin:0">n/a</span>`;
+    return `<tr><td>${w}</td><td style="text-align:right">${valText}</td><td style="text-align:right">${deltaText}</td><td>${badge}</td></tr>`;
+  }).join("");
+  changeRowsEl.innerHTML=`<div class="tablewrap"><table><tr><th>Sessions</th><th style="text-align:right">DXY</th><th style="text-align:right">&Delta;</th><th>Regime</th></tr>${rows}</table></div>`;
+}
+function renderMacro(){
+  const statusEl=document.getElementById("macroStatus");
+  const latestEl=document.getElementById("macroLatest"),asOfEl=document.getElementById("macroAsOf");
+  const prev1El=document.getElementById("macroPrev1"),prev2El=document.getElementById("macroPrev2");
+  const changeRowsEl=document.getElementById("macroChangeRows"),beNoteEl=document.getElementById("macroBreakevenNote");
+  const regimeStatsEl=document.getElementById("macroRegimeStats");
+  if(!statusEl)return;
+  renderDxy();
+  const series=macroSeries();
+  if(!series.length){
+    statusEl.textContent=macroCache&&macroCache.error?`Couldn't load live macro data: ${macroCache.error}. Your sessions are unaffected — this only powers this tab. Try Refresh in your browser.`:"Loading live data from Treasury.gov…";
+    latestEl.textContent="—";
+    prev1El.textContent="—";prev2El.textContent="—";
+    asOfEl.textContent="";changeRowsEl.innerHTML="";beNoteEl.textContent="";
+    document.getElementById("macroChartWrap").innerHTML="";
+    regimeStatsEl.innerHTML="";
+    return;
+  }
+  statusEl.textContent=`Live — ${series.length} trading day${series.length===1?"":"s"} loaded from Treasury.gov for ${Number(macroCache.year)-1}–${macroCache.year}.`+(macroCache.error?` (using last successful fetch — most recent refresh failed: ${macroCache.error})`:"");
+  const latest=series[series.length-1];
+  const prev1=macroYieldNSessionsAgo(latest.date,1),prev2=macroYieldNSessionsAgo(latest.date,2);
+  latestEl.innerHTML=latest.real.toFixed(2)+"%"+trendArrowHtml(prev1==null?null:latest.real-prev1,MACRO_TREND_THRESHOLD);
+  asOfEl.textContent="as of "+fmtMacroDate(latest.date);
+  prev1El.innerHTML=(prev1==null?"—":prev1.toFixed(2)+"%")+trendArrowHtml(prev1==null||prev2==null?null:prev1-prev2,MACRO_TREND_THRESHOLD);
+  prev2El.textContent=prev2==null?"—":prev2.toFixed(2)+"%";
+  const changeRows=MACRO_WINDOWS.map(w=>{
+    const pctText=(()=>{const v=macroYieldNSessionsAgo(latest.date,w);return v==null?"—":v.toFixed(2)+"%"})();
+    const r=macroRegimeForDate(latest.date,w);
+    const bpsText=r?(r.deltaBps>0?"+":"")+r.deltaBps+" bps":"—";
+    const badge=r?(()=>{const[bg,fg]=macroRegimeBadgeColor(r.label);return `<span class="pill" style="background:${bg};color:${fg}">${r.label}</span>`})():`<span class="hint" style="margin:0">n/a</span>`;
+    return `<tr><td>${w}</td><td style="text-align:right">${pctText}</td><td style="text-align:right">${bpsText}</td><td>${badge}</td></tr>`;
+  }).join("");
+  changeRowsEl.innerHTML=`<div class="tablewrap"><table><tr><th>Sessions</th><th style="text-align:right">Yield</th><th style="text-align:right">&Delta;</th><th>Regime</th></tr>${changeRows}</table></div>`;
+  const chartTitleEl=document.getElementById("macroChartTitle");
+  if(chartTitleEl)chartTitleEl.textContent=`10Y Real Yield — last ${Math.min(macroChartWindow,series.length)} sessions`;
+  renderMacroChart(series,macroChartWindow);
+  beNoteEl.textContent=Number.isFinite(latest.nominal)?`Nominal 10Y sits at ${latest.nominal.toFixed(2)}% today — the ${(latest.nominal-latest.real).toFixed(2)}-point gap to the real yield above is the market's implied breakeven inflation rate.`:"";
+
+  const buckets={Falling:[],Flat:[],Rising:[]};
+  sessions.forEach(s=>{
+    if(!s.date)return;
+    const r=macroRegimeForDate(s.date);
+    if(!r)return;
+    buckets[r.label].push(s);
+  });
+  const rows=["Falling","Flat","Rising"].map(label=>{
+    const graded=buckets[label].filter(s=>totalRangeHit(s)==="Yes"||totalRangeHit(s)==="No");
+    const rate=graded.length?graded.filter(s=>totalRangeHit(s)==="Yes").length/graded.length:null;
+    return{label,n:graded.length,rate};
+  });
+  if(!rows.some(r=>r.n>0)){
+    regimeStatsEl.innerHTML=`<p class="hint">No graded sessions fall inside the ${Number(macroCache.year)-1}–${macroCache.year} Treasury data yet — grade a session's Upside/Downside Total Hit on a date in that range to populate this.</p>`;
+  }else{
+    regimeStatsEl.innerHTML=rows.map(r=>`
+      <div class="metric" style="margin-bottom:10px">
+        <div class="label">Real yields ${r.label.toLowerCase()} <span style="font-weight:400">(n=${r.n})</span></div>
+        <div class="value">${r.rate==null?"—":pct(r.rate)}</div>
+        <div class="bar"><div style="width:${r.rate==null?0:(r.rate*100).toFixed(1)}%"></div></div>
+      </div>`).join("");
+  }
+}
+document.getElementById("macroWindowButtons").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-window]");
+  if(!btn)return;
+  macroChartWindow=parseInt(btn.dataset.window,10);
+  document.querySelectorAll("#macroWindowButtons button").forEach(b=>b.classList.toggle("active",b===btn));
+  renderMacro();
+});
+document.getElementById("dxyWindowButtons").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-window]");
+  if(!btn)return;
+  dxyChartWindow=parseInt(btn.dataset.window,10);
+  document.querySelectorAll("#dxyWindowButtons button").forEach(b=>b.classList.toggle("active",b===btn));
+  renderDxy();
+});
 // --- Trade Entries: computed fields & grouping ---
 function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t);if(!m)return null;return Number(m[1])*60+Number(m[2])}
 // Wraps past midnight rather than discarding: a market like gold trades nearly 24h, so a
@@ -1221,7 +1739,7 @@ async function fetchPosSizing(){
 loadPosSizingIntoForm();
 [psAccountSize,psCurrency,psLeverage,psLotSize,psPointValue,psNotional].forEach(el=>el.addEventListener("input",renderPosSizing));
 renderPosSizing();
-entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();const original=sessions.find(x=>x.id===s.id);const keyChanged=!original||original.date!==s.date||original.sessionType!==s.sessionType;const dup=keyChanged?sessions.find(x=>x.date===s.date&&x.sessionType===s.sessionType&&x.id!==s.id):null;if(dup){entryFormError.textContent=`An entry for ${s.sessionType} session on ${s.date} already exists. Edit that entry instead, or change the Date/Session Type.`;entryFormError.style.display="block";return}entryFormError.style.display="none";const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
+entryForm.addEventListener("submit",async e=>{e.preventDefault();const s=formToSession();await macroFetchPromise;const macroPoint=macroForDate(s.date);if(macroPoint){s.realYield10y=macroPoint.real;s.nominalYield10y=macroPoint.nominal}const original=sessions.find(x=>x.id===s.id);const keyChanged=!original||original.date!==s.date||original.sessionType!==s.sessionType;const dup=keyChanged?sessions.find(x=>x.date===s.date&&x.sessionType===s.sessionType&&x.id!==s.id):null;if(dup){entryFormError.textContent=`An entry for ${s.sessionType} session on ${s.date} already exists. Edit that entry instead, or change the Date/Session Type.`;entryFormError.style.display="block";return}entryFormError.style.display="none";const i=sessions.findIndex(x=>x.id===s.id);if(i>=0)sessions[i]={...sessions[i],...s};else sessions.push(s);sessions.sort((a,b)=>(a.date||"").localeCompare(b.date||""));saveSessions();await syncUpsert([s]);resetEntryForm();showTab("dashboard")});
 clearForm.addEventListener("click",resetEntryForm);
 if(!teDate.value)teDate.value=new Date().toISOString().slice(0,10);
 // Trade entries have no natural one-per-day key the way sessions do (you can take many trades
@@ -1691,7 +2209,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
@@ -1821,8 +2339,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
 function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
@@ -1930,6 +2448,37 @@ async function fullSync(){
   }
   renderAll();
 }
+// fetchMacroYields() only actually hits the network once per calendar day (see its cache check)
+// and otherwise resolves instantly, so it's safe to call this on every one of these triggers —
+// boot, an hourly tick for tabs left open past midnight, regaining tab focus, and every session
+// save — without spamming Treasury.gov. A failed refresh surfaces in the same site-wide banner
+// used for Supabase sync errors, keyed separately so it never clobbers/gets clobbered by those.
+function reportMacroFetchResult(){
+  if(macroCache&&macroCache.error){
+    showSyncError("macro:refresh",`Failed to refresh macro yield data from Treasury.gov: ${macroCache.error}. Your sessions are unaffected — this only affects how current the Macro tab is.`);
+  }else{
+    clearSyncError("macro:refresh");
+  }
+}
+// Same pattern as reportMacroFetchResult, keyed separately so a DXY failure and a Treasury
+// failure each show/clear their own banner line independently.
+function reportDxyFetchResult(){
+  if(dxyCache&&dxyCache.error){
+    showSyncError("macro:dxy",`Failed to refresh the Dollar Index (DXY) data: ${dxyCache.error}. Your sessions are unaffected — this only affects the Macro tab's DXY card.`);
+  }else{
+    clearSyncError("macro:dxy");
+  }
+}
+async function refreshMacroYields(){
+  await Promise.all([fetchMacroYields(),fetchDxy()]);
+  reportMacroFetchResult();
+  reportDxyFetchResult();
+  try{renderMacro()}catch(err){console.error("renderMacro failed:",err)}
+}
+// Awaited by the session-save handler so a newly saved session can attach today's reading.
+const macroFetchPromise=refreshMacroYields();
+setInterval(refreshMacroYields,60*60*1000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshMacroYields()});
 bootAuth();
 </script>
 </body>

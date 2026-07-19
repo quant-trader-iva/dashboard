@@ -10,6 +10,13 @@
 -- session's Value Area, entered directly (no numeric VA levels are stored or computed):
 --   alter table public.trading_sessions add column if not exists open_vs_va text check (open_vs_va in ('Above','Inside','Below') or open_vs_va is null);
 --
+-- Run this on an existing database to add the Macro tab's 10Y Real Yield (TIPS) / Nominal Yield
+-- columns — fetched live from Treasury.gov's free daily yield curve feeds and attached to a
+-- session automatically on save (see fetchMacroYields/macroForDate in index.html), not entered
+-- by hand:
+--   alter table public.trading_sessions add column if not exists real_yield_10y numeric;
+--   alter table public.trading_sessions add column if not exists nominal_yield_10y numeric;
+--
 -- If you previously ran an earlier version of this migration that added numeric VA columns
 -- (va_high, va_low, prev_week_va_high/low, prev_day_va_high/low, prev_ny_va_high/low,
 -- london_va_high/low), those are no longer used and can be dropped:
@@ -79,6 +86,11 @@ create table if not exists public.trading_sessions (
   er_hit text check (er_hit in ('Yes','No') or er_hit is null),
   up_total_hit text check (up_total_hit in ('Yes','No') or up_total_hit is null),
   down_total_hit text check (down_total_hit in ('Yes','No') or down_total_hit is null),
+
+  -- Macro tab: 10Y real (TIPS) and nominal Treasury yields, fetched live from Treasury.gov and
+  -- attached automatically on session save — not a form field.
+  real_yield_10y numeric,
+  nominal_yield_10y numeric,
 
   news_events jsonb default '[]'::jsonb,
 
