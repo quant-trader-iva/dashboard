@@ -161,8 +161,6 @@
     <div class="card span-6"><h2>IB Hit Rate by Session</h2><p class="hint">How often the Current / Previous / Past (two sessions ago) Session IB Hit fields were graded Yes, per session type.</p><div class="tablewrap"><table id="ibHitTable"></table></div></div>
     <div class="card span-12"><h2>Weekly Level Hit Rate by Session (Points)</h2><p class="hint">Combined across every week you've logged a Weekly session for, and every weekday: how often each Daily/London/New York session's actual point range (its own High&minus;Low, in points) reached that week's own Weekly FR/HR/QR/ER — the same idea as the day-of-week table below, without splitting by weekday. FR/HR/QR/ER are independent "at least this far" checks, so a session that reached FR also counts toward HR/QR/ER.</p><div class="tablewrap"><table id="weeklyPointSessionTable"></table></div></div>
     <div class="card span-12"><h2>Weekly Level Hit Rate by Day of Week (Points)</h2><p class="hint">Same as the table above, broken down by weekday as well as session type.</p><div class="tablewrap"><table id="weeklyPointDayTable"></table></div></div>
-    <div class="card span-6"><h2>Execution Win/Loss by Day of Week</h2><div id="entryDayBars"></div><h2 style="margin-top:16px">Execution Win/Loss by Session</h2><div id="entrySessionBars"></div></div>
-    <div class="card span-12"><h2>Execution Win/Loss by Time of Day</h2><div id="entryHourBars"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
     <div class="card span-12"><h2>Session Open vs Prior Value Area</h2><p class="hint">Breaks down sessions by the "Open vs Prior VA" field entered on each session — your own Above/Inside/Below judgment of where that session opened relative to the relevant prior session's Value Area (Weekly &rarr; previous Weekly, Daily &rarr; previous Daily, London &rarr; previous New York day, New York &rarr; same-day London). Requires that field to be filled in.</p><div class="tablewrap"><table id="vaOpenTable"></table></div></div>
@@ -396,6 +394,8 @@
   </div>
 
   <div class="grid">
+    <div class="card span-6"><h2>Execution Win/Loss by Day of Week</h2><div id="entryDayBars"></div><h2 style="margin-top:16px">Execution Win/Loss by Session</h2><div id="entrySessionBars"></div></div>
+    <div class="card span-12"><h2>Execution Win/Loss by Time of Day</h2><div id="entryHourBars"></div></div>
     <div class="card span-12"><h2>By Setup Type</h2><p class="hint">Win rate and average result by what triggered the entry — the fastest way to see which setups you actually execute well. Avg Distance From Ref is direction-aware: positive means you chased further from the level in your trade's own direction.</p><div class="tablewrap"><table id="teSetupTable"></table></div></div>
     <div class="card span-6"><h2>By Entry Delay</h2><p class="hint">Time between the setup forming (Signal Time) and your actual fill (Entry Time). Hesitation tends to show up as worse results in the slower buckets.</p><div class="tablewrap"><table id="teDelayTable"></table></div></div>
     <div class="card span-6"><h2>By Order Type</h2><p class="hint">Compares execution method against average slippage from your intended price.</p><div class="tablewrap"><table id="teOrderTypeTable"></table></div></div>
@@ -2323,8 +2323,12 @@ function renderAll(){[renderProjectionGrid,renderMetrics,renderIbHitStats,render
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
+// Skipped while their Execution Stats tab is hidden — showTab() already re-renders them at the
+// correct width the moment that tab is opened, so resizing while on another tab would otherwise
+// just rebuild them into a zero-width offscreen container for nothing.
 let entryChartsResizeTimer=null;
 window.addEventListener("resize",()=>{
+  if(teStats.classList.contains("hidden"))return;
   clearTimeout(entryChartsResizeTimer);
   entryChartsResizeTimer=setTimeout(()=>{[renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots].forEach(fn=>{try{fn()}catch(err){console.error("resize re-render failed:",err)}})},150);
 });
