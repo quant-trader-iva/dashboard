@@ -158,6 +158,8 @@
     <div class="card span-6"><h2>Session Hit Rates</h2><div id="sessionStats"></div></div>
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-6"><h2>Session Hit Rates by Day of Week</h2><div id="sessionStatsByDay"></div></div>
+    <div class="card span-12"><h2>Weekly Level Hit Rate by Session (Points)</h2><p class="hint">Combined across every week you've logged a Weekly session for, and every weekday: how often each Daily/London/New York session's actual point range (its own High&minus;Low, in points) reached that week's own Weekly FR/HR/QR/ER — the same idea as the day-of-week table below, without splitting by weekday. FR/HR/QR/ER are independent "at least this far" checks, so a session that reached FR also counts toward HR/QR/ER.</p><div class="tablewrap"><table id="weeklyPointSessionTable"></table></div></div>
+    <div class="card span-12"><h2>Weekly Level Hit Rate by Day of Week (Points)</h2><p class="hint">Same as the table above, broken down by weekday as well as session type.</p><div class="tablewrap"><table id="weeklyPointDayTable"></table></div></div>
     <div class="card span-6"><h2>Execution Win/Loss by Day of Week</h2><div id="entryDayBars"></div><h2 style="margin-top:16px">Execution Win/Loss by Session</h2><div id="entrySessionBars"></div></div>
     <div class="card span-12"><h2>Execution Win/Loss by Time of Day</h2><div id="entryHourBars"></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
@@ -2012,6 +2014,78 @@ function renderMetrics(){
    hitStats.map(([l,s],i)=>line(l,pct(s.rate),hitStyles[i])).join("")+
    line("Profit Factor",fmt(profitFactor(arr)));
 }
+function weekBounds(dateStr){
+  const start=new Date(dateStr);const day=start.getDay();const diff=(day===0?-6:1-day);start.setDate(start.getDate()+diff);
+  const end=new Date(start);end.setDate(start.getDate()+6);
+  return{start,end};
+}
+// For every week with a Weekly session (and a reference range), pairs it with that week's own
+// Daily/London/New York sessions — the shared grouping step behind both point-based stats below.
+function weeklyPointGroups(){
+  const all=enrich(sessions);
+  const weeklySessions=all.filter(s=>s.sessionType==="Weekly"&&Number.isFinite(s.fullRange));
+  return weeklySessions.map(weekly=>{
+    const{start,end}=weekBounds(weekly.date);
+    const rows=all.filter(s=>s.sessionType!=="Weekly"&&s.date&&(()=>{const d=new Date(s.date);return d>=start&&d<=end})())
+      .map(s=>({session:s,pts:s.currentRange}));
+    return{weekly,rows};
+  });
+}
+// FR/HR/QR/ER here are independent at-least-X checks — the same convention the rest of the
+// dashboard's FR/HR/QR/ER Hit stats use — so a session that reached FR also counts toward HR/QR/ER.
+const POINT_SESSION_TYPES=SESSION_ORDER.filter(x=>x!=="Weekly");
+const POINT_WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday"];
+// Flat list backing both the by-session summary and the by-session-and-day breakdown below, so
+// "which sessions belong to which week, and did each one reach that week's FR/HR/QR/ER" is only
+// computed once.
+function weeklyPointGradedRows(){
+  const graded=[];
+  weeklyPointGroups().forEach(({weekly,rows})=>{
+    rows.forEach(({session:s,pts})=>{
+      if(!Number.isFinite(pts)||!s.day)return;
+      graded.push({
+        sessionType:s.sessionType, day:s.day,
+        fr:pts>=weekly.fullRange, hr:pts>=weekly.halfRange, qr:pts>=weekly.quarterRange, er:pts>=weekly.eighthRange
+      });
+    });
+  });
+  return graded;
+}
+function renderWeeklyPointSessionStats(){
+  const graded=weeklyPointGradedRows();
+  if(!graded.length){
+    weeklyPointSessionTable.innerHTML="<tbody><tr><td>Not enough data yet — need at least one full week with a Weekly session and matching Daily/London/New York sessions.</td></tr></tbody>";
+    return;
+  }
+  const rows=POINT_SESSION_TYPES.map(type=>{
+    const matches=graded.filter(g=>g.sessionType===type);
+    if(!matches.length)return null;
+    const rate=key=>matches.filter(g=>g[key]).length/matches.length;
+    return{type,n:matches.length,fr:rate("fr"),hr:rate("hr"),qr:rate("qr"),er:rate("er")};
+  }).filter(Boolean);
+  const thead=`<thead><tr><th>Session</th><th>n</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th></tr></thead>`;
+  const body=rows.map(r=>`<tr><td>${r.type}</td><td>${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("");
+  weeklyPointSessionTable.innerHTML=thead+`<tbody>${body}</tbody>`;
+}
+function renderWeeklyPointDayStats(){
+  const graded=weeklyPointGradedRows();
+  if(!graded.length){
+    weeklyPointDayTable.innerHTML="<tbody><tr><td>Not enough data yet — need at least one full week with a Weekly session and matching Daily/London/New York sessions.</td></tr></tbody>";
+    return;
+  }
+  const rows=[];
+  POINT_SESSION_TYPES.forEach(type=>{
+    POINT_WEEKDAYS.forEach(day=>{
+      const matches=graded.filter(g=>g.sessionType===type&&g.day===day);
+      if(!matches.length)return;
+      const rate=key=>matches.filter(g=>g[key]).length/matches.length;
+      rows.push({type,day,n:matches.length,fr:rate("fr"),hr:rate("hr"),qr:rate("qr"),er:rate("er")});
+    });
+  });
+  const thead=`<thead><tr><th>Session</th><th>Day</th><th>n</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th></tr></thead>`;
+  const body=rows.map(r=>`<tr><td>${r.type}</td><td>${r.day}</td><td>${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("");
+  weeklyPointDayTable.innerHTML=thead+`<tbody>${body}</tbody>`;
+}
 refreshDash.addEventListener("click",renderAll);viewMode.addEventListener("change",renderAll);sessionFilter.addEventListener("change",()=>{document.querySelectorAll(".quick").forEach(b=>b.classList.toggle("active",b.dataset.session===sessionFilter.value));renderAll()});focusDate.addEventListener("change",renderAll);
 document.querySelectorAll(".quick").forEach(b=>b.addEventListener("click",()=>{sessionFilter.value=b.dataset.session;document.querySelectorAll(".quick").forEach(x=>x.classList.toggle("active",x===b));renderAll()}));
 
@@ -2209,7 +2283,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderWeeklyPointSessionStats,renderWeeklyPointDayStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
