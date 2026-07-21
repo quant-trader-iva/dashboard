@@ -2323,8 +2323,12 @@ function renderAll(){[renderProjectionGrid,renderMetrics,renderIbHitStats,render
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
+// Skipped while their Execution Stats tab is hidden — showTab() already re-renders them at the
+// correct width the moment that tab is opened, so resizing while on another tab would otherwise
+// just rebuild them into a zero-width offscreen container for nothing.
 let entryChartsResizeTimer=null;
 window.addEventListener("resize",()=>{
+  if(teStats.classList.contains("hidden"))return;
   clearTimeout(entryChartsResizeTimer);
   entryChartsResizeTimer=setTimeout(()=>{[renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots].forEach(fn=>{try{fn()}catch(err){console.error("resize re-render failed:",err)}})},150);
 });
