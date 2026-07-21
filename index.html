@@ -1978,10 +1978,13 @@ function renderProjectionGrid(){
     });
   })
 }
+// Shared by every stat that breaks sessions down per SESSION_ORDER type (Session Hit Rates,
+// IB Hit Rate, etc.), so the grouping itself can't drift between call sites.
+function groupBySessionType(arr){return Object.fromEntries(SESSION_ORDER.map(x=>[x,arr.filter(s=>s.sessionType===x)]))}
 function renderMetrics(){
  const session=sessionFilter.value;const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
  mSessions.textContent=arr.length;mFR.textContent=pct(hitRate(arr,"frHit"));mHR.textContent=pct(hitRate(arr,"hrHit"));mQR.textContent=pct(hitRate(arr,"qrHit"));mER.textContent=pct(hitRate(arr,"erHit"));mExp.textContent=fmt(expectancy(arr))+"R";barFR.style.width=(hitRate(arr,"frHit")*100)+"%";barHR.style.width=(hitRate(arr,"hrHit")*100)+"%";barQR.style.width=(hitRate(arr,"qrHit")*100)+"%";barER.style.width=(hitRate(arr,"erHit")*100)+"%";
- const byType=Object.fromEntries(SESSION_ORDER.map(x=>[x,arr.filter(s=>s.sessionType===x)]));
+ const byType=groupBySessionType(arr);
  const hitKeys=[["Total Range","totalRangeHit"],["FR","frHit"],["HR","hrHit"],["QR","qrHit"],["ER","erHit"]];
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key])=>[key,hitStat(byType[x],key)])));
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
@@ -2018,8 +2021,9 @@ function renderMetrics(){
    line("Profit Factor",fmt(profitFactor(arr)));
 }
 function renderIbHitStats(){
-  const all=enrich(sessions);
-  const byType=Object.fromEntries(SESSION_ORDER.map(x=>[x,all.filter(s=>s.sessionType===x)]));
+  const session=sessionFilter.value;
+  const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
+  const byType=groupBySessionType(arr);
   const rows=SESSION_ORDER.map(type=>({
     type,
     current:hitStat(byType[type],"ibCurrentHit"),

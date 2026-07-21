@@ -34,10 +34,16 @@
 -- Run this on an existing database to add the Current Session IB Hit / Previous Session IB Hit
 -- columns — replacing the old numeric IB High/IB Low fields with a direct Yes/No/blank judgment
 -- of whether that session's (or the previous session's) Initial Balance was hit, entered the same
--- way as FR/HR/QR/ER Hit:
+-- way as FR/HR/QR/ER Hit. Do this BEFORE deploying the matching app update — toDb() sends
+-- ib_current_hit/ib_prev_hit on every session upsert, so until these columns exist, every save
+-- and every "Sync Now" fails, the same way skipping any column addition above does:
 --   alter table public.trading_sessions add column if not exists ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null);
 --   alter table public.trading_sessions add column if not exists ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null);
--- The old ib_high/ib_low numeric columns are no longer used and can be dropped:
+-- The old ib_high/ib_low numeric columns are no longer used and can be dropped. This is
+-- IRREVERSIBLE and there is no automatic backfill — a Yes/No hit judgment can't be derived from a
+-- price level, so any numeric IB High/Low values you already logged are gone for good once you
+-- run this. If you want to keep them for reference, export or query them first (e.g.
+-- `select id, date, ib_high, ib_low from public.trading_sessions where ib_high is not null or ib_low is not null`):
 --   alter table public.trading_sessions drop column if exists ib_high;
 --   alter table public.trading_sessions drop column if exists ib_low;
 
