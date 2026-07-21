@@ -31,14 +31,16 @@
 --   alter table public.trading_sessions drop column if exists london_va_high;
 --   alter table public.trading_sessions drop column if exists london_va_low;
 --
--- Run this on an existing database to add the Current Session IB Hit / Previous Session IB Hit
--- columns — replacing the old numeric IB High/IB Low fields with a direct Yes/No/blank judgment
--- of whether that session's (or the previous session's) Initial Balance was hit, entered the same
--- way as FR/HR/QR/ER Hit. Do this BEFORE deploying the matching app update — toDb() sends
--- ib_current_hit/ib_prev_hit on every session upsert, so until these columns exist, every save
--- and every "Sync Now" fails, the same way skipping any column addition above does:
+-- Run this on an existing database to add the Current / Previous / Past Session IB Hit columns —
+-- replacing the old numeric IB High/IB Low fields with a direct Yes/No/blank judgment of whether
+-- that session's, the previous session's, or the session two before that's Initial Balance was
+-- hit, entered the same way as FR/HR/QR/ER Hit. Do this BEFORE deploying the matching app update
+-- — toDb() sends ib_current_hit/ib_prev_hit/ib_past_hit on every session upsert, so until these
+-- columns exist, every save and every "Sync Now" fails, the same way skipping any column addition
+-- above does:
 --   alter table public.trading_sessions add column if not exists ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null);
 --   alter table public.trading_sessions add column if not exists ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null);
+--   alter table public.trading_sessions add column if not exists ib_past_hit text check (ib_past_hit in ('Yes','No') or ib_past_hit is null);
 -- The old ib_high/ib_low numeric columns are no longer used and can be dropped. This is
 -- IRREVERSIBLE and there is no automatic backfill — a Yes/No hit judgment can't be derived from a
 -- price level, so any numeric IB High/Low values you already logged are gone for good once you
@@ -84,6 +86,7 @@ create table if not exists public.trading_sessions (
 
   ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null),
   ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null),
+  ib_past_hit text check (ib_past_hit in ('Yes','No') or ib_past_hit is null),
   ny_high numeric,
   ny_low numeric,
   extreme_high numeric,
