@@ -30,6 +30,16 @@
 --   alter table public.trading_sessions drop column if exists prev_ny_va_low;
 --   alter table public.trading_sessions drop column if exists london_va_high;
 --   alter table public.trading_sessions drop column if exists london_va_low;
+--
+-- Run this on an existing database to add the Current Session IB Hit / Previous Session IB Hit
+-- columns — replacing the old numeric IB High/IB Low fields with a direct Yes/No/blank judgment
+-- of whether that session's (or the previous session's) Initial Balance was hit, entered the same
+-- way as FR/HR/QR/ER Hit:
+--   alter table public.trading_sessions add column if not exists ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null);
+--   alter table public.trading_sessions add column if not exists ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null);
+-- The old ib_high/ib_low numeric columns are no longer used and can be dropped:
+--   alter table public.trading_sessions drop column if exists ib_high;
+--   alter table public.trading_sessions drop column if exists ib_low;
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -66,8 +76,8 @@ create table if not exists public.trading_sessions (
   poc numeric,
   vpoc numeric,
 
-  ib_high numeric,
-  ib_low numeric,
+  ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null),
+  ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null),
   ny_high numeric,
   ny_low numeric,
   extreme_high numeric,
