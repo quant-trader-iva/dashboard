@@ -158,7 +158,8 @@
     <div class="card span-6"><h2>Session Hit Rates</h2><div id="sessionStats"></div></div>
     <div class="card span-6"><h2>Reference Range Statistics</h2><div id="projectionStats"></div></div>
     <div class="card span-6"><h2>Session Hit Rates by Day of Week</h2><div id="sessionStatsByDay"></div></div>
-    <div class="card span-6"><h2>IB Hit Rate by Session</h2><p class="hint">How often the Current / Previous / Past (two sessions ago) Session IB Hit fields were graded Yes, per session type.</p><div class="tablewrap"><table id="ibHitTable"></table></div></div>
+    <div class="card span-6"><h2>IB Hit Rate by Session</h2><p class="hint">How often the Current / Previous / Past (two sessions ago) Session IB Hit fields were graded Yes, per session type.</p><div class="tablewrap"><table id="ibHitTable"></table></div>
+      <h2 style="margin-top:16px">Outcome After IB Hit</h2><p class="hint">Of the sessions graded Yes on the corresponding IB Hit field above, how often price then Reversed back into the IB range vs kept Continuing beyond it — per session type.</p><div class="tablewrap"><table id="ibOutcomeTable"></table></div></div>
     <div class="card span-12"><h2>Weekly Level Hit Rate by Session (Points)</h2><p class="hint">Combined across every week you've logged a Weekly session for, and every weekday: how often each Daily/London/New York session's actual point range (its own High&minus;Low, in points) reached that week's own Weekly FR/HR/QR/ER — the same idea as the day-of-week table below, without splitting by weekday. FR/HR/QR/ER are independent "at least this far" checks, so a session that reached FR also counts toward HR/QR/ER.</p><div class="tablewrap"><table id="weeklyPointSessionTable"></table></div></div>
     <div class="card span-12"><h2>Weekly Level Hit Rate by Day of Week (Points)</h2><p class="hint">Same as the table above, broken down by weekday as well as session type.</p><div class="tablewrap"><table id="weeklyPointDayTable"></table></div></div>
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
@@ -231,8 +232,11 @@
         <div><label>VPOC</label><input id="vpoc" type="number" step="0.01"/></div>
 
         <div><label>Current Session IB Hit</label><select id="ibCurrentHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+        <div><label>Current Session Outcome After IB Hit</label><select id="ibCurrentOutcome"><option value="">—</option><option>Reversal</option><option>Continuation</option></select></div>
         <div><label>Previous Session IB Hit</label><select id="ibPrevHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+        <div><label>Previous Session Outcome After IB Hit</label><select id="ibPrevOutcome"><option value="">—</option><option>Reversal</option><option>Continuation</option></select></div>
         <div><label>Past Session IB Hit <span class="hint" style="font-weight:400">(two sessions ago)</span></label><select id="ibPastHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+        <div><label>Past Session Outcome After IB Hit</label><select id="ibPastOutcome"><option value="">—</option><option>Reversal</option><option>Continuation</option></select></div>
         <div><label>New York High</label><input id="nyHigh" type="number" step="0.01"/></div>
         <div><label>New York Low</label><input id="nyLow" type="number" step="0.01"/></div>
         <div><label>Extreme at High</label><input id="extremeHigh" type="number" step="0.01"/></div>
@@ -596,6 +600,7 @@ const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
+const IB_OUTCOME_OPTS=["","Reversal","Continuation"];
 // Single source of truth for "the five trading weekdays" — bestDayStat, renderEdgeDecay, and the
 // Weekly Level Hit Rate tables all grade sessions per-weekday and previously each declared their
 // own identical local copy of this list.
@@ -619,7 +624,7 @@ function loadPendingEntryDeletes(){try{return JSON.parse(localStorage.getItem(PE
 function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KEY,JSON.stringify(pendingEntryDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibPrevHit","ibPastHit","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
@@ -1832,11 +1837,11 @@ function editableCell(s,field,cls=""){
   d.appendChild(input);
   return d;
 }
-function buildHitSelect(s,hitField){
+function buildHitSelect(s,hitField,opts=["","Yes","No"]){
   if(!s.id)return null;
   const select=document.createElement("select");
   select.className="cellinput";select.style.width="auto";
-  ["","Yes","No"].forEach(opt=>{
+  opts.forEach(opt=>{
     const o=document.createElement("option");o.value=opt;o.textContent=opt||"—";
     if((s[hitField]||"")===opt)o.selected=true;
     select.appendChild(o);
@@ -1869,9 +1874,9 @@ function splitHitCell(s,top,bottom,hitField,topCls="",bottomCls=""){
   d.appendChild(b);
   return d;
 }
-function editableSelectCell(s,hitField,cls=""){
+function editableSelectCell(s,hitField,cls="",opts){
   const d=document.createElement("div");d.className=`cell ${cls}`;
-  const select=buildHitSelect(s,hitField);
+  const select=buildHitSelect(s,hitField,opts);
   if(select)d.appendChild(select);
   return d;
 }
@@ -1951,7 +1956,9 @@ function renderProjectionGrid(){
     ["Current Session High",s=>fmt(s.high),""],["Current Session Low",s=>fmt(s.low),""],["Current Session Range",s=>fmt(s.currentRange),""],
     ["Current H-L Half Range",s=>fmt(s.currentHalfRange),"curr"],["Current H-L Quarter Range",s=>fmt(s.currentQuarterRange),"curr"],["Current H-L Eighth Range",s=>fmt(s.currentEighthRange),"curr"],
     ["FR — Full Reference Range",s=>fmt(s.fullRange),"pink"],["HR — Half Reference Range",s=>fmt(s.halfRange),"pink"],["QR — Quarter Reference Range",s=>fmt(s.quarterRange),"pink"],["ER — Eighth Reference Range",s=>fmt(s.eighthRange),"pink"],
-    ["Current Session IB Hit",null,"cream","ibCurrentHit","select"],["Previous Session IB Hit",null,"cream","ibPrevHit","select"],["Past Session IB Hit",null,"cream","ibPastHit","select"],
+    ["Current Session IB Hit",null,"cream","ibCurrentHit","select"],["Current Session Outcome After IB Hit",null,"cream","ibCurrentOutcome","select",IB_OUTCOME_OPTS],
+    ["Previous Session IB Hit",null,"cream","ibPrevHit","select"],["Previous Session Outcome After IB Hit",null,"cream","ibPrevOutcome","select",IB_OUTCOME_OPTS],
+    ["Past Session IB Hit",null,"cream","ibPastHit","select"],["Past Session Outcome After IB Hit",null,"cream","ibPastOutcome","select",IB_OUTCOME_OPTS],
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
     ["Extreme at High",s=>fmt(s.extremeHigh),"orange","extremeHigh"],["Extreme at Low",s=>fmt(s.extremeLow),"orange","extremeLow"],
@@ -1961,7 +1968,7 @@ function renderProjectionGrid(){
   ];
   root.appendChild(cell("Metric","head corner"));days.forEach(s=>root.appendChild(cell(`<b>${s.day||""}</b><br>${formatDMY(s.date)}<br><span class="pill">${s.sessionType||""}</span>`,"head")));
   const sideCell=cell(sideStats(arr),"side");sideCell.style.gridRow=`span ${rows.length+1}`;root.appendChild(sideCell);
-  rows.forEach(([lab,fn,cls,editField,editType])=>{
+  rows.forEach(([lab,fn,cls,editField,editType,opts])=>{
     root.appendChild(cell(lab,"labelcell"));
     days.forEach(s=>{
       let node;
@@ -1970,7 +1977,7 @@ function renderProjectionGrid(){
         const [topCls,bottomCls]=Array.isArray(cls)?cls:[cls,cls];
         node=editType==="splitHit"?splitHitCell(s,v.top,v.bottom,editField,topCls,bottomCls):splitCell(v.top,v.bottom,topCls,bottomCls);
       }else if(editType==="select"){
-        node=editableSelectCell(s,editField,cls||biasCls(s));
+        node=editableSelectCell(s,editField,cls||biasCls(s),opts);
       }else if(editField){
         node=editableCell(s,editField,cls||biasCls(s));
       }else{
@@ -2036,6 +2043,27 @@ function renderIbHitStats(){
     return`<tr><td>${type}</td>${cells}</tr>`;
   }).join("");
   ibHitTable.innerHTML=thead+`<tbody>${body}</tbody>`;
+}
+// Reversal/Continuation mix, restricted to sessions where the matching IB Hit field was graded
+// Yes — the outcome field is meaningless (and left blank) whenever the IB wasn't hit at all.
+function ibOutcomeMix(arr,hitKey,outcomeKey){
+  const hit=arr.filter(s=>s[hitKey]==="Yes");
+  const answered=hit.filter(s=>s[outcomeKey]==="Reversal"||s[outcomeKey]==="Continuation");
+  if(!answered.length)return "—";
+  const rev=answered.filter(s=>s[outcomeKey]==="Reversal").length;
+  return `Reversal ${pct(rev/answered.length)} · Continuation ${pct((answered.length-rev)/answered.length)} (n=${answered.length})`;
+}
+const IB_OUTCOME_KEYS=[["Current Session","ibCurrentHit","ibCurrentOutcome"],["Previous Session","ibPrevHit","ibPrevOutcome"],["Past Session","ibPastHit","ibPastOutcome"]];
+function renderIbOutcomeStats(){
+  const session=sessionFilter.value;
+  const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
+  const byType=groupBySessionType(arr);
+  const thead=`<thead><tr><th>Session</th>${IB_OUTCOME_KEYS.map(([label])=>`<th>${label}</th>`).join("")}</tr></thead>`;
+  const body=SESSION_ORDER.map(type=>{
+    const cells=IB_OUTCOME_KEYS.map(([,hitKey,outcomeKey])=>`<td>${ibOutcomeMix(byType[type],hitKey,outcomeKey)}</td>`).join("");
+    return`<tr><td>${type}</td>${cells}</tr>`;
+  }).join("");
+  ibOutcomeTable.innerHTML=thead+`<tbody>${body}</tbody>`;
 }
 // Monday-Sunday window containing dateStr. Parses with an explicit local midnight time (matching
 // entryWeekday's convention below) so this doesn't shift a day backward in timezones behind UTC —
@@ -2320,7 +2348,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbHitStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbHitStats,renderIbOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
@@ -2454,8 +2482,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_prev_hit:s.ibPrevHit||null,ib_past_hit:s.ibPastHit||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibPrevHit:r.ib_prev_hit,ibPastHit:r.ib_past_hit,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
 function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
