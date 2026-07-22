@@ -600,7 +600,22 @@ const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
-const IB_OUTCOME_OPTS=["","Reversal","Continuation"];
+// Read from the ibCurrentOutcome select's own <option> list (same convention as outcomeMix()
+// reading #outcome's options below) so a renamed/added outcome option flows through everywhere —
+// the grid's editable cells, ibOutcomeMix's bucketing — instead of needing a hand-kept copy.
+const IB_OUTCOME_OPTS=[...document.getElementById("ibCurrentOutcome").options].map(o=>o.value);
+// Single source of truth for the three IB time-offset slots — IB_HIT_KEYS/IB_OUTCOME_KEYS below
+// and the hit-to-outcome clearing map are all derived from this instead of hand-duplicating the
+// Current/Previous/Past → field-name mapping in multiple parallel arrays.
+const IB_SLOTS=[
+  {label:"Current Session",hitKey:"ibCurrentHit",outcomeKey:"ibCurrentOutcome"},
+  {label:"Previous Session",hitKey:"ibPrevHit",outcomeKey:"ibPrevOutcome"},
+  {label:"Past Session",hitKey:"ibPastHit",outcomeKey:"ibPastOutcome"}
+];
+// Clears the paired Outcome field whenever its Hit field is edited away from "Yes" — otherwise a
+// Reversal/Continuation judgment entered for one Yes grading can silently resurface if the Hit
+// field is later toggled back to Yes without the user revisiting Outcome.
+const IB_HIT_TO_OUTCOME=Object.fromEntries(IB_SLOTS.map(s=>[s.hitKey,s.outcomeKey]));
 // Single source of truth for "the five trading weekdays" — bestDayStat, renderEdgeDecay, and the
 // Weekly Level Hit Rate tables all grade sessions per-weekday and previously each declared their
 // own identical local copy of this list.
@@ -1683,7 +1698,7 @@ function setNewsEventsInForm(events){
   newsEventsList.innerHTML="";
   (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact,ev.time));
 }
-function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
+function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));IB_SLOTS.forEach(({hitKey,outcomeKey})=>{if(o[hitKey]!=="Yes")o[outcomeKey]=""});o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
 function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();entryFormError.style.display="none";showTab("entry")}
 function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields();entryFormError.style.display="none"}
 
@@ -1837,19 +1852,21 @@ function editableCell(s,field,cls=""){
   d.appendChild(input);
   return d;
 }
-function buildHitSelect(s,hitField,opts=["","Yes","No"]){
+function buildFieldSelect(s,field,opts=["","Yes","No"]){
   if(!s.id)return null;
   const select=document.createElement("select");
   select.className="cellinput";select.style.width="auto";
   opts.forEach(opt=>{
     const o=document.createElement("option");o.value=opt;o.textContent=opt||"—";
-    if((s[hitField]||"")===opt)o.selected=true;
+    if((s[field]||"")===opt)o.selected=true;
     select.appendChild(o);
   });
   select.addEventListener("change",()=>{
     const idx=sessions.findIndex(x=>x.id===s.id);
     if(idx<0)return;
-    sessions[idx][hitField]=select.value||null;
+    sessions[idx][field]=select.value||null;
+    const outcomeField=IB_HIT_TO_OUTCOME[field];
+    if(outcomeField&&select.value!=="Yes")sessions[idx][outcomeField]=null;
     sessions[idx].updatedAt=new Date().toISOString();
     saveSessions();syncUpsert([sessions[idx]]);renderAll();
   });
@@ -1869,14 +1886,14 @@ function splitHitCell(s,top,bottom,hitField,topCls="",bottomCls=""){
   const b=document.createElement("div");b.className=`splitpart ${bottomCls}`;
   const bottomText=document.createElement("div");bottomText.textContent=bottom;
   b.appendChild(bottomText);
-  const select=buildHitSelect(s,hitField);
+  const select=buildFieldSelect(s,hitField);
   if(select)b.appendChild(select);
   d.appendChild(b);
   return d;
 }
-function editableSelectCell(s,hitField,cls="",opts){
+function editableSelectCell(s,field,cls="",opts){
   const d=document.createElement("div");d.className=`cell ${cls}`;
-  const select=buildHitSelect(s,hitField,opts);
+  const select=buildFieldSelect(s,field,opts);
   if(select)d.appendChild(select);
   return d;
 }
@@ -2029,41 +2046,50 @@ function renderMetrics(){
    hitStats.map(([l,s],i)=>line(l,pct(s.rate),hitStyles[i])).join("")+
    line("Profit Factor",fmt(profitFactor(arr)));
 }
-const IB_HIT_KEYS=[["Current Session IB Hit","ibCurrentHit"],["Previous Session IB Hit","ibPrevHit"],["Past Session IB Hit","ibPastHit"]];
-function renderIbHitStats(){
+// Both derived from IB_SLOTS (declared above with IB_OUTCOME_OPTS) so the Current/Previous/Past
+// mapping has one source instead of two hand-kept parallel arrays.
+const IB_HIT_KEYS=IB_SLOTS.map(({label,hitKey})=>[`${label} IB Hit`,hitKey]);
+const IB_OUTCOME_KEYS=IB_SLOTS.map(({label,hitKey,outcomeKey})=>[label,hitKey,outcomeKey]);
+// Reversal/Continuation mix, restricted to sessions where the matching IB Hit field was graded
+// Yes — the outcome field is meaningless (and left blank) whenever the IB wasn't hit at all.
+// Reads its category list from IB_OUTCOME_OPTS (itself sourced from the ibCurrentOutcome select)
+// instead of hardcoding "Reversal"/"Continuation", the same convention outcomeMix() uses below.
+// Returns {str,rate,n} like hitStat() — rate is the first option's share, for heatAbs tinting.
+function ibOutcomeMix(arr,hitKey,outcomeKey){
+  const hit=arr.filter(s=>s[hitKey]==="Yes");
+  const order=IB_OUTCOME_OPTS.filter(Boolean);
+  const counts=order.map(k=>[k,hit.filter(s=>s[outcomeKey]===k).length]);
+  const n=counts.reduce((sum,[,c])=>sum+c,0);
+  if(!n)return{str:"—",rate:null,n:0};
+  const str=counts.filter(([,c])=>c>0).map(([k,c])=>`${k} ${pct(c/n)}`).join(" · ")+` (n=${n})`;
+  return{str,rate:counts[0][1]/n,n};
+}
+// Builds both IB tables from one shared enrich()+groupBySessionType() pass — they were previously
+// two separate render functions that each redid that work on the same filtered sessions.
+function renderIbStats(){
   const session=sessionFilter.value;
   const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
   const byType=groupBySessionType(arr);
-  const thead=`<thead><tr><th>Session</th>${IB_HIT_KEYS.map(([label])=>`<th>${label}</th>`).join("")}</tr></thead>`;
-  const body=SESSION_ORDER.map(type=>{
+
+  const hitThead=`<thead><tr><th>Session</th>${IB_HIT_KEYS.map(([label])=>`<th>${label}</th>`).join("")}</tr></thead>`;
+  const hitBody=SESSION_ORDER.map(type=>{
     const cells=IB_HIT_KEYS.map(([,key])=>{
       const s=hitStat(byType[type],key);
       return`<td style="${s.rate!=null?heatAbs(s.rate,s.n):""}">${s.rate!=null?pct(s.rate):"—"}</td>`;
     }).join("");
     return`<tr><td>${type}</td>${cells}</tr>`;
   }).join("");
-  ibHitTable.innerHTML=thead+`<tbody>${body}</tbody>`;
-}
-// Reversal/Continuation mix, restricted to sessions where the matching IB Hit field was graded
-// Yes — the outcome field is meaningless (and left blank) whenever the IB wasn't hit at all.
-function ibOutcomeMix(arr,hitKey,outcomeKey){
-  const hit=arr.filter(s=>s[hitKey]==="Yes");
-  const answered=hit.filter(s=>s[outcomeKey]==="Reversal"||s[outcomeKey]==="Continuation");
-  if(!answered.length)return "—";
-  const rev=answered.filter(s=>s[outcomeKey]==="Reversal").length;
-  return `Reversal ${pct(rev/answered.length)} · Continuation ${pct((answered.length-rev)/answered.length)} (n=${answered.length})`;
-}
-const IB_OUTCOME_KEYS=[["Current Session","ibCurrentHit","ibCurrentOutcome"],["Previous Session","ibPrevHit","ibPrevOutcome"],["Past Session","ibPastHit","ibPastOutcome"]];
-function renderIbOutcomeStats(){
-  const session=sessionFilter.value;
-  const arr=enrich(sessions).filter(s=>session==="All"||s.sessionType===session);
-  const byType=groupBySessionType(arr);
-  const thead=`<thead><tr><th>Session</th>${IB_OUTCOME_KEYS.map(([label])=>`<th>${label}</th>`).join("")}</tr></thead>`;
-  const body=SESSION_ORDER.map(type=>{
-    const cells=IB_OUTCOME_KEYS.map(([,hitKey,outcomeKey])=>`<td>${ibOutcomeMix(byType[type],hitKey,outcomeKey)}</td>`).join("");
+  ibHitTable.innerHTML=hitThead+`<tbody>${hitBody}</tbody>`;
+
+  const outcomeThead=`<thead><tr><th>Session</th>${IB_OUTCOME_KEYS.map(([label])=>`<th>${label}</th>`).join("")}</tr></thead>`;
+  const outcomeBody=SESSION_ORDER.map(type=>{
+    const cells=IB_OUTCOME_KEYS.map(([,hitKey,outcomeKey])=>{
+      const s=ibOutcomeMix(byType[type],hitKey,outcomeKey);
+      return`<td style="${s.rate!=null?heatAbs(s.rate,s.n):""}">${s.str}</td>`;
+    }).join("");
     return`<tr><td>${type}</td>${cells}</tr>`;
   }).join("");
-  ibOutcomeTable.innerHTML=thead+`<tbody>${body}</tbody>`;
+  ibOutcomeTable.innerHTML=outcomeThead+`<tbody>${outcomeBody}</tbody>`;
 }
 // Monday-Sunday window containing dateStr. Parses with an explicit local midnight time (matching
 // entryWeekday's convention below) so this doesn't shift a day backward in timezones behind UTC —
@@ -2348,7 +2374,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbHitStats,renderIbOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
