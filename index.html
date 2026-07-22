@@ -165,6 +165,7 @@
     <div class="card span-12"><h2>Edge Decay by Day of Week</h2><p class="hint" id="edgeDecayNote"></p><div class="tablewrap"><table id="edgeDecayTable"></table></div></div>
     <div class="card span-12"><h2>Range &amp; Volatility Correlations</h2><p class="hint" id="rangeCorrNote"></p><div class="tablewrap"><table id="rangeCorrTable"></table></div></div>
     <div class="card span-12"><h2>Session Open vs Prior Value Area</h2><p class="hint">Breaks down sessions by the "Open vs Prior VA" field entered on each session — your own Above/Inside/Below judgment of where that session opened relative to the relevant prior session's Value Area (Weekly &rarr; previous Weekly, Daily &rarr; previous Daily, London &rarr; previous New York day, New York &rarr; same-day London). Requires that field to be filled in.</p><div class="tablewrap"><table id="vaOpenTable"></table></div></div>
+    <div class="card span-12"><h2>Result R by Confidence Score</h2><p class="hint">Buckets sessions by the Confidence Score you entered, across all session types, and shows average Result R and FR/HR/QR/ER hit rates per bucket — a calibration check for whether your own conviction actually tracks with outcomes. Requires Confidence Score and Result R (or the Hit fields) to be filled in.</p><div class="tablewrap"><table id="confidenceTable"></table></div></div>
     <div class="card span-12"><h2>News Impact</h2><p class="hint">Daily sessions only. "News Day" = at least one High/Medium impact USD event logged for that session. "Timing" compares each session's High/Low Time (optional, entered on the session) against that event's release time — only counted when both a breach happened and both times are known.</p><div class="tablewrap"><table id="newsDayTable"></table></div><h2 style="margin-top:16px">By Event Type</h2><div class="tablewrap"><table id="newsTypeTable"></table></div></div>
   </div>
 </section>
@@ -2289,6 +2290,28 @@ function renderVaOpen(){
     :'<tr><td colspan="9">No sessions yet have the Open vs Prior VA field filled in.</td></tr>'
   }</tbody>`;
 }
+// Fixed 20-point buckets over the 0-100 Confidence Score range — coarse enough that early data
+// (a handful of graded sessions) still lands multiple sessions per bucket instead of spreading
+// thin across 100 individual values.
+const CONFIDENCE_BUCKETS=[[0,20],[21,40],[41,60],[61,80],[81,100]];
+function renderConfidenceStats(){
+  const all=enrich(sessions).filter(s=>Number.isFinite(s.confidenceScore));
+  const rows=CONFIDENCE_BUCKETS.map(([lo,hi])=>{
+    const arr=all.filter(s=>s.confidenceScore>=lo&&s.confidenceScore<=hi);
+    return{label:`${lo}–${hi}`,...vaBucketStats(arr)};
+  });
+  const fmtHit=h=>h.n?`${pct(h.rate)} (n=${h.n})`:"—";
+  const nStyles=heatCol(rows,r=>({value:r.n}));
+  const frStyles=heatCol(rows,r=>r.fr.n?{value:r.fr.rate,n:r.fr.n}:null);
+  const hrStyles=heatCol(rows,r=>r.hr.n?{value:r.hr.rate,n:r.hr.n}:null);
+  const qrStyles=heatCol(rows,r=>r.qr.n?{value:r.qr.rate,n:r.qr.n}:null);
+  const erStyles=heatCol(rows,r=>r.er.n?{value:r.er.rate,n:r.er.n}:null);
+  const avgRStyles=heatCol(rows,r=>r.avgR!=null?{value:r.avgR,n:r.n}:null,true);
+  confidenceTable.innerHTML=`<thead><tr><th>Confidence Score</th><th>n</th><th>Avg Result R</th><th>FR Hit</th><th>HR Hit</th><th>QR Hit</th><th>ER Hit</th></tr></thead><tbody>${
+    rows.some(r=>r.n>0)?rows.map((r,i)=>`<tr><td>${r.label}</td><td style="${nStyles[i]}">${r.n}</td><td style="${avgRStyles[i]}">${r.avgR!=null?fmt(r.avgR)+"R":"—"}</td><td style="${frStyles[i]}">${fmtHit(r.fr)}</td><td style="${hrStyles[i]}">${fmtHit(r.hr)}</td><td style="${qrStyles[i]}">${fmtHit(r.qr)}</td><td style="${erStyles[i]}">${fmtHit(r.er)}</td></tr>`).join("")
+    :'<tr><td colspan="7">No sessions yet have the Confidence Score field filled in.</td></tr>'
+  }</tbody>`;
+}
 function newsBreachStats(arr){
   const n=arr.length;
   return{
@@ -2374,7 +2397,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
