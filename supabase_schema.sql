@@ -48,6 +48,15 @@
 -- `select id, date, ib_high, ib_low from public.trading_sessions where ib_high is not null or ib_low is not null`):
 --   alter table public.trading_sessions drop column if exists ib_high;
 --   alter table public.trading_sessions drop column if exists ib_low;
+--
+-- Run this on an existing database to add the Current / Previous / Past Session "Outcome After IB
+-- Hit" columns — a Reversal/Continuation/blank judgment of what happened once that session's IB
+-- was hit (only meaningful, and only ever entered, when the matching ib_*_hit column is 'Yes').
+-- Do this BEFORE deploying the matching app update, for the same reason as the ib_*_hit columns
+-- above — toDb() sends these on every session upsert:
+--   alter table public.trading_sessions add column if not exists ib_current_outcome text check (ib_current_outcome in ('Reversal','Continuation') or ib_current_outcome is null);
+--   alter table public.trading_sessions add column if not exists ib_prev_outcome text check (ib_prev_outcome in ('Reversal','Continuation') or ib_prev_outcome is null);
+--   alter table public.trading_sessions add column if not exists ib_past_outcome text check (ib_past_outcome in ('Reversal','Continuation') or ib_past_outcome is null);
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -85,8 +94,11 @@ create table if not exists public.trading_sessions (
   vpoc numeric,
 
   ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null),
+  ib_current_outcome text check (ib_current_outcome in ('Reversal','Continuation') or ib_current_outcome is null),
   ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null),
+  ib_prev_outcome text check (ib_prev_outcome in ('Reversal','Continuation') or ib_prev_outcome is null),
   ib_past_hit text check (ib_past_hit in ('Yes','No') or ib_past_hit is null),
+  ib_past_outcome text check (ib_past_outcome in ('Reversal','Continuation') or ib_past_outcome is null),
   ny_high numeric,
   ny_low numeric,
   extreme_high numeric,
