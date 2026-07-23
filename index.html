@@ -2164,8 +2164,9 @@ function renderWeeklyPointStats(){
     if(!matches.length)return null;
     return{type,n:matches.length,fr:rate(matches,"fr"),hr:rate(matches,"hr"),qr:rate(matches,"qr"),er:rate(matches,"er")};
   }).filter(Boolean);
+  const sessionNStyles=heatCol(sessionRows,r=>({value:r.n}));
   weeklyPointSessionTable.innerHTML=`<thead><tr><th>Session</th><th>n</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th></tr></thead><tbody>${
-    sessionRows.map(r=>`<tr><td>${r.type}</td><td>${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("")
+    sessionRows.map((r,i)=>`<tr><td>${r.type}</td><td style="${sessionNStyles[i]}">${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("")
   }</tbody>`;
   const dayRows=[];
   POINT_SESSION_TYPES.forEach(type=>{
@@ -2175,8 +2176,9 @@ function renderWeeklyPointStats(){
       dayRows.push({type,day,n:matches.length,fr:rate(matches,"fr"),hr:rate(matches,"hr"),qr:rate(matches,"qr"),er:rate(matches,"er")});
     });
   });
+  const dayNStyles=heatCol(dayRows,r=>({value:r.n}));
   weeklyPointDayTable.innerHTML=`<thead><tr><th>Session</th><th>Day</th><th>n</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th></tr></thead><tbody>${
-    dayRows.map(r=>`<tr><td>${r.type}</td><td>${r.day}</td><td>${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("")
+    dayRows.map((r,i)=>`<tr><td>${r.type}</td><td>${r.day}</td><td style="${dayNStyles[i]}">${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("")
   }</tbody>`;
 }
 refreshDash.addEventListener("click",renderAll);viewMode.addEventListener("change",renderAll);sessionFilter.addEventListener("change",()=>{document.querySelectorAll(".quick").forEach(b=>b.classList.toggle("active",b.dataset.session===sessionFilter.value));renderAll()});focusDate.addEventListener("change",renderAll);
