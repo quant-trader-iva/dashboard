@@ -2189,7 +2189,7 @@ function renderWeeklyPointStats(){
     const maxFr=Math.max(...rowsForType.map(r=>r.fr));
     rowsForType.filter(r=>r.fr===maxFr).forEach(r=>{
       const conf=confFrac(r.n);
-      bestDayStyle.set(`${r.type}|${r.day}`,`background:rgba(${HEAT_POS_RGB},${(0.10+0.25*conf).toFixed(2)});font-weight:${conf>=1?900:700};`);
+      bestDayStyle.set(`${r.type}|${r.day}`,`background:rgba(${HEAT_SEQ_RGB},${(0.10+0.25*conf).toFixed(2)});font-weight:${conf>=1?900:700};`);
     });
   });
   weeklyPointDayTable.innerHTML=`<thead><tr><th>Session</th><th>Day</th><th>n</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th></tr></thead><tbody>${
