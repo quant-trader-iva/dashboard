@@ -2177,8 +2177,23 @@ function renderWeeklyPointStats(){
     });
   });
   const dayNStyles=heatCol(dayRows,r=>({value:r.n}));
+  // Marks the best day(s) per session type on the Day cell itself — based on FR, the primary "at
+  // least this far" level (a session reaching FR also counts toward HR/QR/ER, so it's the most
+  // discriminating single metric to rank days by). Ties all get marked, and the tint/weight is
+  // dampened by confFrac(n) the same way bestDayLabel dampens its own "best day" callout elsewhere,
+  // so a day backed by n=1 doesn't read as confidently as one backed by a real sample size.
+  const bestDayStyle=new Map();
+  POINT_SESSION_TYPES.forEach(type=>{
+    const rowsForType=dayRows.filter(r=>r.type===type);
+    if(!rowsForType.length)return;
+    const maxFr=Math.max(...rowsForType.map(r=>r.fr));
+    rowsForType.filter(r=>r.fr===maxFr).forEach(r=>{
+      const conf=confFrac(r.n);
+      bestDayStyle.set(`${r.type}|${r.day}`,`background:rgba(${HEAT_POS_RGB},${(0.10+0.25*conf).toFixed(2)});font-weight:${conf>=1?900:700};`);
+    });
+  });
   weeklyPointDayTable.innerHTML=`<thead><tr><th>Session</th><th>Day</th><th>n</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th></tr></thead><tbody>${
-    dayRows.map((r,i)=>`<tr><td>${r.type}</td><td>${r.day}</td><td style="${dayNStyles[i]}">${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("")
+    dayRows.map((r,i)=>`<tr><td>${r.type}</td><td style="${bestDayStyle.get(`${r.type}|${r.day}`)||""}">${r.day}</td><td style="${dayNStyles[i]}">${r.n}</td><td style="${heatAbs(r.fr,r.n)}">${pct(r.fr)}</td><td style="${heatAbs(r.hr,r.n)}">${pct(r.hr)}</td><td style="${heatAbs(r.qr,r.n)}">${pct(r.qr)}</td><td style="${heatAbs(r.er,r.n)}">${pct(r.er)}</td></tr>`).join("")
   }</tbody>`;
 }
 refreshDash.addEventListener("click",renderAll);viewMode.addEventListener("change",renderAll);sessionFilter.addEventListener("change",()=>{document.querySelectorAll(".quick").forEach(b=>b.classList.toggle("active",b.dataset.session===sessionFilter.value));renderAll()});focusDate.addEventListener("change",renderAll);
