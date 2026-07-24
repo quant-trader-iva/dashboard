@@ -2031,11 +2031,8 @@ function renderMetrics(){
  ];
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key,getRange])=>[key,{...hitStat(byType[x],key),range:avgStat(byType[x].map(getRange))}])));
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
- // Heat-tinted the same way every other "average range" column in the app is (Reference Range
- // Statistics, Edge Decay, News tables) via heatCol, instead of rendering plain gray text.
- const sessionRangeStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,heatCol(sessionRows,r=>r[key].range)]));
  sessionStatsHead.innerHTML=lineRange("Metric","Avg Range","Hit Rate","","","rangehead");
- sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>lineRange(x+" "+label,sessionRows[i][key].range?fmt(sessionRows[i][key].range.value):"—",sessionRows[i][key].rate!=null?pct(sessionRows[i][key].rate):"—",sessionStyles[key][i],sessionRangeStyles[key][i])).join("")).join("");
+ sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>lineRange(x+" "+label,sessionRows[i][key].range?fmt(sessionRows[i][key].range.value):"—",sessionRows[i][key].rate!=null?pct(sessionRows[i][key].rate):"—",sessionStyles[key][i])).join("")).join("");
  sessionStatsByDay.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line3(x+" "+label,pct(sessionRows[i][key].rate),bestDayLabel(bestDayStat(byType[x],key)),sessionStyles[key][i])).join("")).join("");
 
  // Not heat-tinted: HR/QR/ER are always exactly FR/2, FR/4, FR/8 for every session, so comparing
