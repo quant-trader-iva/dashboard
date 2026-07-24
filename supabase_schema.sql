@@ -169,7 +169,10 @@ create unique index if not exists trading_sessions_user_date_type_uidx
 
 -- Run this on an existing database to add the Pip Size column — the broker's price-per-pip
 -- (e.g. 0.01 for many Gold/XAUUSD CFDs), used to convert a range in points into a pip count
--- next to the Session Hit Rates "Avg Range" column:
+-- next to the Session Hit Rates "Avg Range" column. Do this BEFORE deploying the matching app
+-- update — toPosSizingDb() sends pip_size on every Position Sizing upsert, so until this column
+-- exists, saving ANY Position Sizing field (not just Pip Size) fails, and clicking "Sync Now" to
+-- retry will instead pull the stale cloud row and silently revert whatever you just typed:
 --   alter table public.position_sizing add column if not exists pip_size numeric;
 --
 -- Position Sizing calculator settings — one row per user, synced across devices.

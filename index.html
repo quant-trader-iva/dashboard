@@ -1725,10 +1725,9 @@ function moneySuffix(ps,target,points){
 // Pips are a broker/instrument-specific price increment (e.g. 0.01 for many Gold/XAUUSD CFDs),
 // distinct from the "Value per Point" money conversion above — this only converts a range in
 // points into a pip count, it doesn't involve lot size or currency.
-function pipsOf(ps,points){return ps.pipSize>0&&Number.isFinite(points)?points/ps.pipSize:null}
 function pipSuffix(ps,points){
-  const pips=pipsOf(ps,points);
-  return pips===null?"":` (${fmt(pips,1)} pips)`;
+  if(!(ps.pipSize>0)||!Number.isFinite(points))return"";
+  return` (${fmt(points/ps.pipSize,0)} pips)`;
 }
 function renderPosSizingSummary(ps){
   const lev=leverageRatio(ps.leverage);
@@ -1748,6 +1747,7 @@ function renderPosSizing(){
   localStorage.setItem(POS_SIZING_KEY,JSON.stringify(ps));
   renderPosSizingSummary(ps);
   try{renderProjectionGrid()}catch(err){console.error("renderProjectionGrid failed:",err)}
+  try{renderMetrics()}catch(err){console.error("renderMetrics failed:",err)}
   clearTimeout(posSizingSyncTimer);
   posSizingSyncTimer=setTimeout(()=>syncPosSizing(ps),600);
 }
@@ -2042,7 +2042,10 @@ function renderMetrics(){
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
  const ps=getPosSizing();
  sessionStatsHead.innerHTML=lineRange("Metric","Avg Range","Hit Rate","","","rangehead");
- sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>lineRange(x+" "+label,sessionRows[i][key].range?fmt(sessionRows[i][key].range.value)+pipSuffix(ps,sessionRows[i][key].range.value):"—",sessionRows[i][key].rate!=null?pct(sessionRows[i][key].rate):"—",sessionStyles[key][i])).join("")).join("");
+ sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>{
+   const{range,rate}=sessionRows[i][key];
+   return lineRange(x+" "+label,range?fmt(range.value)+pipSuffix(ps,range.value):"—",rate!=null?pct(rate):"—",sessionStyles[key][i]);
+ }).join("")).join("");
  sessionStatsByDay.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line3(x+" "+label,pct(sessionRows[i][key].rate),bestDayLabel(bestDayStat(byType[x],key)),sessionStyles[key][i])).join("")).join("");
 
  // Not heat-tinted: HR/QR/ER are always exactly FR/2, FR/4, FR/8 for every session, so comparing
