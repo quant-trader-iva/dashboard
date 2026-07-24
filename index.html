@@ -48,8 +48,8 @@
     .sideinner{width:100%;padding:12px}.sidetitle{background:var(--blue);padding:10px;border-radius:10px;text-align:center;font-weight:900;margin-bottom:8px}
     .statline{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline b{color:white}
     .statline3{display:grid;grid-template-columns:1fr 60px 195px;align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline3 b{color:white;text-align:right}.statline3 .bestday{font-size:12px;color:#94a3b8;white-space:nowrap;text-align:left;border-left:1px solid #334155;padding-left:10px}
-    .statline-range{display:grid;grid-template-columns:1fr 160px 70px;align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline-range b{color:white;text-align:right}.statline-range .rangeval{font-size:13px;color:#94a3b8;text-align:right}
-    .statline-range.rangehead{color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #475569;padding-bottom:6px}.statline-range.rangehead span.rangeval,.statline-range.rangehead b{color:#94a3b8;font-size:11px}
+    .statline-range{display:grid;grid-template-columns:1fr 160px 110px 70px;align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid #334155;font-size:13px}.statline-range b{color:white;text-align:right}.statline-range .rangeval,.statline-range .moneyval{font-size:13px;color:#94a3b8;text-align:right}
+    .statline-range.rangehead{color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #475569;padding-bottom:6px}.statline-range.rangehead span.rangeval,.statline-range.rangehead span.moneyval,.statline-range.rangehead b{color:#94a3b8;font-size:11px}
     table{width:100%;border-collapse:collapse} th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-size:13px} th{background:#1f2937;position:sticky;top:0;z-index:1}.tablewrap{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:12px}
     .chart-hoverline{stroke:#64748b;stroke-width:1;stroke-dasharray:3,3;opacity:0;pointer-events:none}
     .chart-hoverdot{opacity:0;pointer-events:none}
@@ -1722,6 +1722,14 @@ function moneySuffix(ps,target,points){
   if(!Number.isFinite(target)||!Number.isFinite(points)||mpp===null)return"";
   return` (${ps.currency}${fmt(points*mpp)})`;
 }
+// Same money-per-point conversion as moneySuffix, but returned as a standalone column value
+// (no parens, no wrapping "target" guard) for tables that show it in its own column rather than
+// appended to a range figure.
+function moneyValueText(ps,points){
+  const mpp=moneyPerPointOf(ps);
+  if(!Number.isFinite(points)||mpp===null)return"—";
+  return`${ps.currency}${fmt(points*mpp)}`;
+}
 // Pips are a broker/instrument-specific price increment (e.g. 0.01 for many Gold/XAUUSD CFDs),
 // distinct from the "Value per Point" money conversion above — this only converts a range in
 // points into a pip count, it doesn't involve lot size or currency. Divided by a further 10 since
@@ -1913,10 +1921,11 @@ function editableSelectCell(s,field,cls="",opts){
 }
 function line(l,v,style){return `<div class="statline" style="${style||""}"><span>${l}</span><b>${v}</b></div>`}
 function line3(l,v,extra,style){return `<div class="statline3" style="${style||""}"><span>${l}</span><b>${v}</b><span class="bestday">${extra}</span></div>`}
-// Column order is deliberately label/rangeVal/hitRateVal (rate bold on the right) to match this
-// card's "Metric | Avg Range | Hit Rate" header, unlike line3()'s label/v/extra (rate bold in the
-// middle) — don't copy-paste between the two without checking which slot is which.
-function lineRange(l,rangeVal,hitRateVal,style,rangeStyle,cls){return `<div class="statline-range${cls?" "+cls:""}" style="${style||""}"><span>${l}</span><span class="rangeval" style="${rangeStyle||""}">${rangeVal}</span><b>${hitRateVal}</b></div>`}
+// Column order is deliberately label/rangeVal/moneyVal/hitRateVal (rate bold on the right) to
+// match this card's "Metric | Avg Range | Price Opportunity | Hit Rate" header, unlike line3()'s
+// label/v/extra (rate bold in the middle) — don't copy-paste between the two without checking
+// which slot is which.
+function lineRange(l,rangeVal,moneyVal,hitRateVal,style,rangeStyle,cls){return `<div class="statline-range${cls?" "+cls:""}" style="${style||""}"><span>${l}</span><span class="rangeval" style="${rangeStyle||""}">${rangeVal}</span><span class="moneyval">${moneyVal}</span><b>${hitRateVal}</b></div>`}
 // Which weekday(s) have the best hit rate for this session-type+range combo. Requires at least one
 // answered (Yes/No) session on that weekday. Returns every weekday tied at the top rate (not just the
 // earliest) so e.g. a 100% rate shared by all five weekdays reads as "every day", not "Monday only".
@@ -2043,10 +2052,10 @@ function renderMetrics(){
  const sessionRows=SESSION_ORDER.map(x=>Object.fromEntries(hitKeys.map(([,key,getRange])=>[key,{...hitStat(byType[x],key),range:avgStat(byType[x].map(getRange))}])));
  const sessionStyles=Object.fromEntries(hitKeys.map(([,key])=>[key,sessionRows.map(r=>r[key].rate!=null?heatAbs(r[key].rate,r[key].n):"")]));
  const ps=getPosSizing();
- sessionStatsHead.innerHTML=lineRange("Metric","Avg Range","Hit Rate","","","rangehead");
+ sessionStatsHead.innerHTML=lineRange("Metric","Avg Range","Price Opportunity","Hit Rate","","","rangehead");
  sessionStats.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>{
    const{range,rate}=sessionRows[i][key];
-   return lineRange(x+" "+label,range?fmt(range.value)+pipSuffix(ps,range.value):"—",rate!=null?pct(rate):"—",sessionStyles[key][i]);
+   return lineRange(x+" "+label,range?fmt(range.value)+pipSuffix(ps,range.value):"—",range?moneyValueText(ps,range.value):"—",rate!=null?pct(rate):"—",sessionStyles[key][i]);
  }).join("")).join("");
  sessionStatsByDay.innerHTML=SESSION_ORDER.map((x,i)=>hitKeys.map(([label,key])=>line3(x+" "+label,pct(sessionRows[i][key].rate),bestDayLabel(bestDayStat(byType[x],key)),sessionStyles[key][i])).join("")).join("");
 
