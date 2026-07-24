@@ -1724,10 +1724,12 @@ function moneySuffix(ps,target,points){
 }
 // Pips are a broker/instrument-specific price increment (e.g. 0.01 for many Gold/XAUUSD CFDs),
 // distinct from the "Value per Point" money conversion above — this only converts a range in
-// points into a pip count, it doesn't involve lot size or currency.
+// points into a pip count, it doesn't involve lot size or currency. Divided by a further 10 since
+// some brokers (e.g. IC Markets) call that 0.01 increment a "pip" while quoting spreads/ranges in
+// the coarser 10x unit traders actually think in.
 function pipSuffix(ps,points){
   if(!(ps.pipSize>0)||!Number.isFinite(points))return"";
-  return` (${fmt(points/ps.pipSize,0)} pips)`;
+  return` (${fmt(points/ps.pipSize/10,0)} pips)`;
 }
 function renderPosSizingSummary(ps){
   const lev=leverageRatio(ps.leverage);
