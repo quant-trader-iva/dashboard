@@ -409,6 +409,7 @@
     <div class="card span-6"><h2>By Entry Delay</h2><p class="hint">Time between the setup forming (Signal Time) and your actual fill (Entry Time). Hesitation tends to show up as worse results in the slower buckets.</p><div class="tablewrap"><table id="teDelayTable"></table></div></div>
     <div class="card span-6"><h2>By Order Type</h2><p class="hint">Compares execution method against average slippage from your intended price.</p><div class="tablewrap"><table id="teOrderTypeTable"></table></div></div>
     <div class="card span-12"><h2>By Time of Day</h2><p class="hint">Entry Time grouped into 4-hour blocks, using your browser's local time.</p><div class="tablewrap"><table id="teHourTable"></table></div></div>
+    <div class="card span-12"><h2>By Week of Month</h2><p class="hint">Entry Date's day-of-month grouped into calendar weeks (1-7, 8-14, 15-21, 22-28, 29-31).</p><div class="tablewrap"><table id="teWeekOfMonthTable"></table></div></div>
 
     <div class="card span-6"><h2>By Direction</h2><div class="tablewrap"><table id="teDirectionTable"></table></div></div>
     <div class="card span-6"><h2>By Session Type</h2><div class="tablewrap"><table id="teSessionTypeTable"></table></div></div>
@@ -1346,16 +1347,41 @@ const DELAY_BUCKETS=[{label:"<1 min",test:d=>d<1},{label:"1-5 min",test:d=>d>=1&
 function delayBucketOf(d){if(!Number.isFinite(d))return null;const b=DELAY_BUCKETS.find(b=>b.test(d));return b?b.label:null}
 const HOUR_BUCKETS=[{label:"00:00–04:00",lo:0,hi:4},{label:"04:00–08:00",lo:4,hi:8},{label:"08:00–12:00",lo:8,hi:12},{label:"12:00–16:00",lo:12,hi:16},{label:"16:00–20:00",lo:16,hi:20},{label:"20:00–24:00",lo:20,hi:24}];
 function hourBucketOf(entryTime){const m=timeToMinutes(entryTime);if(m==null)return null;const h=Math.floor(m/60);const b=HOUR_BUCKETS.find(b=>h>=b.lo&&h<b.hi);return b?b.label:null}
+// Shared by entryWeekday/weekOfMonthOf. Parsed with an explicit local midnight time so this
+// doesn't shift a day backward in timezones behind UTC (a bare `new Date("2026-07-18")` parses
+// as UTC midnight), and cross-checked against the y/m/d it was built from because JS silently
+// rolls invalid calendar dates (e.g. "2026-02-30") into the next month instead of yielding NaN —
+// without this check a corrupted/hand-edited import could land in the wrong bucket instead of
+// being excluded like other malformed input.
+function parseEntryDate(e){
+  if(!e.date)return null;
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(e.date);
+  if(!m)return null;
+  const[y,mo,da]=m.slice(1).map(Number);
+  const d=new Date(e.date+"T00:00:00");
+  if(Number.isNaN(d.getTime()))return null;
+  if(d.getFullYear()!==y||d.getMonth()+1!==mo||d.getDate()!==da)return null;
+  return d;
+}
+// Calendar week within the month, split on the day-of-month rather than aligning to the actual
+// Sunday/Monday week boundary — simplest read on "which week of the month" without pulling in a
+// full calendar-week library. Week 5 only ever gets the 29th-31st, so it's naturally sparse.
+const WEEK_OF_MONTH_BUCKETS=[{label:"Week 1",lo:1,hi:8},{label:"Week 2",lo:8,hi:15},{label:"Week 3",lo:15,hi:22},{label:"Week 4",lo:22,hi:29},{label:"Week 5",lo:29,hi:32}];
+function weekOfMonthOf(e){
+  const d=parseEntryDate(e);
+  if(!d)return null;
+  const day=d.getDate();
+  const b=WEEK_OF_MONTH_BUCKETS.find(b=>day>=b.lo&&day<b.hi);
+  return b?b.label:null;
+}
 function avgOrNull(nums){const x=nums.filter(Number.isFinite);return x.length?avg(x):null}
 function entryWinRate(arr){const x=arr.filter(e=>Number.isFinite(e.resultR));return x.length?x.filter(e=>e.resultR>0).length/x.length:null}
 const JS_WEEKDAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 // Trade entries have no manually-picked Day field like sessions do — weekday is derived from the
-// entry's Date. Parsed with an explicit local midnight time so this doesn't shift a day backward
-// in timezones behind UTC (a bare `new Date("2026-07-18")` parses as UTC midnight).
+// entry's Date via parseEntryDate.
 function entryWeekday(e){
-  if(!e.date)return null;
-  const d=new Date(e.date+"T00:00:00");
-  return Number.isNaN(d.getTime())?null:JS_WEEKDAY_NAMES[d.getDay()];
+  const d=parseEntryDate(e);
+  return d?JS_WEEKDAY_NAMES[d.getDay()]:null;
 }
 function entryAvgR(arr){return avgOrNull(arr.map(e=>e.resultR))}
 function entryAvgSlip(arr){return avgOrNull(arr.map(e=>e.slippagePts))}
@@ -1413,6 +1439,13 @@ function renderEntryStats(){
   e.forEach(x=>{const b=hourBucketOf(x.entryTime);if(!b)return;if(!hourMap.has(b))hourMap.set(b,[]);hourMap.get(b).push(x)});
   const hourRows=HOUR_BUCKETS.map(b=>({label:b.label,...entryGroupStats(hourMap.get(b.label)||[])})).filter(r=>r.n>0);
   renderEntryStatTable("teHourTable",hourRows,["Hour","n","Win Rate","Avg R"],
+    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+
+  const womMap=new Map();
+  e.forEach(x=>{const b=weekOfMonthOf(x);if(!b)return;if(!womMap.has(b))womMap.set(b,[]);womMap.get(b).push(x)});
+  const womRows=WEEK_OF_MONTH_BUCKETS.map(b=>({label:b.label,...entryGroupStats(womMap.get(b.label)||[])})).filter(r=>r.n>0);
+  renderEntryStatTable("teWeekOfMonthTable",womRows,["Week","n","Win Rate","Avg R"],
     r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
     [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
 
