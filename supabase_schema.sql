@@ -257,9 +257,11 @@ for delete using (auth.uid() = user_id);
 --
 -- If you already created the table before the Psychology tab columns (emotional_state,
 -- plan_adherence, mistake_tags) existed, add them with:
---   alter table public.trade_entries add column if not exists emotional_state text;
+--   alter table public.trade_entries add column if not exists emotional_state text check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null);
 --   alter table public.trade_entries add column if not exists plan_adherence text check (plan_adherence in ('Yes','No','Partial') or plan_adherence is null);
 --   alter table public.trade_entries add column if not exists mistake_tags jsonb default '[]'::jsonb;
+-- If you already ran the above without the emotional_state check constraint, add it separately with:
+--   alter table public.trade_entries add constraint trade_entries_emotional_state_check check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null);
 -- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
 -- approach as institutional_trades/news_events), not in Supabase Storage. That keeps setup to
 -- just this one table, but every save re-upserts the full row including all attached images —
@@ -317,7 +319,7 @@ create table if not exists public.trade_entries (
   -- Psychology tab: what state you were in and whether you stuck to your plan, so patterns like
   -- tilt/revenge-trading can be measured rather than just felt. mistake_tags is multi-select
   -- (same convention as institutional_trades above) since one entry can have several.
-  emotional_state text,
+  emotional_state text check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null),
   plan_adherence text check (plan_adherence in ('Yes','No','Partial') or plan_adherence is null),
   mistake_tags jsonb default '[]'::jsonb,
 

@@ -459,7 +459,7 @@
   <div class="grid">
     <div class="card span-6"><h2>By Emotional State</h2><p class="hint">Win rate and average result by how you described feeling at the moment of entry — fill this in on every entry to see which states actually cost you money.</p><div class="tablewrap"><table id="psyEmotionTable"></table></div></div>
     <div class="card span-6"><h2>By Plan Adherence</h2><p class="hint">Compares trades you flagged as in-plan ("Yes"), a partial deviation, or entirely off-plan ("No"). The gap between Yes and No is the price of breaking your own rules.</p><div class="tablewrap"><table id="psyAdherenceTable"></table></div></div>
-    <div class="card span-12"><h2>By Mistake Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows. Sort by n to see your most frequent leaks, or by Avg R to see your costliest ones.</p><div class="tablewrap"><table id="psyMistakeTagTable"></table></div></div>
+    <div class="card span-12"><h2>By Mistake Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows. Rows are ordered by n (most frequent first) — scan the Avg R column to see which of your frequent mistakes are also the costliest.</p><div class="tablewrap"><table id="psyMistakeTagTable"></table></div></div>
     <div class="card span-6"><h2>Performance After Losing Streak</h2><p class="hint">Buckets each entry (across all markets, ordered by date/entry time) by how many losing trades in a row immediately preceded it — a falling Avg R as the streak grows is the signature of tilt/revenge-trading. Requires Result R filled in.</p><div class="tablewrap"><table id="psyLossStreakTable"></table></div></div>
     <div class="card span-6"><h2>Performance After Winning Streak</h2><p class="hint">Same idea in the other direction — a falling Avg R after a run of wins can flag overconfidence (oversizing, skipping the plan) creeping in. Requires Result R filled in.</p><div class="tablewrap"><table id="psyWinStreakTable"></table></div></div>
   </div>
@@ -689,14 +689,12 @@ const fields=["date","day","sessionType","market","dayType","openType","bias","o
 const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","StopLossPrice","ExitPrice","ReferenceLabel","ReferencePrice","ResultR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","EmotionalState","PlanAdherence","Notes"];
 function teId(name){return "te"+name}
 function teKey(name){return name[0].toLowerCase()+name.slice(1)}
-// Institutional Trades is a fixed checkbox group (multiple selections), not a single-value
-// field, so it's handled separately from teFieldNames/teId's one-element-per-field mapping —
-// the checkboxes themselves (and their value list) live directly in the #teInstitutionalTrades
-// HTML markup, read back here via a live DOM query rather than a separate JS list.
-function getInstitutionalTradesFromForm(){return [...document.querySelectorAll("#teInstitutionalTrades input[type=checkbox]:checked")].map(cb=>cb.value)}
-function setInstitutionalTradesInForm(vals){const set=new Set(vals||[]);document.querySelectorAll("#teInstitutionalTrades input[type=checkbox]").forEach(cb=>cb.checked=set.has(cb.value))}
-function getMistakeTagsFromForm(){return [...document.querySelectorAll("#teMistakeTags input[type=checkbox]:checked")].map(cb=>cb.value)}
-function setMistakeTagsInForm(vals){const set=new Set(vals||[]);document.querySelectorAll("#teMistakeTags input[type=checkbox]").forEach(cb=>cb.checked=set.has(cb.value))}
+// Institutional Trades and Mistake Tags are fixed checkbox groups (multiple selections), not
+// single-value fields, so they're handled separately from teFieldNames/teId's one-element-per-field
+// mapping — the checkboxes themselves (and their value list) live directly in the container's HTML
+// markup, read back here via a live DOM query rather than a separate JS list.
+function getCheckboxGroupFromForm(containerId){return [...document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)].map(cb=>cb.value)}
+function setCheckboxGroupInForm(containerId,vals){const set=new Set(vals||[]);document.querySelectorAll(`#${containerId} input[type=checkbox]`).forEach(cb=>cb.checked=set.has(cb.value))}
 // Screenshots are held as {name,dataUrl} objects, same array-in-record pattern as
 // Institutional Trades/News Events, but built up via file input + canvas compression instead
 // of a text field, so they're tracked in their own module-level array (teScreenshotsState)
@@ -1508,25 +1506,29 @@ function renderPsychologyStats(){
   const withPsych=e.filter(x=>x.emotionalState||x.planAdherence||(x.mistakeTags||[]).length);
   psyMCount.textContent=withPsych.length;
 
-  const adherenceRated=e.filter(x=>x.planAdherence==="Yes"||x.planAdherence==="No");
+  // "Partial" counts toward the denominator (it's a real, rated trade) but not the numerator (it
+  // wasn't fully followed) — keeps this rate consistent with the Yes/Partial/No split shown in the
+  // By Plan Adherence table below, instead of silently excluding Partial from both sides.
+  const adherenceRated=e.filter(x=>x.planAdherence==="Yes"||x.planAdherence==="No"||x.planAdherence==="Partial");
   const followedCount=adherenceRated.filter(x=>x.planAdherence==="Yes").length;
   psyMAdherenceRate.textContent=adherenceRated.length?pct(followedCount/adherenceRated.length):"—";
 
-  const mistakeCounts=new Map();
-  e.forEach(x=>(x.mistakeTags||[]).forEach(tag=>mistakeCounts.set(tag,(mistakeCounts.get(tag)||0)+1)));
-  const topMistake=[...mistakeCounts.entries()].sort((a,b)=>b[1]-a[1])[0];
-  psyMTopMistake.textContent=topMistake?`${topMistake[0]} (${topMistake[1]})`:"—";
-
-  const tagged=e.filter(x=>(x.mistakeTags||[]).length>0);
-  const clean=e.filter(x=>(x.mistakeTags||[]).length===0);
+  // "Clean" is scoped to entries that actually got psychology data logged (withPsych), not every
+  // entry with an empty mistakeTags array — otherwise legacy entries and ones where the trader just
+  // skipped the checkboxes would pad out the "no mistakes" side of the comparison below.
+  const tagged=[],clean=[];
+  withPsych.forEach(x=>((x.mistakeTags||[]).length>0?tagged:clean).push(x));
   const taggedAvgR=entryAvgR(tagged), cleanAvgR=entryAvgR(clean);
   psyMMistakeVsClean.textContent=(taggedAvgR!=null&&cleanAvgR!=null)?`${fmt(taggedAvgR)}R vs ${fmt(cleanAvgR)}R`:"—";
 
   renderCategoricalEntryTable("psyEmotionTable","Emotional State",e,x=>x.emotionalState||null);
   renderCategoricalEntryTable("psyAdherenceTable","Plan Adherence",e,x=>x.planAdherence||null);
-  renderMistakeTagTable("psyMistakeTagTable",e);
-  renderStreakTable("psyLossStreakTable",e,"loss");
-  renderStreakTable("psyWinStreakTable",e,"win");
+  const mistakeRows=renderMistakeTagTable("psyMistakeTagTable",e);
+  psyMTopMistake.textContent=mistakeRows.length?`${mistakeRows[0].label} (${mistakeRows[0].n})`:"—";
+
+  const{lossBuckets,winBuckets}=precedingStreakBuckets(e);
+  renderStreakTable("psyLossStreakTable",lossBuckets,"loss");
+  renderStreakTable("psyWinStreakTable",winBuckets,"win");
 }
 // Shared renderer for a "diverging mark per bucket" chart: mark sits at zero-to-avgR (bar) or right
 // at avgR (dot), green=net-winning bucket, red=net-losing. Pass {markShape:"dot",slotW} for a dense
@@ -1661,7 +1663,9 @@ function renderCategoricalEntryTable(tableId,headerLabel,arr,getLabel){
 // counted-once-per-tag convention as the News Impact "By Event Type" table on the dashboard.
 // Shared renderer for any multi-select tag field (an entry can have several tags, so unlike
 // renderCategoricalEntryTable an entry can contribute to more than one row) — used by both
-// Institutional Trade Tag and the Psychology tab's Mistake Tag table.
+// Institutional Trade Tag and the Psychology tab's Mistake Tag table. Returns the sorted rows
+// (label/n/winRate/avgR, highest n first) so a caller that needs the same grouping for something
+// else (e.g. a "most common tag" summary tile) can reuse it instead of re-deriving it.
 function renderMultiTagEntryTable(tableId,headerLabel,arr,getTags){
   const map=new Map();
   arr.forEach(x=>(getTags(x)||[]).forEach(tag=>{
@@ -1672,33 +1676,41 @@ function renderMultiTagEntryTable(tableId,headerLabel,arr,getTags){
   renderEntryStatTable(tableId,rows,[headerLabel,"n","Win Rate","Avg R"],
     r=>[escapeHtml(r.label),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
     [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+  return rows;
 }
-function renderInstitutionalTagTable(tableId,arr){renderMultiTagEntryTable(tableId,"Institutional Trade Tag",arr,x=>x.institutionalTrades)}
-function renderMistakeTagTable(tableId,arr){renderMultiTagEntryTable(tableId,"Mistake Tag",arr,x=>x.mistakeTags)}
-// Buckets each entry by how many losing (kind="loss") or winning (kind="win") trades in a row
-// immediately preceded it, chronologically across all markets/session types — the streak is
-// reset by any trade of the opposite (or ties for win) outcome, and only entries with a finite
-// Result R can participate since the streak itself is defined by win/loss. Bucket assignment
-// uses the streak as it stood BEFORE this trade, then the streak updates from this trade's own
-// result for whichever entry comes next — so "Preceding Losses: 2" means this trade followed
-// exactly two straight losers, not that it's part of a 2-loss run itself.
-function precedingStreakBuckets(arr,kind){
-  const sorted=arr.filter(x=>Number.isFinite(x.resultR)).slice()
-    .sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.entryTime||"").localeCompare(b.entryTime||""));
-  const buckets=new Map();
-  let streak=0;
+function renderInstitutionalTagTable(tableId,arr){return renderMultiTagEntryTable(tableId,"Institutional Trade Tag",arr,x=>x.institutionalTrades)}
+function renderMistakeTagTable(tableId,arr){return renderMultiTagEntryTable(tableId,"Mistake Tag",arr,x=>x.mistakeTags)}
+// Single ordered set of streak-length buckets, shared by the classifier and the render row order —
+// same "one array drives both" convention as DELAY_BUCKETS/HOUR_BUCKETS/WEEK_OF_MONTH_BUCKETS above.
+const STREAK_BUCKET_LABELS=["0 (fresh)","1","2","3+"];
+function streakBucketLabel(streak){return streak>=3?"3+":STREAK_BUCKET_LABELS[streak]}
+// Buckets each graded entry by how many losing/winning trades in a row immediately preceded it,
+// chronologically across all markets/session types — computing both the loss-streak and win-streak
+// buckets in one pass (they only differ in which side of the streak check they track, so sorting
+// twice would be wasted work). An entry with no Result R yet can't be classified as a win or loss,
+// so it resets both streaks to 0 rather than being silently dropped from the sequence — otherwise a
+// still-ungraded trade sitting between two graded losers would let the streak run straight through
+// it as if it never happened. Bucket assignment uses the streak as it stood BEFORE this trade, then
+// the streak updates from this trade's own result for whichever entry comes next — so "Preceding
+// Losses: 2" means this trade followed exactly two straight losers, not that it's part of one itself.
+function precedingStreakBuckets(arr){
+  const sorted=arr.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.entryTime||"").localeCompare(b.entryTime||""));
+  const lossBuckets=new Map(), winBuckets=new Map();
+  let lossStreak=0, winStreak=0;
   sorted.forEach(x=>{
-    const label=streak===0?"0 (fresh)":streak>=3?"3+":String(streak);
-    if(!buckets.has(label))buckets.set(label,[]);
-    buckets.get(label).push(x);
-    const matches=kind==="loss"?x.resultR<0:x.resultR>0;
-    streak=matches?streak+1:0;
+    if(!Number.isFinite(x.resultR)){lossStreak=0;winStreak=0;return}
+    const lossLabel=streakBucketLabel(lossStreak), winLabel=streakBucketLabel(winStreak);
+    if(!lossBuckets.has(lossLabel))lossBuckets.set(lossLabel,[]);
+    lossBuckets.get(lossLabel).push(x);
+    if(!winBuckets.has(winLabel))winBuckets.set(winLabel,[]);
+    winBuckets.get(winLabel).push(x);
+    lossStreak=x.resultR<0?lossStreak+1:0;
+    winStreak=x.resultR>0?winStreak+1:0;
   });
-  return buckets;
+  return{lossBuckets,winBuckets};
 }
-function renderStreakTable(tableId,arr,kind){
-  const buckets=precedingStreakBuckets(arr,kind);
-  const rows=["0 (fresh)","1","2","3+"].map(label=>({label,...entryGroupStats(buckets.get(label)||[])})).filter(r=>r.n>0);
+function renderStreakTable(tableId,buckets,kind){
+  const rows=STREAK_BUCKET_LABELS.map(label=>({label,...entryGroupStats(buckets.get(label)||[])})).filter(r=>r.n>0);
   renderEntryStatTable(tableId,rows,[`Preceding ${kind==="loss"?"Losses":"Wins"}`,"n","Win Rate","Avg R"],
     r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
     [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
@@ -1709,15 +1721,15 @@ function signBucket(v){if(!Number.isFinite(v))return null;if(v>0)return"Positive
 function renderEntryLogTable(){
   const e=enrichEntries(tradeEntries).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Stop</th><th>Exit</th><th>Stop Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Emotion</th><th>Plan</th><th>Mistakes</th><th>Photos</th><th>Result R</th><th>Actions</th></tr></thead><tbody>${
-    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${x.stopSlippagePts!=null?fmt(x.stopSlippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${x.emotionalState||""}</td><td>${x.planAdherence||""}</td><td>${escapeHtml((x.mistakeTags||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
+    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${x.stopSlippagePts!=null?fmt(x.stopSlippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${escapeHtml(x.emotionalState||"")}</td><td>${escapeHtml(x.planAdherence||"")}</td><td>${escapeHtml((x.mistakeTags||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
   }</tbody>`;
 }
 function formToEntry(){
   let o={};
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
   ["entryPrice","stopLossPrice","exitPrice","referencePrice","intendedPrice","resultR","volume","bookImbalance","stackedImbalances","deltaAtEntry","deltaAbsolute","rotationsBeforeEntry"].forEach(k=>o[k]=n(o[k]));
-  o.institutionalTrades=getInstitutionalTradesFromForm();
-  o.mistakeTags=getMistakeTagsFromForm();
+  o.institutionalTrades=getCheckboxGroupFromForm("teInstitutionalTrades");
+  o.mistakeTags=getCheckboxGroupFromForm("teMistakeTags");
   o.screenshots=teScreenshotsState.slice();
   o.id=teRecordId.value||crypto.randomUUID();
   o.updatedAt=new Date().toISOString();
@@ -1726,8 +1738,8 @@ function formToEntry(){
 function entryToForm(e){
   teRecordId.value=e.id||"";
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)el.value=e[teKey(name)]??""});
-  setInstitutionalTradesInForm(e.institutionalTrades);
-  setMistakeTagsInForm(e.mistakeTags);
+  setCheckboxGroupInForm("teInstitutionalTrades",e.institutionalTrades);
+  setCheckboxGroupInForm("teMistakeTags",e.mistakeTags);
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
