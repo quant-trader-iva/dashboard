@@ -254,6 +254,12 @@ for delete using (auth.uid() = user_id);
 --
 -- If you already created the table before the screenshots column existed, add it with:
 --   alter table public.trade_entries add column if not exists screenshots jsonb default '[]'::jsonb;
+--
+-- If you already created the table before the Psychology tab columns (emotional_state,
+-- plan_adherence, mistake_tags) existed, add them with:
+--   alter table public.trade_entries add column if not exists emotional_state text;
+--   alter table public.trade_entries add column if not exists plan_adherence text check (plan_adherence in ('Yes','No','Partial') or plan_adherence is null);
+--   alter table public.trade_entries add column if not exists mistake_tags jsonb default '[]'::jsonb;
 -- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
 -- approach as institutional_trades/news_events), not in Supabase Storage. That keeps setup to
 -- just this one table, but every save re-upserts the full row including all attached images —
@@ -307,6 +313,13 @@ create table if not exists public.trade_entries (
   ema_1h text check (ema_1h in ('8','21','60') or ema_1h is null),
 
   screenshots jsonb default '[]'::jsonb,
+
+  -- Psychology tab: what state you were in and whether you stuck to your plan, so patterns like
+  -- tilt/revenge-trading can be measured rather than just felt. mistake_tags is multi-select
+  -- (same convention as institutional_trades above) since one entry can have several.
+  emotional_state text,
+  plan_adherence text check (plan_adherence in ('Yes','No','Partial') or plan_adherence is null),
+  mistake_tags jsonb default '[]'::jsonb,
 
   notes text,
   created_at timestamptz default now(),

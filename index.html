@@ -117,6 +117,7 @@
     <button class="tab" data-tab="entry">New Session</button>
     <button class="tab" data-tab="teNew">New Entry</button>
     <button class="tab" data-tab="teStats">Execution Stats</button>
+    <button class="tab" data-tab="psychology">Psychology</button>
     <button class="tab" data-tab="teLog">Entry Log</button>
     <button class="tab" data-tab="research">Research</button>
     <button class="tab" data-tab="macro">Macro</button>
@@ -377,6 +378,25 @@
             <label class="chk-item"><input type="checkbox" value="Spoofing / Layering"/> Spoofing / Layering</label>
           </div>
         </div>
+        <div><label>Emotional State <span class="hint" style="font-weight:400">(at the moment of entry)</span></label><select id="teEmotionalState"><option value="">—</option><option>Calm / Confident</option><option>Excited / Euphoric</option><option>Anxious / Nervous</option><option>FOMO</option><option>Impatient</option><option>Frustrated / Angry</option><option>Revenge</option><option>Bored</option><option>Tired / Low Energy</option><option>Hesitant</option></select></div>
+        <div><label>Followed Plan? <span class="hint" style="font-weight:400">(was this trade in your plan/rules)</span></label><select id="tePlanAdherence"><option value="">—</option><option>Yes</option><option>Partial</option><option>No</option></select></div>
+        <div style="grid-column:1/-1">
+          <label>Mistake Tags <span class="hint" style="font-weight:400">(select all that apply — leave blank for a clean trade)</span></label>
+          <div id="teMistakeTags" class="checkrow">
+            <label class="chk-item"><input type="checkbox" value="FOMO Entry"/> FOMO Entry</label>
+            <label class="chk-item"><input type="checkbox" value="Revenge Trade"/> Revenge Trade</label>
+            <label class="chk-item"><input type="checkbox" value="Moved Stop Loss"/> Moved Stop Loss</label>
+            <label class="chk-item"><input type="checkbox" value="Oversized Position"/> Oversized Position</label>
+            <label class="chk-item"><input type="checkbox" value="Hesitated / Late Entry"/> Hesitated / Late Entry</label>
+            <label class="chk-item"><input type="checkbox" value="Chased Price"/> Chased Price</label>
+            <label class="chk-item"><input type="checkbox" value="Ignored Plan / Rules"/> Ignored Plan / Rules</label>
+            <label class="chk-item"><input type="checkbox" value="Overtraded"/> Overtraded</label>
+            <label class="chk-item"><input type="checkbox" value="Cut Winner Early"/> Cut Winner Early</label>
+            <label class="chk-item"><input type="checkbox" value="Held Loser Too Long"/> Held Loser Too Long</label>
+            <label class="chk-item"><input type="checkbox" value="Averaged Down a Loser"/> Averaged Down a Loser</label>
+            <label class="chk-item"><input type="checkbox" value="No Valid Setup (Impulse)"/> No Valid Setup (Impulse)</label>
+          </div>
+        </div>
         <div style="grid-column:1/-1">
           <label>Screenshots <span class="hint" style="font-weight:400">(chart, footprint, bookmap — compressed and saved with the entry)</span></label>
           <input id="teScreenshotsInput" type="file" accept="image/*" multiple/>
@@ -425,6 +445,23 @@
     <div class="card span-6"><h2>By Exhaustion</h2><div class="tablewrap"><table id="teExhaustionTable"></table></div></div>
     <div class="card span-12"><h2>By POC/Value Area Position at Entry</h2><div class="tablewrap"><table id="tePocVaTable"></table></div></div>
     <div class="card span-12"><h2>By Institutional Trade Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows.</p><div class="tablewrap"><table id="teInstTagTable"></table></div></div>
+  </div>
+</section>
+
+<section id="psychology" class="page hidden">
+  <div class="grid" style="margin-bottom:14px">
+    <div class="metric span-3"><div class="label">Entries With Psych Data</div><div class="value" id="psyMCount">0</div></div>
+    <div class="metric span-3"><div class="label">Followed Plan Rate</div><div class="value" id="psyMAdherenceRate">—</div></div>
+    <div class="metric span-3"><div class="label">Most Common Mistake</div><div class="value" id="psyMTopMistake" style="font-size:16px">—</div></div>
+    <div class="metric span-3"><div class="label">Avg R — Mistake-Tagged vs Clean</div><div class="value" id="psyMMistakeVsClean" style="font-size:16px">—</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card span-6"><h2>By Emotional State</h2><p class="hint">Win rate and average result by how you described feeling at the moment of entry — fill this in on every entry to see which states actually cost you money.</p><div class="tablewrap"><table id="psyEmotionTable"></table></div></div>
+    <div class="card span-6"><h2>By Plan Adherence</h2><p class="hint">Compares trades you flagged as in-plan ("Yes"), a partial deviation, or entirely off-plan ("No"). The gap between Yes and No is the price of breaking your own rules.</p><div class="tablewrap"><table id="psyAdherenceTable"></table></div></div>
+    <div class="card span-12"><h2>By Mistake Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows. Sort by n to see your most frequent leaks, or by Avg R to see your costliest ones.</p><div class="tablewrap"><table id="psyMistakeTagTable"></table></div></div>
+    <div class="card span-6"><h2>Performance After Losing Streak</h2><p class="hint">Buckets each entry (across all markets, ordered by date/entry time) by how many losing trades in a row immediately preceded it — a falling Avg R as the streak grows is the signature of tilt/revenge-trading. Requires Result R filled in.</p><div class="tablewrap"><table id="psyLossStreakTable"></table></div></div>
+    <div class="card span-6"><h2>Performance After Winning Streak</h2><p class="hint">Same idea in the other direction — a falling Avg R after a run of wins can flag overconfidence (oversizing, skipping the plan) creeping in. Requires Result R filled in.</p><div class="tablewrap"><table id="psyWinStreakTable"></table></div></div>
   </div>
 </section>
 
@@ -649,7 +686,7 @@ const fields=["date","day","sessionType","market","dayType","openType","bias","o
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
 // never collide with the session form's ids (both live in the same document at once).
-const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","StopLossPrice","ExitPrice","ReferenceLabel","ReferencePrice","ResultR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","Notes"];
+const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","StopLossPrice","ExitPrice","ReferenceLabel","ReferencePrice","ResultR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","EmotionalState","PlanAdherence","Notes"];
 function teId(name){return "te"+name}
 function teKey(name){return name[0].toLowerCase()+name.slice(1)}
 // Institutional Trades is a fixed checkbox group (multiple selections), not a single-value
@@ -658,6 +695,8 @@ function teKey(name){return name[0].toLowerCase()+name.slice(1)}
 // HTML markup, read back here via a live DOM query rather than a separate JS list.
 function getInstitutionalTradesFromForm(){return [...document.querySelectorAll("#teInstitutionalTrades input[type=checkbox]:checked")].map(cb=>cb.value)}
 function setInstitutionalTradesInForm(vals){const set=new Set(vals||[]);document.querySelectorAll("#teInstitutionalTrades input[type=checkbox]").forEach(cb=>cb.checked=set.has(cb.value))}
+function getMistakeTagsFromForm(){return [...document.querySelectorAll("#teMistakeTags input[type=checkbox]:checked")].map(cb=>cb.value)}
+function setMistakeTagsInForm(vals){const set=new Set(vals||[]);document.querySelectorAll("#teMistakeTags input[type=checkbox]").forEach(cb=>cb.checked=set.has(cb.value))}
 // Screenshots are held as {name,dataUrl} objects, same array-in-record pattern as
 // Institutional Trades/News Events, but built up via file input + canvas compression instead
 // of a text field, so they're tracked in their own module-level array (teScreenshotsState)
@@ -1464,6 +1503,31 @@ function renderEntryStats(){
   renderCategoricalEntryTable("tePocVaTable","POC/VA Position",e,x=>x.pocVaPosition||null);
   renderInstitutionalTagTable("teInstTagTable",e);
 }
+function renderPsychologyStats(){
+  const e=enrichEntries(tradeEntries);
+  const withPsych=e.filter(x=>x.emotionalState||x.planAdherence||(x.mistakeTags||[]).length);
+  psyMCount.textContent=withPsych.length;
+
+  const adherenceRated=e.filter(x=>x.planAdherence==="Yes"||x.planAdherence==="No");
+  const followedCount=adherenceRated.filter(x=>x.planAdherence==="Yes").length;
+  psyMAdherenceRate.textContent=adherenceRated.length?pct(followedCount/adherenceRated.length):"—";
+
+  const mistakeCounts=new Map();
+  e.forEach(x=>(x.mistakeTags||[]).forEach(tag=>mistakeCounts.set(tag,(mistakeCounts.get(tag)||0)+1)));
+  const topMistake=[...mistakeCounts.entries()].sort((a,b)=>b[1]-a[1])[0];
+  psyMTopMistake.textContent=topMistake?`${topMistake[0]} (${topMistake[1]})`:"—";
+
+  const tagged=e.filter(x=>(x.mistakeTags||[]).length>0);
+  const clean=e.filter(x=>(x.mistakeTags||[]).length===0);
+  const taggedAvgR=entryAvgR(tagged), cleanAvgR=entryAvgR(clean);
+  psyMMistakeVsClean.textContent=(taggedAvgR!=null&&cleanAvgR!=null)?`${fmt(taggedAvgR)}R vs ${fmt(cleanAvgR)}R`:"—";
+
+  renderCategoricalEntryTable("psyEmotionTable","Emotional State",e,x=>x.emotionalState||null);
+  renderCategoricalEntryTable("psyAdherenceTable","Plan Adherence",e,x=>x.planAdherence||null);
+  renderMistakeTagTable("psyMistakeTagTable",e);
+  renderStreakTable("psyLossStreakTable",e,"loss");
+  renderStreakTable("psyWinStreakTable",e,"win");
+}
 // Shared renderer for a "diverging mark per bucket" chart: mark sits at zero-to-avgR (bar) or right
 // at avgR (dot), green=net-winning bucket, red=net-losing. Pass {markShape:"dot",slotW} for a dense
 // per-hour dot plot; bars are the default. A group with n===0 still reserves its axis slot (so the
@@ -1595,15 +1659,48 @@ function renderCategoricalEntryTable(tableId,headerLabel,arr,getLabel){
 // Institutional Trades is multi-value (an entry can have several tags checked), so unlike
 // renderCategoricalEntryTable an entry can contribute to more than one row here — same
 // counted-once-per-tag convention as the News Impact "By Event Type" table on the dashboard.
-function renderInstitutionalTagTable(tableId,arr){
+// Shared renderer for any multi-select tag field (an entry can have several tags, so unlike
+// renderCategoricalEntryTable an entry can contribute to more than one row) — used by both
+// Institutional Trade Tag and the Psychology tab's Mistake Tag table.
+function renderMultiTagEntryTable(tableId,headerLabel,arr,getTags){
   const map=new Map();
-  arr.forEach(x=>(x.institutionalTrades||[]).forEach(tag=>{
+  arr.forEach(x=>(getTags(x)||[]).forEach(tag=>{
     if(!map.has(tag))map.set(tag,[]);
     map.get(tag).push(x);
   }));
   const rows=[...map.entries()].map(([label,a])=>({label,...entryGroupStats(a)})).sort((a,b)=>b.n-a.n);
-  renderEntryStatTable(tableId,rows,["Institutional Trade Tag","n","Win Rate","Avg R"],
+  renderEntryStatTable(tableId,rows,[headerLabel,"n","Win Rate","Avg R"],
     r=>[escapeHtml(r.label),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
+    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
+}
+function renderInstitutionalTagTable(tableId,arr){renderMultiTagEntryTable(tableId,"Institutional Trade Tag",arr,x=>x.institutionalTrades)}
+function renderMistakeTagTable(tableId,arr){renderMultiTagEntryTable(tableId,"Mistake Tag",arr,x=>x.mistakeTags)}
+// Buckets each entry by how many losing (kind="loss") or winning (kind="win") trades in a row
+// immediately preceded it, chronologically across all markets/session types — the streak is
+// reset by any trade of the opposite (or ties for win) outcome, and only entries with a finite
+// Result R can participate since the streak itself is defined by win/loss. Bucket assignment
+// uses the streak as it stood BEFORE this trade, then the streak updates from this trade's own
+// result for whichever entry comes next — so "Preceding Losses: 2" means this trade followed
+// exactly two straight losers, not that it's part of a 2-loss run itself.
+function precedingStreakBuckets(arr,kind){
+  const sorted=arr.filter(x=>Number.isFinite(x.resultR)).slice()
+    .sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.entryTime||"").localeCompare(b.entryTime||""));
+  const buckets=new Map();
+  let streak=0;
+  sorted.forEach(x=>{
+    const label=streak===0?"0 (fresh)":streak>=3?"3+":String(streak);
+    if(!buckets.has(label))buckets.set(label,[]);
+    buckets.get(label).push(x);
+    const matches=kind==="loss"?x.resultR<0:x.resultR>0;
+    streak=matches?streak+1:0;
+  });
+  return buckets;
+}
+function renderStreakTable(tableId,arr,kind){
+  const buckets=precedingStreakBuckets(arr,kind);
+  const rows=["0 (fresh)","1","2","3+"].map(label=>({label,...entryGroupStats(buckets.get(label)||[])})).filter(r=>r.n>0);
+  renderEntryStatTable(tableId,rows,[`Preceding ${kind==="loss"?"Losses":"Wins"}`,"n","Win Rate","Avg R"],
+    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
     [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
 }
 // v===0 is a real, meaningful reading (flat delta / perfectly balanced book), not "unset" —
@@ -1611,8 +1708,8 @@ function renderInstitutionalTagTable(tableId,arr){
 function signBucket(v){if(!Number.isFinite(v))return null;if(v>0)return"Positive (+)";if(v<0)return"Negative (−)";return"Neutral (0)"}
 function renderEntryLogTable(){
   const e=enrichEntries(tradeEntries).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Stop</th><th>Exit</th><th>Stop Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Photos</th><th>Result R</th><th>Actions</th></tr></thead><tbody>${
-    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${x.stopSlippagePts!=null?fmt(x.stopSlippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
+  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Stop</th><th>Exit</th><th>Stop Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Emotion</th><th>Plan</th><th>Mistakes</th><th>Photos</th><th>Result R</th><th>Actions</th></tr></thead><tbody>${
+    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${x.stopSlippagePts!=null?fmt(x.stopSlippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${x.emotionalState||""}</td><td>${x.planAdherence||""}</td><td>${escapeHtml((x.mistakeTags||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
   }</tbody>`;
 }
 function formToEntry(){
@@ -1620,6 +1717,7 @@ function formToEntry(){
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
   ["entryPrice","stopLossPrice","exitPrice","referencePrice","intendedPrice","resultR","volume","bookImbalance","stackedImbalances","deltaAtEntry","deltaAbsolute","rotationsBeforeEntry"].forEach(k=>o[k]=n(o[k]));
   o.institutionalTrades=getInstitutionalTradesFromForm();
+  o.mistakeTags=getMistakeTagsFromForm();
   o.screenshots=teScreenshotsState.slice();
   o.id=teRecordId.value||crypto.randomUUID();
   o.updatedAt=new Date().toISOString();
@@ -1629,6 +1727,7 @@ function entryToForm(e){
   teRecordId.value=e.id||"";
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)el.value=e[teKey(name)]??""});
   setInstitutionalTradesInForm(e.institutionalTrades);
+  setMistakeTagsInForm(e.mistakeTags);
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
@@ -2495,7 +2594,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
@@ -2514,7 +2613,7 @@ function download(name,text,mime){const blob=new Blob([text],{type:mime});const 
 exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.csv",[[...fields,"newsEvents"].join(",")].concat(sessions.map(s=>[...fields.map(f=>csvEscape(s[f])),csvEscape(JSON.stringify(s.newsEvents||[]))].join(","))).join("\n"),"text/csv"));
 // Screenshots are exported as a count only (not the image data itself) — base64 image data
 // doesn't belong in a CSV row; use Download Backup (JSON) to get the actual images out.
-exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entries_v1.csv",[[...teFieldNames.map(teKey),"institutionalTrades","screenshotCount"].join(",")].concat(tradeEntries.map(e=>[...teFieldNames.map(name=>csvEscape(e[teKey(name)])),csvEscape(JSON.stringify(e.institutionalTrades||[])),csvEscape((e.screenshots||[]).length)].join(","))).join("\n"),"text/csv"));
+exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entries_v1.csv",[[...teFieldNames.map(teKey),"institutionalTrades","mistakeTags","screenshotCount"].join(",")].concat(tradeEntries.map(e=>[...teFieldNames.map(name=>csvEscape(e[teKey(name)])),csvEscape(JSON.stringify(e.institutionalTrades||[])),csvEscape(JSON.stringify(e.mistakeTags||[])),csvEscape((e.screenshots||[]).length)].join(","))).join("\n"),"text/csv"));
 downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing()},null,2),"application/json"));
 importJson.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
@@ -2631,8 +2730,8 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
-function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
-function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
+function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],emotional_state:e.emotionalState||null,plan_adherence:e.planAdherence||null,mistake_tags:e.mistakeTags||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
+function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],emotionalState:r.emotional_state,planAdherence:r.plan_adherence,mistakeTags:r.mistake_tags||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
   if(!supabaseClient||!authUser||!records.length)return false;
   const key=records.length===1?"entryupsert:"+records[0].id:"entryupsert:bulk";
