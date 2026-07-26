@@ -262,6 +262,16 @@ for delete using (auth.uid() = user_id);
 --   alter table public.trade_entries add column if not exists mistake_tags jsonb default '[]'::jsonb;
 -- If you already ran the above without the emotional_state check constraint, add it separately with:
 --   alter table public.trade_entries add constraint trade_entries_emotional_state_check check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null);
+--
+-- If you already created the table before the MFE/MAE columns (mfe_r, mae_r) or the 1H candle
+-- columns (h1_candle_hour, h1_delta, h1_poc, h1_vah, h1_val) existed, add them with:
+--   alter table public.trade_entries add column if not exists mfe_r numeric;
+--   alter table public.trade_entries add column if not exists mae_r numeric;
+--   alter table public.trade_entries add column if not exists h1_candle_hour text;
+--   alter table public.trade_entries add column if not exists h1_delta numeric;
+--   alter table public.trade_entries add column if not exists h1_poc numeric;
+--   alter table public.trade_entries add column if not exists h1_vah numeric;
+--   alter table public.trade_entries add column if not exists h1_val numeric;
 -- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
 -- approach as institutional_trades/news_events), not in Supabase Storage. That keeps setup to
 -- just this one table, but every save re-upserts the full row including all attached images —
@@ -289,6 +299,8 @@ create table if not exists public.trade_entries (
   reference_label text,
   reference_price numeric,
   result_r numeric,
+  mfe_r numeric,
+  mae_r numeric,
 
   volume numeric,
   volume_node text check (volume_node in ('HVN','LVN') or volume_node is null),
@@ -307,6 +319,15 @@ create table if not exists public.trade_entries (
   cum_delta_trend text check (cum_delta_trend in ('Rising','Falling','Flat') or cum_delta_trend is null),
   rotations_before_entry numeric,
   poc_va_position text check (poc_va_position in ('Inside Value','Outside Value','At VAL','At VAH','At POC') or poc_va_position is null),
+
+  -- The specific 1H candle the trade entered after (hour label, e.g. "09:00–10:00"), and that
+  -- candle's own delta/POC/value-area — logged separately from poc_va_position above, which
+  -- describes the entry price relative to the wider session's profile, not the hourly candle's.
+  h1_candle_hour text,
+  h1_delta numeric,
+  h1_poc numeric,
+  h1_vah numeric,
+  h1_val numeric,
 
   vwap_level text check (vwap_level in ('Middle','Std1','Std2') or vwap_level is null),
   bollinger_band text check (bollinger_band in ('Middle','Below Lower Band','Above Lower Band','Upper Band','Lower Band') or bollinger_band is null),
