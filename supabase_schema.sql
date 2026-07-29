@@ -272,6 +272,7 @@ for delete using (auth.uid() = user_id);
 --   alter table public.trade_entries add column if not exists h1_poc numeric;
 --   alter table public.trade_entries add column if not exists h1_vah numeric;
 --   alter table public.trade_entries add column if not exists h1_val numeric;
+--   alter table public.trade_entries add column if not exists h1_candle_pattern text check (h1_candle_pattern in ('Morning Star','Evening Star','Bullish Engulfing','Bearish Engulfing','Bullish Pin Bar','Bearish Pin Bar','Doji','Hammer','Shooting Star','Inside Bar','Outside Bar') or h1_candle_pattern is null);
 -- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
 -- approach as institutional_trades/news_events), not in Supabase Storage. That keeps setup to
 -- just this one table, but every save re-upserts the full row including all attached images —
@@ -328,6 +329,7 @@ create table if not exists public.trade_entries (
   h1_poc numeric,
   h1_vah numeric,
   h1_val numeric,
+  h1_candle_pattern text check (h1_candle_pattern in ('Morning Star','Evening Star','Bullish Engulfing','Bearish Engulfing','Bullish Pin Bar','Bearish Pin Bar','Doji','Hammer','Shooting Star','Inside Bar','Outside Bar') or h1_candle_pattern is null),
 
   vwap_level text check (vwap_level in ('Middle','Std1','Std2') or vwap_level is null),
   bollinger_band text check (bollinger_band in ('Middle','Below Lower Band','Above Lower Band','Upper Band','Lower Band') or bollinger_band is null),
