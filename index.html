@@ -716,6 +716,7 @@ const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const OI_STORAGE_KEY="trading_projection_oi_snapshots_v1";
+const PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
 // Read from the ibCurrentOutcome select's own <option> list (same convention as outcomeMix()
 // reading #outcome's options below) so a renamed/added outcome option flows through everywhere —
@@ -759,9 +760,11 @@ function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KE
 // not accumulate duplicate rows.
 function loadOiSnapshots(){try{return JSON.parse(localStorage.getItem(OI_STORAGE_KEY)||"[]")}catch{return[]}}
 function saveOiSnapshots(){localStorage.setItem(OI_STORAGE_KEY,JSON.stringify(oiSnapshots))}
+function loadPendingOiDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_OI_DELETES_KEY)||"[]")}catch{return[]}}
+function savePendingOiDeletes(){localStorage.setItem(PENDING_OI_DELETES_KEY,JSON.stringify(pendingOiDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
-let oiSnapshots=loadOiSnapshots();
+let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
 const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
@@ -2877,7 +2880,10 @@ async function syncEntryDelete(id){
   return ok;
 }
 function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,updated_at:o.updatedAt||new Date().toISOString()}}
-function fromOiDb(r){return{date:r.date,strike:r.strike,callOi:r.call_oi,putOi:r.put_oi,updatedAt:r.updated_at}}
+// call_oi/put_oi are `numeric` columns — PostgREST serializes those as JSON strings (to avoid
+// float-precision loss), not numbers, so this coerces them back before they hit any arithmetic
+// (renderOi's sums would otherwise silently do string concatenation on synced data).
+function fromOiDb(r){return{date:r.date,strike:Number(r.strike),callOi:Number(r.call_oi)||0,putOi:Number(r.put_oi)||0,updatedAt:r.updated_at}}
 async function syncOiUpsert(records){
   if(!supabaseClient||!authUser||!records.length)return false;
   return runSyncOp("oiupsert:bulk",
@@ -2886,21 +2892,31 @@ async function syncOiUpsert(records){
 }
 async function syncOiDeleteDate(date){
   if(!supabaseClient||!authUser)return false;
-  return runSyncOp("oidelete:"+date,
+  const ok=await runSyncOp("oidelete:"+date,
     ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date),
     msg=>`Failed to sync a 0DTE OI deletion to the cloud: ${msg}. The rows were removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+  if(ok){pendingOiDeletes=pendingOiDeletes.filter(x=>x!==date)}else if(!pendingOiDeletes.includes(date)){pendingOiDeletes.push(date)}
+  savePendingOiDeletes();
+  return ok;
 }
-// Unlike sessions/entries there's no pending-delete queue here — a failed delete sync just leaves
-// the old rows in Supabase until the next "Delete This Date" retry or a fresh upload overwrites
-// them, which is an acceptable gap for bulk-imported reference data (not a hand-entered record
-// that would otherwise silently reappear on next sync).
+// Deletes specific strikes for a date without touching pendingOiDeletes — used when a re-upload
+// has fewer strikes than what's already synced, so the leftover cloud rows for strikes no longer
+// in the new file get cleaned up too. Deliberately separate from syncOiDeleteDate/pendingOiDeletes:
+// that queue means "this whole date should be gone," which would be wrong here since we're
+// simultaneously uploading fresh rows for this exact date.
+async function syncOiDeleteStrikes(date,strikes){
+  if(!supabaseClient||!authUser||!strikes.length)return false;
+  return runSyncOp("oideletestrikes:"+date,
+    ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date).in("strike",strikes),
+    msg=>`Failed to remove ${strikes.length} stale 0DTE OI row(s) from the cloud for ${date}: ${msg}. Your local copy is correct — click Sync Now in Settings to retry.`);
+}
 async function syncOiFromCloud(){
   try{
     const {data,error}=await supabaseClient.from("oi_snapshots").select("*").order("date",{ascending:true});
     if(error){showSyncError("fullsync:oi:select","Failed to load 0DTE OI data: "+error.message);return false}
     clearSyncError("fullsync:oi:select");
     const map=new Map();
-    [...oiSnapshots,...data.map(fromOiDb)].forEach(o=>{
+    [...oiSnapshots,...data.map(fromOiDb)].filter(o=>!pendingOiDeletes.includes(o.date)).forEach(o=>{
       const key=o.date+"|"+o.strike;
       const existing=map.get(key);
       if(!existing||(o.updatedAt||"")>=(existing.updatedAt||""))map.set(key,o);
@@ -2992,6 +3008,7 @@ async function fullSync(){
   await fetchPosSizing();
   for(const id of [...pendingDeletes]){await syncDelete(id)}
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
+  for(const date of [...pendingOiDeletes]){await syncOiDeleteDate(date)}
   const ok=await syncSessionsFromCloud();
   const entryOk=await syncEntriesFromCloud();
   const oiOk=await syncOiFromCloud();
@@ -3096,16 +3113,26 @@ async function parseOiPdf(arrayBuffer){
   const putX=putItem.x;
   const nextCall=cpRow.filter(it=>it.str==="C"&&it.x>putX).sort((a,b)=>a.x-b.x)[0];
   const putZoneEnd=nextCall?nextCall.x:putX+14;
-  const rowsMap=new Map();
+  // Rows are clustered by y using the same near() tolerance used for the header matches above,
+  // rather than an exact toFixed(1) key — a strike's own text run and its Call/Put values can
+  // land at slightly different y baselines (pdf.js sub-pixel jitter), and an exact-match key
+  // would silently split them into two "rows" (one with a strike but no OI, one with OI but no
+  // strike, which gets dropped entirely below) instead of recognizing them as the same row.
+  const Y_TOL=0.5;
+  const rowBuckets=[];
   items.filter(it=>(it.page===page&&it.y<cpRowY-1)||it.page>page).forEach(it=>{
-    const key=it.page+":"+it.y.toFixed(1);
-    if(!rowsMap.has(key))rowsMap.set(key,[]);
-    rowsMap.get(key).push(it);
+    let bucket=rowBuckets.find(b=>b.page===it.page&&near(b.y,it.y,Y_TOL));
+    if(!bucket){bucket={page:it.page,y:it.y,items:[]};rowBuckets.push(bucket)}
+    bucket.items.push(it);
   });
-  const STRIKE_TOL=4;
   const rows=[];
-  for(const rowItems of rowsMap.values()){
-    const strikeIt=rowItems.find(it=>near(it.x,strikeX,STRIKE_TOL));
+  for(const {items:rowItems} of rowBuckets){
+    // STRIKE is the leftmost column in the table, so anything ending before the 0 DTE Call
+    // column's start is the strike value — this doesn't depend on knowing STRIKE's own
+    // alignment (matching by proximity to strikeX broke on multi-digit strikes, since QuikStrike
+    // right-aligns numbers and a wider strike text pushes its left edge further from a narrower
+    // header's).
+    const strikeIt=rowItems.find(it=>(it.x+it.w)<=callX);
     if(!strikeIt)continue;
     const strike=Number(strikeIt.str.replace(/,/g,""));
     if(!Number.isFinite(strike))continue;
@@ -3130,12 +3157,24 @@ oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
     const buf=await file.arrayBuffer();
     const isPdf=/\.pdf$/i.test(file.name)||file.type==="application/pdf";
     const parsed=isPdf?await parseOiPdf(buf):parseOiWorkbook(buf);
+    // Dedupe by strike (last wins) before this hits a bulk upsert — two rows for the same
+    // strike in one batch (e.g. a wrapped/duplicate line in the PDF) would otherwise make
+    // Supabase reject the whole upsert with "ON CONFLICT DO UPDATE command cannot affect row
+    // a second time," failing the sync for every strike in this upload, not just the dupe.
+    const dedupedParsed=[...new Map(parsed.map(r=>[r.strike,r])).values()];
     const now=new Date().toISOString();
-    const incoming=parsed.map(r=>({date,strike:r.strike,callOi:r.callOi,putOi:r.putOi,updatedAt:now}));
+    const incoming=dedupedParsed.map(r=>({date,strike:r.strike,callOi:r.callOi,putOi:r.putOi,updatedAt:now}));
+    // Capture which strikes this date had in Supabase before we replace it, so a re-upload with
+    // FEWER strikes than last time (e.g. a corrected export) can clean those up in the cloud too
+    // — upsert alone only adds/updates, it never removes rows for strikes no longer in the file.
+    const prevStrikesForDate=oiSnapshots.filter(o=>o.date===date).map(o=>o.strike);
+    const newStrikeSet=new Set(incoming.map(r=>r.strike));
+    const removedStrikes=prevStrikesForDate.filter(s=>!newStrikeSet.has(s));
     oiSnapshots=[...oiSnapshots.filter(o=>o.date!==date),...incoming].sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.strike-b.strike);
     saveOiSnapshots();
-    oiUploadStatus.textContent=`Loaded ${parsed.length} strikes for ${date}.`;
+    oiUploadStatus.textContent=`Loaded ${incoming.length} strikes for ${date}.`;
     await syncOiUpsert(incoming);
+    if(removedStrikes.length)await syncOiDeleteStrikes(date,removedStrikes);
     renderOi(date);
   }catch(err){
     oiUploadStatus.textContent="Could not read this file: "+errMsg(err);
@@ -3152,7 +3191,7 @@ oiDeleteDate&&oiDeleteDate.addEventListener("click",async()=>{
   await syncOiDeleteDate(date);
   renderOi();
 });
-oiViewDate&&oiViewDate.addEventListener("change",renderOi);
+oiViewDate&&oiViewDate.addEventListener("change",()=>renderOi());
 // Picks a "nice" round gridline step (1/2/5 × a power of 10) for ~targetCount divisions across
 // [vMin,vMax], the same rounding convention spreadsheet charts use for their value axis — plain
 // n/targetCount steps land on ugly numbers like 3,614.3.
@@ -3188,7 +3227,7 @@ function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColo
   const gridlines=ticks.map(t=>{
     const tx=x(t);
     return `<line x1="${tx.toFixed(2)}" x2="${tx.toFixed(2)}" y1="${padT}" y2="${plotBottom}" stroke="#334155" stroke-width="1" opacity=".5"/>
-      <text x="${tx.toFixed(2)}" y="${(plotBottom+13).toFixed(2)}" text-anchor="middle" font-size="9" fill="#94a3b8">${t.toLocaleString()}</text>`;
+      <text x="${tx.toFixed(2)}" y="${(plotBottom+13).toFixed(2)}" text-anchor="middle" font-size="9" fill="#94a3b8">${fmt(t,0)}</text>`;
   }).join("");
   const axisTitle=`<text x="${((padL+W-padR)/2).toFixed(2)}" y="${(H-8).toFixed(2)}" text-anchor="middle" font-size="11" fill="#e5e7eb">${axisLabel}</text>`;
   const bars=rows.map((r,i)=>{
@@ -3205,7 +3244,7 @@ function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColo
     const labelFill=negLabelColor&&r.value<0?negLabelColor:"#0b1220";
     return `<text x="${padL-8}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="end" font-size="10" fill="#94a3b8">${r.strike}</text>
       <rect x="${left.toFixed(2)}" y="${y}" width="${width.toFixed(2)}" height="${barH}" rx="2" fill="${fill}"/>
-      <text x="${labelX.toFixed(2)}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="${anchor}" font-size="10" fill="${labelFill}">${r.value.toLocaleString()}</text>`;
+      <text x="${labelX.toFixed(2)}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="${anchor}" font-size="10" fill="${labelFill}">${fmt(r.value,0)}</text>`;
   }).join("");
   wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" preserveAspectRatio="none">
     ${gridlines}
@@ -3223,7 +3262,11 @@ function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColo
 // (keep the previous selection, or fall back to the most recent date) is right for every OTHER
 // call site (tab switches, sync, delete) where nothing new was just added.
 function renderOi(preferredDate){
-  if(!oiViewDate)return;
+  // Skip the DOM/SVG rebuild when the tab isn't visible — renderOi runs on every renderAll(),
+  // i.e. every tab switch and every session/entry save anywhere in the app, not just when the
+  // user is actually looking at this tab. showTab() removes the "hidden" class before calling
+  // renderAll(), so this still renders correctly the moment the user switches to this tab.
+  if(!oiViewDate||document.getElementById("oi").classList.contains("hidden"))return;
   const dates=[...new Set(oiSnapshots.map(o=>o.date))].sort();
   const prevSelected=preferredDate||oiViewDate.value;
   oiViewDate.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join("");
@@ -3244,14 +3287,14 @@ function renderOi(preferredDate){
   const body=rows.map(r=>{
     const sum=r.callOi+r.putOi,diff=r.callOi-r.putOi;
     totalSum+=sum;totalDiff+=diff;totalCall+=r.callOi;totalPut+=r.putOi;
-    return `<tr><td>${r.strike}</td><td style="text-align:right">${r.callOi.toLocaleString()}</td><td style="text-align:right">${r.putOi.toLocaleString()}</td><td style="text-align:right">${sum.toLocaleString()}</td><td style="text-align:right">${diff.toLocaleString()}</td></tr>`;
+    return `<tr><td>${r.strike}</td><td style="text-align:right">${fmt(r.callOi,0)}</td><td style="text-align:right">${fmt(r.putOi,0)}</td><td style="text-align:right">${fmt(sum,0)}</td><td style="text-align:right">${fmt(diff,0)}</td></tr>`;
   }).join("");
   oiTable.innerHTML=`<tr><th>Strike</th><th style="text-align:right">Call OI</th><th style="text-align:right">Put OI</th><th style="text-align:right">Sum (C+P)</th><th style="text-align:right">Diff (C-P)</th></tr>${body}`;
-  oiTotals.innerHTML=`<b>${date}</b> — Total Call OI: ${totalCall.toLocaleString()} &nbsp;·&nbsp; Total Put OI: ${totalPut.toLocaleString()} &nbsp;·&nbsp; Total OI (Sum): ${totalSum.toLocaleString()} &nbsp;·&nbsp; Net Call&minus;Put (Diff): ${totalDiff.toLocaleString()}`;
-  if(oiNetPutCall)oiNetPutCall.textContent=(totalPut-totalCall).toLocaleString();
-  if(oiTotalVolume)oiTotalVolume.textContent=totalSum.toLocaleString();
+  oiTotals.innerHTML=`<b>${date}</b> — Total Call OI: ${fmt(totalCall,0)} &nbsp;·&nbsp; Total Put OI: ${fmt(totalPut,0)} &nbsp;·&nbsp; Total OI (Sum): ${fmt(totalSum,0)} &nbsp;·&nbsp; Net Call&minus;Put (Diff): ${fmt(totalDiff,0)}`;
+  if(oiNetPutCall)oiNetPutCall.textContent=fmt(totalPut-totalCall,0);
+  if(oiTotalVolume)oiTotalVolume.textContent=fmt(totalSum,0);
   if(oiTotalDiff){
-    oiTotalDiff.textContent=totalDiff.toLocaleString();
+    oiTotalDiff.textContent=fmt(totalDiff,0);
     oiTotalDiff.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
     oiTotalDiff.style.color=totalDiff!==0?"#fff":"";
   }
