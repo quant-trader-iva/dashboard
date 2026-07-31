@@ -672,6 +672,10 @@
           <div class="hint" style="margin:0">Total Difference</div>
           <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oiTotalDiff">&mdash;</div>
         </div>
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Power Factor</div>
+          <div style="font-size:20px;font-weight:800" id="oiPowerFactor">&mdash;</div>
+        </div>
       </div>
     </div>
     <div class="card span-6">
@@ -3301,6 +3305,7 @@ function renderOi(preferredDate){
     if(oiNetPutCall)oiNetPutCall.textContent="—";
     if(oiTotalVolume)oiTotalVolume.textContent="—";
     if(oiTotalDiff){oiTotalDiff.textContent="—";oiTotalDiff.style.background="";oiTotalDiff.style.color=""}
+    if(oiPowerFactor)oiPowerFactor.textContent="—";
     renderOiBarChart("oiVolumeChartWrap",[]);
     renderOiBarChart("oiDiffChartWrap",[]);
     return;
@@ -3320,6 +3325,10 @@ function renderOi(preferredDate){
     oiTotalDiff.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
     oiTotalDiff.style.color=totalDiff!==0?"#fff":"";
   }
+  // Total Difference as a % of Total Volume — a normalized put/call skew: +100% would be pure
+  // call OI, -100% pure put OI, 0% perfectly balanced. Reverse-engineered from the user's
+  // reference spreadsheet (verified against its "Power factor" figures for two separate days).
+  if(oiPowerFactor)oiPowerFactor.textContent=totalSum?pct(totalDiff/totalSum):"—";
   const byStrikeDesc=[...rows].sort((a,b)=>b.strike-a.strike);
   renderOiBarChart("oiVolumeChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),r=>r.value),"volume","var(--cyan)");
   renderOiBarChart("oiDiffChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),r=>Math.abs(r.value)),"difference","var(--green)","#b91c1c","#fef2f2");
