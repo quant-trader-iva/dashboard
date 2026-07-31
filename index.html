@@ -3216,6 +3216,18 @@ function niceOiTicks(vMin,vMax,targetCount){
 // tick labels, "volume"/"difference" title). Always includes 0 in the scale so the zero
 // gridline (and the Difference chart's positive/negative split) is always present, even when
 // every value happens to be one sign.
+// Flags strikes whose magnitude sits more than one standard deviation above the mean of the
+// chart's own values — a self-adjusting way to call out concentration ("walls") instead of a
+// fixed OI threshold that would need hand-retuning as overall volume varies day to day. Called
+// once per chart with its own magnitude function since Volume's magnitude is the value itself
+// but Difference's is |value| (a large negative diff is just as notable as a large positive one).
+function flagHighOiRows(rows,magnitude){
+  const mags=rows.map(magnitude);
+  const mean=mags.reduce((s,v)=>s+v,0)/(mags.length||1);
+  const variance=mags.reduce((s,v)=>s+(v-mean)**2,0)/(mags.length||1);
+  const threshold=mean+Math.sqrt(variance);
+  return rows.map((r,i)=>({...r,high:mags[i]>threshold}));
+}
 function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColor){
   const wrap=document.getElementById(containerId);
   if(!wrap)return;
@@ -3247,8 +3259,13 @@ function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColo
     const labelX=r.value<0?left+6:left+width-6;
     const anchor=r.value<0?"start":"end";
     const labelFill=negLabelColor&&r.value<0?negLabelColor:"#0b1220";
-    return `<text x="${padL-8}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="end" font-size="10" fill="#94a3b8">${r.strike}</text>
-      <rect x="${left.toFixed(2)}" y="${y}" width="${width.toFixed(2)}" height="${barH}" rx="2" fill="${fill}"/>
+    // High-OI strikes (see flagHighOiRows) get an amber outline on the bar and a bold, brighter
+    // strike label — amber reads as "notable" without colliding with the existing
+    // cyan/green/red meanings already in use for the bars themselves.
+    const stroke=r.high?` stroke="#fbbf24" stroke-width="2"`:"";
+    const strikeWeight=r.high?"800":"400",strikeFill=r.high?"#fbbf24":"#94a3b8";
+    return `<text x="${padL-8}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="end" font-size="10" font-weight="${strikeWeight}" fill="${strikeFill}">${r.strike}</text>
+      <rect x="${left.toFixed(2)}" y="${y}" width="${width.toFixed(2)}" height="${barH}" rx="2" fill="${fill}"${stroke}/>
       <text x="${labelX.toFixed(2)}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="${anchor}" font-size="10" fill="${labelFill}">${fmt(r.value,0)}</text>`;
   }).join("");
   wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" preserveAspectRatio="none">
@@ -3304,8 +3321,8 @@ function renderOi(preferredDate){
     oiTotalDiff.style.color=totalDiff!==0?"#fff":"";
   }
   const byStrikeDesc=[...rows].sort((a,b)=>b.strike-a.strike);
-  renderOiBarChart("oiVolumeChartWrap",byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),"volume","var(--cyan)");
-  renderOiBarChart("oiDiffChartWrap",byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),"difference","var(--green)","#b91c1c","#fef2f2");
+  renderOiBarChart("oiVolumeChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),r=>r.value),"volume","var(--cyan)");
+  renderOiBarChart("oiDiffChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),r=>Math.abs(r.value)),"difference","var(--green)","#b91c1c","#fef2f2");
 }
 // fetchMacroYields() only actually hits the network once per calendar day (see its cache check)
 // and otherwise resolves instantly, so it's safe to call this on every one of these triggers —
