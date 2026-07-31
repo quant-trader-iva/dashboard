@@ -34,6 +34,8 @@
     .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
     @media(max-width:900px){.form-grid{grid-template-columns:1fr}}
     .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px}.toolbar>div{min-width:150px}
+    details summary{cursor:pointer;font-weight:700;color:var(--cyan);padding:4px 0;list-style:revert}
+    details summary:hover{opacity:.85}
     .session-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.session-buttons button{background:#1f2937}.session-buttons button.active{background:var(--cyan);color:#082f49}
     .dash-grid{display:grid;grid-template-columns:250px repeat(5,minmax(190px,1fr)) 350px;gap:0;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:#08111f}
     .cell{min-height:35px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px}
@@ -650,15 +652,18 @@
     <div class="toolbar">
       <div><label>Viewing Date</label><select id="oiViewDate"></select></div>
     </div>
-    <div id="oiTotals" class="hint"></div>
-    <div class="tablewrap"><table id="oiTable"></table></div>
+    <details id="oiTableDetails">
+      <summary>Show strike-by-strike table</summary>
+      <div id="oiTotals" class="hint" style="margin-top:10px"></div>
+      <div class="tablewrap"><table id="oiTable"></table></div>
+    </details>
   </div>
   <div class="grid">
-    <div class="card span-4">
+    <div class="card span-12">
       <h2>Net Put &minus; Call OI</h2>
       <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
       <div style="text-align:center;margin-top:10px"><div class="value" id="oiNetPutCall">&mdash;</div></div>
-      <div style="display:flex;gap:10px;margin-top:14px">
+      <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
         <div style="flex:1;text-align:center">
           <div class="hint" style="margin:0">Total Volume</div>
           <div style="font-size:20px;font-weight:800" id="oiTotalVolume">&mdash;</div>
@@ -669,12 +674,12 @@
         </div>
       </div>
     </div>
-    <div class="card span-8">
+    <div class="card span-6">
       <h2>Volume by Strike</h2>
       <p class="hint">Call OI + Put OI at each strike.</p>
       <div class="chartwrap" id="oiVolumeChartWrap" style="position:relative"></div>
     </div>
-    <div class="card span-12">
+    <div class="card span-6">
       <h2>Difference by Strike</h2>
       <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
       <div class="chartwrap" id="oiDiffChartWrap" style="position:relative"></div>
