@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Trading Projection Dashboard v4</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";</script>
   <style>
     :root{
       --bg:#020617; --panel:#0f172a; --line:#334155; --text:#e5e7eb; --muted:#94a3b8;
@@ -20,8 +23,8 @@
     button:hover{filter:brightness(1.12)}button.active,.primary{background:var(--orange);color:white}.good{background:var(--green);color:#052e16}.danger{background:var(--red);color:white}
     main{max-width:1800px;margin:0 auto;padding:18px}.page{display:block}.hidden{display:none}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
-    .span-2{grid-column:span 2}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-12{grid-column:span 12}
-    @media(max-width:1000px){.span-2,.span-3,.span-4,.span-6,.span-12{grid-column:span 12}header{align-items:flex-start;flex-direction:column}}
+    .span-2{grid-column:span 2}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-8{grid-column:span 8}.span-12{grid-column:span 12}
+    @media(max-width:1000px){.span-2,.span-3,.span-4,.span-6,.span-8,.span-12{grid-column:span 12}header{align-items:flex-start;flex-direction:column}}
     .card,.metric{background:rgba(15,23,42,.94);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 14px 32px rgba(0,0,0,.25)}
     h2{margin:0 0 12px;font-size:18px}
     .metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:26px;font-weight:900;margin-top:5px}
@@ -114,6 +117,7 @@
   </div>
   <div class="tabs">
     <button class="tab" data-tab="macro">Macro</button>
+    <button class="tab" data-tab="oi">0DTE OI</button>
     <button class="tab active" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="entry">New Session</button>
     <button class="tab" data-tab="data">Data</button>
@@ -630,6 +634,54 @@
   </div>
 </section>
 
+<section id="oi" class="page hidden">
+  <div class="card">
+    <h2>0DTE Open Interest</h2>
+    <p class="hint">Upload the XLSX or PDF Open Interest Matrix export from QuikStrike (Gold OG|GC). Only the 0 DTE Call/Put columns are read — every other expiration in the file is ignored. Re-uploading a date overwrites that date's rows.</p>
+    <div class="toolbar">
+      <div><label>Date</label><input id="oiUploadDate" type="date"/></div>
+      <label style="display:inline-flex;align-items:center;gap:8px;margin:0;cursor:pointer"><input id="oiUploadFile" type="file" accept=".xlsx,.pdf" style="display:none"><span class="pill">Upload XLSX / PDF</span></label>
+      <button id="oiDeleteDate" class="danger">Delete This Date</button>
+    </div>
+    <p id="oiUploadStatus" class="hint"></p>
+  </div>
+  <div class="card">
+    <h2>Strike Ladder</h2>
+    <div class="toolbar">
+      <div><label>Viewing Date</label><select id="oiViewDate"></select></div>
+    </div>
+    <div id="oiTotals" class="hint"></div>
+    <div class="tablewrap"><table id="oiTable"></table></div>
+  </div>
+  <div class="grid">
+    <div class="card span-4">
+      <h2>Net Put &minus; Call OI</h2>
+      <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+      <div style="text-align:center;margin-top:10px"><div class="value" id="oiNetPutCall">&mdash;</div></div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Total Volume</div>
+          <div style="font-size:20px;font-weight:800" id="oiTotalVolume">&mdash;</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Total Difference</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oiTotalDiff">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="card span-8">
+      <h2>Volume by Strike</h2>
+      <p class="hint">Call OI + Put OI at each strike.</p>
+      <div class="chartwrap" id="oiVolumeChartWrap" style="position:relative"></div>
+    </div>
+    <div class="card span-12">
+      <h2>Difference by Strike</h2>
+      <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+      <div class="chartwrap" id="oiDiffChartWrap" style="position:relative"></div>
+    </div>
+  </div>
+</section>
+
 <section id="settings" class="page hidden">
   <div class="grid">
     <div class="card span-6">
@@ -663,6 +715,7 @@ const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
 const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
+const OI_STORAGE_KEY="trading_projection_oi_snapshots_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
 // Read from the ibCurrentOutcome select's own <option> list (same convention as outcomeMix()
 // reading #outcome's options below) so a renamed/added outcome option flows through everywhere —
@@ -701,8 +754,14 @@ function saveEntries(){
 }
 function loadPendingEntryDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_ENTRY_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KEY,JSON.stringify(pendingEntryDeletes))}
+// oiSnapshots rows are keyed by date+strike (not a uuid id) — see the matching note on the
+// oi_snapshots table in supabase_schema.sql for why: re-uploading a date should overwrite it,
+// not accumulate duplicate rows.
+function loadOiSnapshots(){try{return JSON.parse(localStorage.getItem(OI_STORAGE_KEY)||"[]")}catch{return[]}}
+function saveOiSnapshots(){localStorage.setItem(OI_STORAGE_KEY,JSON.stringify(oiSnapshots))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
+let oiSnapshots=loadOiSnapshots();
 const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
@@ -2663,7 +2722,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro,renderOi].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
@@ -2817,6 +2876,43 @@ async function syncEntryDelete(id){
   savePendingEntryDeletes();
   return ok;
 }
+function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,updated_at:o.updatedAt||new Date().toISOString()}}
+function fromOiDb(r){return{date:r.date,strike:r.strike,callOi:r.call_oi,putOi:r.put_oi,updatedAt:r.updated_at}}
+async function syncOiUpsert(records){
+  if(!supabaseClient||!authUser||!records.length)return false;
+  return runSyncOp("oiupsert:bulk",
+    ()=>supabaseClient.from("oi_snapshots").upsert(records.map(toOiDb),{onConflict:"user_id,date,strike"}),
+    msg=>`Failed to sync 0DTE OI data to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+}
+async function syncOiDeleteDate(date){
+  if(!supabaseClient||!authUser)return false;
+  return runSyncOp("oidelete:"+date,
+    ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date),
+    msg=>`Failed to sync a 0DTE OI deletion to the cloud: ${msg}. The rows were removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+}
+// Unlike sessions/entries there's no pending-delete queue here — a failed delete sync just leaves
+// the old rows in Supabase until the next "Delete This Date" retry or a fresh upload overwrites
+// them, which is an acceptable gap for bulk-imported reference data (not a hand-entered record
+// that would otherwise silently reappear on next sync).
+async function syncOiFromCloud(){
+  try{
+    const {data,error}=await supabaseClient.from("oi_snapshots").select("*").order("date",{ascending:true});
+    if(error){showSyncError("fullsync:oi:select","Failed to load 0DTE OI data: "+error.message);return false}
+    clearSyncError("fullsync:oi:select");
+    const map=new Map();
+    [...oiSnapshots,...data.map(fromOiDb)].forEach(o=>{
+      const key=o.date+"|"+o.strike;
+      const existing=map.get(key);
+      if(!existing||(o.updatedAt||"")>=(existing.updatedAt||""))map.set(key,o);
+    });
+    oiSnapshots=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.strike-b.strike);
+    saveOiSnapshots();
+    return await syncOiUpsert(oiSnapshots);
+  }catch(err){
+    showSyncError("fullsync:oi:select","Failed to load 0DTE OI data: "+errMsg(err));
+    return false;
+  }
+}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
@@ -2898,13 +2994,270 @@ async function fullSync(){
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
   const ok=await syncSessionsFromCloud();
   const entryOk=await syncEntriesFromCloud();
-  if(ok&&entryOk){
-    syncStatus.textContent=`Synced ${sessions.length} sessions and ${tradeEntries.length} trade entries.`;
+  const oiOk=await syncOiFromCloud();
+  if(ok&&entryOk&&oiOk){
+    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, and ${oiSnapshots.length} 0DTE OI rows.`;
   }else{
-    const failed=[!ok&&"sessions",!entryOk&&"trade entries"].filter(Boolean).join(" and ");
+    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!oiOk&&"0DTE OI data"].filter(Boolean).join(" and ");
     syncStatus.textContent=`Sync failed for ${failed} — see the banner above for details.`;
   }
   renderAll();
+}
+// Scans a QuikStrike Open Interest Matrix export (XLSX) for the STRIKE column and the 0 DTE
+// Call/Put column pair, wherever they land in the sheet — their exact row/column position shifts
+// with how many other expirations happen to be in that day's file, so this searches by cell text
+// instead of assuming fixed coordinates. Every column other than STRIKE/0 DTE is ignored.
+function parseOiWorkbook(arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:"array"});
+  const sheet=wb.Sheets[wb.SheetNames[0]];
+  const grid=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null,raw:true});
+  const norm=v=>(v==null?"":String(v).trim().toUpperCase());
+  let strikeRow=-1,strikeCol=-1;
+  for(let r=0;r<grid.length&&strikeRow<0;r++){
+    for(let c=0;c<(grid[r]||[]).length;c++){
+      if(norm(grid[r][c])==="STRIKE"){strikeRow=r;strikeCol=c;break}
+    }
+  }
+  if(strikeRow<0)throw new Error('Could not find a "STRIKE" column header in this file — is this the Open Interest Matrix export?');
+  let dteRow=-1,callCol=-1;
+  for(let r=strikeRow;r<Math.min(grid.length,strikeRow+6)&&dteRow<0;r++){
+    for(let c=strikeCol+1;c<(grid[r]||[]).length;c++){
+      if(/^0\s*DTE$/.test(norm(grid[r][c]))){dteRow=r;callCol=c;break}
+    }
+  }
+  if(dteRow<0)throw new Error('Could not find a "0 DTE" column in this file.');
+  let cpRow=-1;
+  for(let r=dteRow;r<Math.min(grid.length,dteRow+3);r++){
+    if(norm((grid[r]||[])[callCol])==="C"){cpRow=r;break}
+  }
+  if(cpRow<0)throw new Error('Found the 0 DTE column but not its Call/Put sub-headers.');
+  const putCol=callCol+1;
+  if(norm((grid[cpRow]||[])[putCol])!=="P")throw new Error("0 DTE column layout looks unexpected (no Put column next to Call).");
+  const rows=[];
+  for(let r=cpRow+1;r<grid.length;r++){
+    const strikeVal=(grid[r]||[])[strikeCol];
+    if(strikeVal==null||strikeVal==="")continue;
+    const strike=Number(strikeVal);
+    if(!Number.isFinite(strike))continue;
+    const callOi=Number((grid[r]||[])[callCol]);
+    const putOi=Number((grid[r]||[])[putCol]);
+    rows.push({strike,callOi:Number.isFinite(callOi)?callOi:0,putOi:Number.isFinite(putOi)?putOi:0});
+  }
+  if(!rows.length)throw new Error("Found the 0 DTE column but no strike rows underneath it.");
+  return rows;
+}
+// Parses the same QuikStrike Open Interest Matrix when exported as a PDF instead of XLSX.
+// A PDF has no cells — pdf.js gives back a flat list of text runs, each with its own x/y
+// position on the page — so the table has to be reconstructed from those coordinates:
+//  1. Find "STRIKE" and the "0"+"DTE" pair (rendered as two separate runs) to locate the
+//     header row and the approximate x of the 0 DTE column.
+//  2. Find that column's "C"/"P" sub-header runs directly below it.
+//  3. QuikStrike right-aligns every number within its column (so "1,900" and "7" have
+//     different LEFT edges but land at the same RIGHT edge as every other value in that
+//     column) — matching data to a column by left edge was tried and is wrong; this matches
+//     each item's RIGHT edge (x+width) against a zone bounded by that header's left edge and
+//     the next header's left edge, which held up across every strike checked in testing.
+//  4. Rows are grouped by y (strikes share a y with their Call/Put values); pages after the
+//     header's page are treated as pure continuation rows (no repeated header assumed).
+async function parseOiPdf(arrayBuffer){
+  if(!window.pdfjsLib)throw new Error("PDF support failed to load — check your internet connection and try again.");
+  const doc=await pdfjsLib.getDocument({data:new Uint8Array(arrayBuffer)}).promise;
+  const items=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p);
+    const content=await page.getTextContent();
+    content.items.forEach(it=>{
+      const s=(it.str||"").trim();
+      if(!s)return;
+      items.push({str:s,x:it.transform[4],y:it.transform[5],w:it.width,page:p});
+    });
+  }
+  const near=(a,b,tol)=>Math.abs(a-b)<=tol;
+  const strikeHdr=items.find(it=>it.str==="STRIKE");
+  if(!strikeHdr)throw new Error('Could not find a "STRIKE" column header in this PDF — is this the Open Interest Matrix export?');
+  const strikeX=strikeHdr.x,page=strikeHdr.page;
+  let dteZero=null;
+  for(const it of items){
+    if(it.str!=="0"||it.page!==page)continue;
+    const dte=items.find(d=>d.str==="DTE"&&d.page===it.page&&near(d.y,it.y,0.5)&&d.x>it.x&&d.x-(it.x+it.w)<6);
+    if(dte){dteZero=it;break}
+  }
+  if(!dteZero)throw new Error('Could not find a "0 DTE" column in this PDF.');
+  const approxColX=dteZero.x,dteRowY=dteZero.y;
+  const cpCandidates=items.filter(it=>it.page===page&&(it.str==="C"||it.str==="P")&&it.y<dteRowY&&it.y>dteRowY-20);
+  if(!cpCandidates.length)throw new Error("Found the 0 DTE column but not its Call/Put sub-headers.");
+  const cpRowY=Math.max(...cpCandidates.map(it=>it.y));
+  const cpRow=cpCandidates.filter(it=>near(it.y,cpRowY,0.5)).sort((a,b)=>a.x-b.x);
+  const callItem=cpRow.filter(it=>it.str==="C").sort((a,b)=>Math.abs(a.x-approxColX)-Math.abs(b.x-approxColX))[0];
+  if(!callItem)throw new Error("Found the 0 DTE column but not its Call/Put sub-headers.");
+  const callX=callItem.x;
+  const putItem=cpRow.filter(it=>it.str==="P"&&it.x>callX).sort((a,b)=>a.x-b.x)[0];
+  if(!putItem)throw new Error("0 DTE column layout looks unexpected (no Put column next to Call).");
+  const putX=putItem.x;
+  const nextCall=cpRow.filter(it=>it.str==="C"&&it.x>putX).sort((a,b)=>a.x-b.x)[0];
+  const putZoneEnd=nextCall?nextCall.x:putX+14;
+  const rowsMap=new Map();
+  items.filter(it=>(it.page===page&&it.y<cpRowY-1)||it.page>page).forEach(it=>{
+    const key=it.page+":"+it.y.toFixed(1);
+    if(!rowsMap.has(key))rowsMap.set(key,[]);
+    rowsMap.get(key).push(it);
+  });
+  const STRIKE_TOL=4;
+  const rows=[];
+  for(const rowItems of rowsMap.values()){
+    const strikeIt=rowItems.find(it=>near(it.x,strikeX,STRIKE_TOL));
+    if(!strikeIt)continue;
+    const strike=Number(strikeIt.str.replace(/,/g,""));
+    if(!Number.isFinite(strike))continue;
+    const callIt=rowItems.find(it=>{const r=it.x+it.w;return r>callX&&r<=putX});
+    const putIt=rowItems.find(it=>{const r=it.x+it.w;return r>putX&&r<=putZoneEnd});
+    const callOi=callIt?Number(callIt.str.replace(/,/g,"")):0;
+    const putOi=putIt?Number(putIt.str.replace(/,/g,"")):0;
+    rows.push({strike,callOi:Number.isFinite(callOi)?callOi:0,putOi:Number.isFinite(putOi)?putOi:0});
+  }
+  if(!rows.length)throw new Error("Found the 0 DTE column but no strike rows underneath it.");
+  rows.sort((a,b)=>a.strike-b.strike);
+  return rows;
+}
+if(oiUploadDate&&!oiUploadDate.value)oiUploadDate.valueAsDate=new Date();
+oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
+  const file=oiUploadFile.files[0];
+  if(!file)return;
+  const date=oiUploadDate.value;
+  if(!date){oiUploadStatus.textContent="Pick a date before uploading.";oiUploadFile.value="";return}
+  oiUploadStatus.textContent="Parsing...";
+  try{
+    const buf=await file.arrayBuffer();
+    const isPdf=/\.pdf$/i.test(file.name)||file.type==="application/pdf";
+    const parsed=isPdf?await parseOiPdf(buf):parseOiWorkbook(buf);
+    const now=new Date().toISOString();
+    const incoming=parsed.map(r=>({date,strike:r.strike,callOi:r.callOi,putOi:r.putOi,updatedAt:now}));
+    oiSnapshots=[...oiSnapshots.filter(o=>o.date!==date),...incoming].sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.strike-b.strike);
+    saveOiSnapshots();
+    oiUploadStatus.textContent=`Loaded ${parsed.length} strikes for ${date}.`;
+    await syncOiUpsert(incoming);
+    renderOi(date);
+  }catch(err){
+    oiUploadStatus.textContent="Could not read this file: "+errMsg(err);
+  }finally{
+    oiUploadFile.value="";
+  }
+});
+oiDeleteDate&&oiDeleteDate.addEventListener("click",async()=>{
+  const date=oiViewDate.value;
+  if(!date)return;
+  if(!confirm(`Delete all uploaded 0 DTE OI rows for ${date}?`))return;
+  oiSnapshots=oiSnapshots.filter(o=>o.date!==date);
+  saveOiSnapshots();
+  await syncOiDeleteDate(date);
+  renderOi();
+});
+oiViewDate&&oiViewDate.addEventListener("change",renderOi);
+// Picks a "nice" round gridline step (1/2/5 × a power of 10) for ~targetCount divisions across
+// [vMin,vMax], the same rounding convention spreadsheet charts use for their value axis — plain
+// n/targetCount steps land on ugly numbers like 3,614.3.
+function niceOiTicks(vMin,vMax,targetCount){
+  const rawStep=(vMax-vMin)/targetCount||1;
+  const mag=Math.pow(10,Math.floor(Math.log10(Math.abs(rawStep))));
+  const norm=rawStep/mag;
+  const step=(norm>=5?5:norm>=2?2:1)*mag;
+  const start=Math.ceil(vMin/step)*step;
+  const ticks=[];
+  for(let t=start;t<=vMax+step*1e-6;t+=step)ticks.push(Math.round(t/step)*step);
+  if(vMin<=0&&vMax>=0&&!ticks.includes(0))ticks.push(0);
+  return [...new Set(ticks)].sort((a,b)=>a-b);
+}
+// Horizontal diverging bar chart, strikes top-to-bottom (highest first) with a numeric value
+// axis and axis title along the bottom — matching the reference spreadsheet charts (gridlines,
+// tick labels, "volume"/"difference" title). Always includes 0 in the scale so the zero
+// gridline (and the Difference chart's positive/negative split) is always present, even when
+// every value happens to be one sign.
+function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColor){
+  const wrap=document.getElementById(containerId);
+  if(!wrap)return;
+  if(!rows.length){wrap.innerHTML="";return}
+  const barH=16,gap=6,padL=64,padR=16,padT=8,padB=38;
+  const W=620,n=rows.length,H=padT+padB+n*(barH+gap)-gap;
+  const vals=rows.map(r=>r.value);
+  const vMin=Math.min(0,...vals),vMax=Math.max(0,...vals);
+  const span=(vMax-vMin)||1;
+  const x=v=>padL+(W-padL-padR)*((v-vMin)/span);
+  const zeroX=x(0);
+  const plotBottom=H-padB;
+  const ticks=niceOiTicks(vMin,vMax,5);
+  const gridlines=ticks.map(t=>{
+    const tx=x(t);
+    return `<line x1="${tx.toFixed(2)}" x2="${tx.toFixed(2)}" y1="${padT}" y2="${plotBottom}" stroke="#334155" stroke-width="1" opacity=".5"/>
+      <text x="${tx.toFixed(2)}" y="${(plotBottom+13).toFixed(2)}" text-anchor="middle" font-size="9" fill="#94a3b8">${t.toLocaleString()}</text>`;
+  }).join("");
+  const axisTitle=`<text x="${((padL+W-padR)/2).toFixed(2)}" y="${(H-8).toFixed(2)}" text-anchor="middle" font-size="11" fill="#e5e7eb">${axisLabel}</text>`;
+  const bars=rows.map((r,i)=>{
+    const y=padT+i*(barH+gap);
+    const bx=x(r.value);
+    const left=Math.min(zeroX,bx),width=Math.max(1,Math.abs(bx-zeroX));
+    const fill=negColor&&r.value<0?negColor:color;
+    // Label always sits INSIDE the bar's outer edge (not floating past it) so it can never
+    // collide with the strike axis labels — the bar for the most extreme value in a
+    // one-sided chart (e.g. every Difference negative) can otherwise span almost the full
+    // width, leaving no room for a label placed outside it.
+    const labelX=r.value<0?left+6:left+width-6;
+    const anchor=r.value<0?"start":"end";
+    const labelFill=negLabelColor&&r.value<0?negLabelColor:"#0b1220";
+    return `<text x="${padL-8}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="end" font-size="10" fill="#94a3b8">${r.strike}</text>
+      <rect x="${left.toFixed(2)}" y="${y}" width="${width.toFixed(2)}" height="${barH}" rx="2" fill="${fill}"/>
+      <text x="${labelX.toFixed(2)}" y="${(y+barH*0.75).toFixed(2)}" text-anchor="${anchor}" font-size="10" fill="${labelFill}">${r.value.toLocaleString()}</text>`;
+  }).join("");
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" preserveAspectRatio="none">
+    ${gridlines}
+    <line x1="${zeroX.toFixed(2)}" x2="${zeroX.toFixed(2)}" y1="${padT}" y2="${plotBottom}" stroke="#64748b" stroke-width="1"/>
+    ${bars}
+    ${axisTitle}
+  </svg>`;
+}
+// Replicates the Feb-24 workbook's calculation exactly: per strike, Sum = Call OI + Put OI and
+// Diff = Call OI − Put OI, then each of those two columns summed down the whole strike ladder
+// for the day's totals — computed here at render time rather than stored (see the note on the
+// oi_snapshots table in supabase_schema.sql).
+// preferredDate lets a fresh upload jump the view straight to the date just uploaded, instead
+// of silently staying on whatever date happened to be selected before — the default fallback
+// (keep the previous selection, or fall back to the most recent date) is right for every OTHER
+// call site (tab switches, sync, delete) where nothing new was just added.
+function renderOi(preferredDate){
+  if(!oiViewDate)return;
+  const dates=[...new Set(oiSnapshots.map(o=>o.date))].sort();
+  const prevSelected=preferredDate||oiViewDate.value;
+  oiViewDate.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join("");
+  const date=dates.includes(prevSelected)?prevSelected:dates[dates.length-1];
+  if(date)oiViewDate.value=date;
+  const rows=oiSnapshots.filter(o=>o.date===date).sort((a,b)=>a.strike-b.strike);
+  if(!rows.length){
+    oiTotals.textContent=dates.length?"":"No 0DTE OI data uploaded yet.";
+    oiTable.innerHTML="";
+    if(oiNetPutCall)oiNetPutCall.textContent="—";
+    if(oiTotalVolume)oiTotalVolume.textContent="—";
+    if(oiTotalDiff){oiTotalDiff.textContent="—";oiTotalDiff.style.background="";oiTotalDiff.style.color=""}
+    renderOiBarChart("oiVolumeChartWrap",[]);
+    renderOiBarChart("oiDiffChartWrap",[]);
+    return;
+  }
+  let totalSum=0,totalDiff=0,totalCall=0,totalPut=0;
+  const body=rows.map(r=>{
+    const sum=r.callOi+r.putOi,diff=r.callOi-r.putOi;
+    totalSum+=sum;totalDiff+=diff;totalCall+=r.callOi;totalPut+=r.putOi;
+    return `<tr><td>${r.strike}</td><td style="text-align:right">${r.callOi.toLocaleString()}</td><td style="text-align:right">${r.putOi.toLocaleString()}</td><td style="text-align:right">${sum.toLocaleString()}</td><td style="text-align:right">${diff.toLocaleString()}</td></tr>`;
+  }).join("");
+  oiTable.innerHTML=`<tr><th>Strike</th><th style="text-align:right">Call OI</th><th style="text-align:right">Put OI</th><th style="text-align:right">Sum (C+P)</th><th style="text-align:right">Diff (C-P)</th></tr>${body}`;
+  oiTotals.innerHTML=`<b>${date}</b> — Total Call OI: ${totalCall.toLocaleString()} &nbsp;·&nbsp; Total Put OI: ${totalPut.toLocaleString()} &nbsp;·&nbsp; Total OI (Sum): ${totalSum.toLocaleString()} &nbsp;·&nbsp; Net Call&minus;Put (Diff): ${totalDiff.toLocaleString()}`;
+  if(oiNetPutCall)oiNetPutCall.textContent=(totalPut-totalCall).toLocaleString();
+  if(oiTotalVolume)oiTotalVolume.textContent=totalSum.toLocaleString();
+  if(oiTotalDiff){
+    oiTotalDiff.textContent=totalDiff.toLocaleString();
+    oiTotalDiff.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
+    oiTotalDiff.style.color=totalDiff!==0?"#fff":"";
+  }
+  const byStrikeDesc=[...rows].sort((a,b)=>b.strike-a.strike);
+  renderOiBarChart("oiVolumeChartWrap",byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),"volume","var(--cyan)");
+  renderOiBarChart("oiDiffChartWrap",byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),"difference","var(--green)","#b91c1c","#fef2f2");
 }
 // fetchMacroYields() only actually hits the network once per calendar day (see its cache check)
 // and otherwise resolves instantly, so it's safe to call this on every one of these triggers —
