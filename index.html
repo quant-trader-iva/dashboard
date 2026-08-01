@@ -119,7 +119,9 @@
   </div>
   <div class="tabs">
     <button class="tab" data-tab="macro">Macro</button>
-    <button class="tab" data-tab="oi">0DTE OI</button>
+    <button class="tab" data-tab="oi0">0DTE</button>
+    <button class="tab" data-tab="oi2">2DTE</button>
+    <button class="tab" data-tab="oi3">3DTE</button>
     <button class="tab active" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="entry">New Session</button>
     <button class="tab" data-tab="data">Data</button>
@@ -636,57 +638,162 @@
   </div>
 </section>
 
-<section id="oi" class="page hidden">
+<section id="oi0" class="page hidden">
   <div class="card">
-    <h2>0DTE Open Interest</h2>
-    <p class="hint">Upload the XLSX or PDF Open Interest Matrix export from QuikStrike (Gold OG|GC). Only the 0 DTE Call/Put columns are read — every other expiration in the file is ignored. Re-uploading a date overwrites that date's rows.</p>
+    <h2>Open Interest &mdash; Upload</h2>
+    <p class="hint">Upload the XLSX or PDF Open Interest Matrix export from QuikStrike (Gold OG|GC). Tick which DTE column(s) to extract &mdash; the same file is scanned once per ticked box and each result is routed to that column's own tab (0DTE / 2DTE / 3DTE). Every other expiration in the file is ignored. Re-uploading a date overwrites that date's rows for whichever columns are ticked.</p>
     <div class="toolbar">
       <div><label>Date</label><input id="oiUploadDate" type="date"/></div>
       <label style="display:inline-flex;align-items:center;gap:8px;margin:0;cursor:pointer"><input id="oiUploadFile" type="file" accept=".xlsx,.pdf" style="display:none"><span class="pill">Upload XLSX / PDF</span></label>
-      <button id="oiDeleteDate" class="danger">Delete This Date</button>
+    </div>
+    <div class="toolbar">
+      <label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="oiCheck0" type="checkbox" checked/> 0 DTE</label>
+      <label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="oiCheck2" type="checkbox"/> 2 DTE</label>
+      <label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="oiCheck3" type="checkbox"/> 3 DTE</label>
     </div>
     <p id="oiUploadStatus" class="hint"></p>
   </div>
   <div class="card">
     <h2>Strike Ladder</h2>
     <div class="toolbar">
-      <div><label>Viewing Date</label><select id="oiViewDate"></select></div>
+      <div><label>Viewing Date</label><select id="oi0ViewDate"></select></div>
+      <button id="oi0DeleteDate" class="danger">Delete This Date</button>
     </div>
-    <details id="oiTableDetails">
+    <details id="oi0TableDetails">
       <summary>Show strike-by-strike table</summary>
-      <div id="oiTotals" class="hint" style="margin-top:10px"></div>
-      <div class="tablewrap"><table id="oiTable"></table></div>
+      <div id="oi0Totals" class="hint" style="margin-top:10px"></div>
+      <div class="tablewrap"><table id="oi0Table"></table></div>
     </details>
   </div>
   <div class="grid">
     <div class="card span-12">
       <h2>Net Put &minus; Call OI</h2>
       <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-      <div style="text-align:center;margin-top:10px"><div class="value" id="oiNetPutCall">&mdash;</div></div>
+      <div style="text-align:center;margin-top:10px"><div class="value" id="oi0NetPutCall">&mdash;</div></div>
       <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
         <div style="flex:1;text-align:center">
           <div class="hint" style="margin:0">Total Volume</div>
-          <div style="font-size:20px;font-weight:800" id="oiTotalVolume">&mdash;</div>
+          <div style="font-size:20px;font-weight:800" id="oi0TotalVolume">&mdash;</div>
         </div>
         <div style="flex:1;text-align:center">
           <div class="hint" style="margin:0">Total Difference</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oiTotalDiff">&mdash;</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0TotalDiff">&mdash;</div>
         </div>
         <div style="flex:1;text-align:center">
           <div class="hint" style="margin:0">Power Factor</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oiPowerFactor">&mdash;</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0PowerFactor">&mdash;</div>
         </div>
       </div>
     </div>
     <div class="card span-6">
       <h2>Volume by Strike</h2>
       <p class="hint">Call OI + Put OI at each strike.</p>
-      <div class="chartwrap" id="oiVolumeChartWrap" style="position:relative"></div>
+      <div class="chartwrap" id="oi0VolumeChartWrap" style="position:relative"></div>
     </div>
     <div class="card span-6">
       <h2>Difference by Strike</h2>
       <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-      <div class="chartwrap" id="oiDiffChartWrap" style="position:relative"></div>
+      <div class="chartwrap" id="oi0DiffChartWrap" style="position:relative"></div>
+    </div>
+  </div>
+</section>
+
+<section id="oi2" class="page hidden">
+  <div class="card">
+    <h2>2DTE Open Interest</h2>
+    <p class="hint">Uploaded from the <b>0DTE</b> tab &mdash; tick "2 DTE" there when uploading a file to populate this tab.</p>
+  </div>
+  <div class="card">
+    <h2>Strike Ladder</h2>
+    <div class="toolbar">
+      <div><label>Viewing Date</label><select id="oi2ViewDate"></select></div>
+      <button id="oi2DeleteDate" class="danger">Delete This Date</button>
+    </div>
+    <details id="oi2TableDetails">
+      <summary>Show strike-by-strike table</summary>
+      <div id="oi2Totals" class="hint" style="margin-top:10px"></div>
+      <div class="tablewrap"><table id="oi2Table"></table></div>
+    </details>
+  </div>
+  <div class="grid">
+    <div class="card span-12">
+      <h2>Net Put &minus; Call OI</h2>
+      <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+      <div style="text-align:center;margin-top:10px"><div class="value" id="oi2NetPutCall">&mdash;</div></div>
+      <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Total Volume</div>
+          <div style="font-size:20px;font-weight:800" id="oi2TotalVolume">&mdash;</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Total Difference</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2TotalDiff">&mdash;</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Power Factor</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2PowerFactor">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="card span-6">
+      <h2>Volume by Strike</h2>
+      <p class="hint">Call OI + Put OI at each strike.</p>
+      <div class="chartwrap" id="oi2VolumeChartWrap" style="position:relative"></div>
+    </div>
+    <div class="card span-6">
+      <h2>Difference by Strike</h2>
+      <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+      <div class="chartwrap" id="oi2DiffChartWrap" style="position:relative"></div>
+    </div>
+  </div>
+</section>
+
+<section id="oi3" class="page hidden">
+  <div class="card">
+    <h2>3DTE Open Interest</h2>
+    <p class="hint">Uploaded from the <b>0DTE</b> tab &mdash; tick "3 DTE" there when uploading a file to populate this tab.</p>
+  </div>
+  <div class="card">
+    <h2>Strike Ladder</h2>
+    <div class="toolbar">
+      <div><label>Viewing Date</label><select id="oi3ViewDate"></select></div>
+      <button id="oi3DeleteDate" class="danger">Delete This Date</button>
+    </div>
+    <details id="oi3TableDetails">
+      <summary>Show strike-by-strike table</summary>
+      <div id="oi3Totals" class="hint" style="margin-top:10px"></div>
+      <div class="tablewrap"><table id="oi3Table"></table></div>
+    </details>
+  </div>
+  <div class="grid">
+    <div class="card span-12">
+      <h2>Net Put &minus; Call OI</h2>
+      <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+      <div style="text-align:center;margin-top:10px"><div class="value" id="oi3NetPutCall">&mdash;</div></div>
+      <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Total Volume</div>
+          <div style="font-size:20px;font-weight:800" id="oi3TotalVolume">&mdash;</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Total Difference</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3TotalDiff">&mdash;</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div class="hint" style="margin:0">Power Factor</div>
+          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3PowerFactor">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="card span-6">
+      <h2>Volume by Strike</h2>
+      <p class="hint">Call OI + Put OI at each strike.</p>
+      <div class="chartwrap" id="oi3VolumeChartWrap" style="position:relative"></div>
+    </div>
+    <div class="card span-6">
+      <h2>Difference by Strike</h2>
+      <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+      <div class="chartwrap" id="oi3DiffChartWrap" style="position:relative"></div>
     </div>
   </div>
 </section>
@@ -724,8 +831,8 @@ const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
 const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
-const OI_STORAGE_KEY="trading_projection_oi_snapshots_v1";
-const PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v1";
+const OI_STORAGE_KEY="trading_projection_oi_snapshots_v2";
+const PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v2";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
 // Read from the ibCurrentOutcome select's own <option> list (same convention as outcomeMix()
 // reading #outcome's options below) so a renamed/added outcome option flows through everywhere —
@@ -764,9 +871,10 @@ function saveEntries(){
 }
 function loadPendingEntryDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_ENTRY_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KEY,JSON.stringify(pendingEntryDeletes))}
-// oiSnapshots rows are keyed by date+strike (not a uuid id) — see the matching note on the
+// oiSnapshots rows are keyed by date+dte+strike (not a uuid id) — see the matching note on the
 // oi_snapshots table in supabase_schema.sql for why: re-uploading a date should overwrite it,
-// not accumulate duplicate rows.
+// not accumulate duplicate rows. Storage key bumped to v2 when the dte column was added — old
+// v1 data was single-DTE-only (0DTE) and small enough to just re-upload rather than migrate.
 function loadOiSnapshots(){try{return JSON.parse(localStorage.getItem(OI_STORAGE_KEY)||"[]")}catch{return[]}}
 function saveOiSnapshots(){localStorage.setItem(OI_STORAGE_KEY,JSON.stringify(oiSnapshots))}
 function loadPendingOiDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_OI_DELETES_KEY)||"[]")}catch{return[]}}
@@ -2734,7 +2842,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro,renderOi].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
@@ -2888,53 +2996,58 @@ async function syncEntryDelete(id){
   savePendingEntryDeletes();
   return ok;
 }
-function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,updated_at:o.updatedAt||new Date().toISOString()}}
+function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,dte:o.dte,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,updated_at:o.updatedAt||new Date().toISOString()}}
 // call_oi/put_oi are `numeric` columns — PostgREST serializes those as JSON strings (to avoid
 // float-precision loss), not numbers, so this coerces them back before they hit any arithmetic
-// (renderOi's sums would otherwise silently do string concatenation on synced data).
-function fromOiDb(r){return{date:r.date,strike:Number(r.strike),callOi:Number(r.call_oi)||0,putOi:Number(r.put_oi)||0,updatedAt:r.updated_at}}
+// (renderOiTab's sums would otherwise silently do string concatenation on synced data).
+function fromOiDb(r){return{date:r.date,dte:Number(r.dte)||0,strike:Number(r.strike),callOi:Number(r.call_oi)||0,putOi:Number(r.put_oi)||0,updatedAt:r.updated_at}}
 async function syncOiUpsert(records){
   if(!supabaseClient||!authUser||!records.length)return false;
   return runSyncOp("oiupsert:bulk",
-    ()=>supabaseClient.from("oi_snapshots").upsert(records.map(toOiDb),{onConflict:"user_id,date,strike"}),
-    msg=>`Failed to sync 0DTE OI data to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+    ()=>supabaseClient.from("oi_snapshots").upsert(records.map(toOiDb),{onConflict:"user_id,date,dte,strike"}),
+    msg=>`Failed to sync Open Interest data to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
 }
-async function syncOiDeleteDate(date){
+// pendingOiDeletes entries are {date,dte} objects, not plain date strings, since a delete is now
+// scoped to one tab's data for a date, not every DTE's data for that date.
+function oiPendingKey(date,dte){return date+"|"+dte}
+async function syncOiDeleteDate(date,dte){
   if(!supabaseClient||!authUser)return false;
-  const ok=await runSyncOp("oidelete:"+date,
-    ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date),
-    msg=>`Failed to sync a 0DTE OI deletion to the cloud: ${msg}. The rows were removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
-  if(ok){pendingOiDeletes=pendingOiDeletes.filter(x=>x!==date)}else if(!pendingOiDeletes.includes(date)){pendingOiDeletes.push(date)}
+  const key=oiPendingKey(date,dte);
+  const ok=await runSyncOp("oidelete:"+key,
+    ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date).eq("dte",dte),
+    msg=>`Failed to sync an Open Interest deletion to the cloud: ${msg}. The rows were removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+  if(ok){pendingOiDeletes=pendingOiDeletes.filter(p=>oiPendingKey(p.date,p.dte)!==key)}else if(!pendingOiDeletes.some(p=>oiPendingKey(p.date,p.dte)===key)){pendingOiDeletes.push({date,dte})}
   savePendingOiDeletes();
   return ok;
 }
-// Deletes specific strikes for a date without touching pendingOiDeletes — used when a re-upload
-// has fewer strikes than what's already synced, so the leftover cloud rows for strikes no longer
-// in the new file get cleaned up too. Deliberately separate from syncOiDeleteDate/pendingOiDeletes:
-// that queue means "this whole date should be gone," which would be wrong here since we're
-// simultaneously uploading fresh rows for this exact date.
-async function syncOiDeleteStrikes(date,strikes){
+// Deletes specific strikes for a date+dte without touching pendingOiDeletes — used when a
+// re-upload has fewer strikes than what's already synced, so the leftover cloud rows for strikes
+// no longer in the new file get cleaned up too. Deliberately separate from
+// syncOiDeleteDate/pendingOiDeletes: that queue means "this whole date+dte should be gone," which
+// would be wrong here since we're simultaneously uploading fresh rows for this exact date+dte.
+async function syncOiDeleteStrikes(date,dte,strikes){
   if(!supabaseClient||!authUser||!strikes.length)return false;
-  return runSyncOp("oideletestrikes:"+date,
-    ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date).in("strike",strikes),
-    msg=>`Failed to remove ${strikes.length} stale 0DTE OI row(s) from the cloud for ${date}: ${msg}. Your local copy is correct — click Sync Now in Settings to retry.`);
+  return runSyncOp("oideletestrikes:"+date+"|"+dte,
+    ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date).eq("dte",dte).in("strike",strikes),
+    msg=>`Failed to remove ${strikes.length} stale Open Interest row(s) from the cloud for ${date}: ${msg}. Your local copy is correct — click Sync Now in Settings to retry.`);
 }
 async function syncOiFromCloud(){
   try{
     const {data,error}=await supabaseClient.from("oi_snapshots").select("*").order("date",{ascending:true});
-    if(error){showSyncError("fullsync:oi:select","Failed to load 0DTE OI data: "+error.message);return false}
+    if(error){showSyncError("fullsync:oi:select","Failed to load Open Interest data: "+error.message);return false}
     clearSyncError("fullsync:oi:select");
+    const pendingKeys=new Set(pendingOiDeletes.map(p=>oiPendingKey(p.date,p.dte)));
     const map=new Map();
-    [...oiSnapshots,...data.map(fromOiDb)].filter(o=>!pendingOiDeletes.includes(o.date)).forEach(o=>{
-      const key=o.date+"|"+o.strike;
+    [...oiSnapshots,...data.map(fromOiDb)].filter(o=>!pendingKeys.has(oiPendingKey(o.date,o.dte))).forEach(o=>{
+      const key=o.date+"|"+o.dte+"|"+o.strike;
       const existing=map.get(key);
       if(!existing||(o.updatedAt||"")>=(existing.updatedAt||""))map.set(key,o);
     });
-    oiSnapshots=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.strike-b.strike);
+    oiSnapshots=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.dte-b.dte||a.strike-b.strike);
     saveOiSnapshots();
     return await syncOiUpsert(oiSnapshots);
   }catch(err){
-    showSyncError("fullsync:oi:select","Failed to load 0DTE OI data: "+errMsg(err));
+    showSyncError("fullsync:oi:select","Failed to load Open Interest data: "+errMsg(err));
     return false;
   }
 }
@@ -3017,27 +3130,31 @@ async function fullSync(){
   await fetchPosSizing();
   for(const id of [...pendingDeletes]){await syncDelete(id)}
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
-  for(const date of [...pendingOiDeletes]){await syncOiDeleteDate(date)}
+  for(const p of [...pendingOiDeletes]){await syncOiDeleteDate(p.date,p.dte)}
   const ok=await syncSessionsFromCloud();
   const entryOk=await syncEntriesFromCloud();
   const oiOk=await syncOiFromCloud();
   if(ok&&entryOk&&oiOk){
-    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, and ${oiSnapshots.length} 0DTE OI rows.`;
+    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, and ${oiSnapshots.length} Open Interest rows.`;
   }else{
-    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!oiOk&&"0DTE OI data"].filter(Boolean).join(" and ");
+    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!oiOk&&"Open Interest data"].filter(Boolean).join(" and ");
     syncStatus.textContent=`Sync failed for ${failed} — see the banner above for details.`;
   }
   renderAll();
 }
-// Scans a QuikStrike Open Interest Matrix export (XLSX) for the STRIKE column and the 0 DTE
-// Call/Put column pair, wherever they land in the sheet — their exact row/column position shifts
-// with how many other expirations happen to be in that day's file, so this searches by cell text
-// instead of assuming fixed coordinates. Every column other than STRIKE/0 DTE is ignored.
-function parseOiWorkbook(arrayBuffer){
+// Scans a QuikStrike Open Interest Matrix export (XLSX) for the STRIKE column and the
+// {targetDte} DTE Call/Put column pair, wherever they land in the sheet — their exact row/column
+// position shifts with how many other expirations happen to be in that day's file, so this
+// searches by cell text instead of assuming fixed coordinates. Every column other than
+// STRIKE/{targetDte} DTE is ignored. targetDte is a number (0, 2, 3, ...) — whichever DTE
+// checkbox this parse call is for.
+function parseOiWorkbook(arrayBuffer,targetDte){
   const wb=XLSX.read(arrayBuffer,{type:"array"});
   const sheet=wb.Sheets[wb.SheetNames[0]];
   const grid=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null,raw:true});
   const norm=v=>(v==null?"":String(v).trim().toUpperCase());
+  const dteLabel=`${targetDte} DTE`;
+  const dteRe=new RegExp(`^${targetDte}\\s*DTE$`);
   let strikeRow=-1,strikeCol=-1;
   for(let r=0;r<grid.length&&strikeRow<0;r++){
     for(let c=0;c<(grid[r]||[]).length;c++){
@@ -3048,17 +3165,17 @@ function parseOiWorkbook(arrayBuffer){
   let dteRow=-1,callCol=-1;
   for(let r=strikeRow;r<Math.min(grid.length,strikeRow+6)&&dteRow<0;r++){
     for(let c=strikeCol+1;c<(grid[r]||[]).length;c++){
-      if(/^0\s*DTE$/.test(norm(grid[r][c]))){dteRow=r;callCol=c;break}
+      if(dteRe.test(norm(grid[r][c]))){dteRow=r;callCol=c;break}
     }
   }
-  if(dteRow<0)throw new Error('Could not find a "0 DTE" column in this file.');
+  if(dteRow<0)throw new Error(`Could not find a "${dteLabel}" column in this file.`);
   let cpRow=-1;
   for(let r=dteRow;r<Math.min(grid.length,dteRow+3);r++){
     if(norm((grid[r]||[])[callCol])==="C"){cpRow=r;break}
   }
-  if(cpRow<0)throw new Error('Found the 0 DTE column but not its Call/Put sub-headers.');
+  if(cpRow<0)throw new Error(`Found the ${dteLabel} column but not its Call/Put sub-headers.`);
   const putCol=callCol+1;
-  if(norm((grid[cpRow]||[])[putCol])!=="P")throw new Error("0 DTE column layout looks unexpected (no Put column next to Call).");
+  if(norm((grid[cpRow]||[])[putCol])!=="P")throw new Error(`${dteLabel} column layout looks unexpected (no Put column next to Call).`);
   const rows=[];
   for(let r=cpRow+1;r<grid.length;r++){
     const strikeVal=(grid[r]||[])[strikeCol];
@@ -3069,14 +3186,14 @@ function parseOiWorkbook(arrayBuffer){
     const putOi=Number((grid[r]||[])[putCol]);
     rows.push({strike,callOi:Number.isFinite(callOi)?callOi:0,putOi:Number.isFinite(putOi)?putOi:0});
   }
-  if(!rows.length)throw new Error("Found the 0 DTE column but no strike rows underneath it.");
+  if(!rows.length)throw new Error(`Found the ${dteLabel} column but no strike rows underneath it.`);
   return rows;
 }
 // Parses the same QuikStrike Open Interest Matrix when exported as a PDF instead of XLSX.
 // A PDF has no cells — pdf.js gives back a flat list of text runs, each with its own x/y
 // position on the page — so the table has to be reconstructed from those coordinates:
-//  1. Find "STRIKE" and the "0"+"DTE" pair (rendered as two separate runs) to locate the
-//     header row and the approximate x of the 0 DTE column.
+//  1. Find "STRIKE" and the "{targetDte}"+"DTE" pair (rendered as two separate runs) to locate
+//     the header row and the approximate x of the target DTE column.
 //  2. Find that column's "C"/"P" sub-header runs directly below it.
 //  3. QuikStrike right-aligns every number within its column (so "1,900" and "7" have
 //     different LEFT edges but land at the same RIGHT edge as every other value in that
@@ -3085,8 +3202,10 @@ function parseOiWorkbook(arrayBuffer){
 //     the next header's left edge, which held up across every strike checked in testing.
 //  4. Rows are grouped by y (strikes share a y with their Call/Put values); pages after the
 //     header's page are treated as pure continuation rows (no repeated header assumed).
-async function parseOiPdf(arrayBuffer){
+// targetDte is a number (0, 2, 3, ...) — whichever DTE checkbox this parse call is for.
+async function parseOiPdf(arrayBuffer,targetDte){
   if(!window.pdfjsLib)throw new Error("PDF support failed to load — check your internet connection and try again.");
+  const dteLabel=`${targetDte} DTE`;
   const doc=await pdfjsLib.getDocument({data:new Uint8Array(arrayBuffer)}).promise;
   const items=[];
   for(let p=1;p<=doc.numPages;p++){
@@ -3102,23 +3221,24 @@ async function parseOiPdf(arrayBuffer){
   const strikeHdr=items.find(it=>it.str==="STRIKE");
   if(!strikeHdr)throw new Error('Could not find a "STRIKE" column header in this PDF — is this the Open Interest Matrix export?');
   const strikeX=strikeHdr.x,page=strikeHdr.page;
+  const targetDigits=String(targetDte);
   let dteZero=null;
   for(const it of items){
-    if(it.str!=="0"||it.page!==page)continue;
+    if(it.str!==targetDigits||it.page!==page)continue;
     const dte=items.find(d=>d.str==="DTE"&&d.page===it.page&&near(d.y,it.y,0.5)&&d.x>it.x&&d.x-(it.x+it.w)<6);
     if(dte){dteZero=it;break}
   }
-  if(!dteZero)throw new Error('Could not find a "0 DTE" column in this PDF.');
+  if(!dteZero)throw new Error(`Could not find a "${dteLabel}" column in this PDF.`);
   const approxColX=dteZero.x,dteRowY=dteZero.y;
   const cpCandidates=items.filter(it=>it.page===page&&(it.str==="C"||it.str==="P")&&it.y<dteRowY&&it.y>dteRowY-20);
-  if(!cpCandidates.length)throw new Error("Found the 0 DTE column but not its Call/Put sub-headers.");
+  if(!cpCandidates.length)throw new Error(`Found the ${dteLabel} column but not its Call/Put sub-headers.`);
   const cpRowY=Math.max(...cpCandidates.map(it=>it.y));
   const cpRow=cpCandidates.filter(it=>near(it.y,cpRowY,0.5)).sort((a,b)=>a.x-b.x);
   const callItem=cpRow.filter(it=>it.str==="C").sort((a,b)=>Math.abs(a.x-approxColX)-Math.abs(b.x-approxColX))[0];
-  if(!callItem)throw new Error("Found the 0 DTE column but not its Call/Put sub-headers.");
+  if(!callItem)throw new Error(`Found the ${dteLabel} column but not its Call/Put sub-headers.`);
   const callX=callItem.x;
   const putItem=cpRow.filter(it=>it.str==="P"&&it.x>callX).sort((a,b)=>a.x-b.x)[0];
-  if(!putItem)throw new Error("0 DTE column layout looks unexpected (no Put column next to Call).");
+  if(!putItem)throw new Error(`${dteLabel} column layout looks unexpected (no Put column next to Call).`);
   const putX=putItem.x;
   const nextCall=cpRow.filter(it=>it.str==="C"&&it.x>putX).sort((a,b)=>a.x-b.x)[0];
   const putZoneEnd=nextCall?nextCall.x:putX+14;
@@ -3151,56 +3271,88 @@ async function parseOiPdf(arrayBuffer){
     const putOi=putIt?Number(putIt.str.replace(/,/g,"")):0;
     rows.push({strike,callOi:Number.isFinite(callOi)?callOi:0,putOi:Number.isFinite(putOi)?putOi:0});
   }
-  if(!rows.length)throw new Error("Found the 0 DTE column but no strike rows underneath it.");
+  if(!rows.length)throw new Error(`Found the ${dteLabel} column but no strike rows underneath it.`);
   rows.sort((a,b)=>a.strike-b.strike);
   return rows;
 }
+// One config per DTE tab — drives the checkboxes on the shared upload panel (in the 0DTE
+// section) and the per-tab DOM id prefixes used by renderOiTab/wireOiTab below, so adding a
+// 4th tracked DTE later is a one-line addition here plus a new HTML section, not new JS logic.
+const OI_DTE_TABS=[
+  {dte:0,prefix:"oi0",checkboxId:"oiCheck0",label:"0 DTE"},
+  {dte:2,prefix:"oi2",checkboxId:"oiCheck2",label:"2 DTE"},
+  {dte:3,prefix:"oi3",checkboxId:"oiCheck3",label:"3 DTE"}
+];
 if(oiUploadDate&&!oiUploadDate.value)oiUploadDate.valueAsDate=new Date();
 oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
   const file=oiUploadFile.files[0];
   if(!file)return;
   const date=oiUploadDate.value;
+  const checked=OI_DTE_TABS.filter(cfg=>document.getElementById(cfg.checkboxId).checked);
   if(!date){oiUploadStatus.textContent="Pick a date before uploading.";oiUploadFile.value="";return}
+  if(!checked.length){oiUploadStatus.textContent="Tick at least one DTE checkbox before uploading.";oiUploadFile.value="";return}
   oiUploadStatus.textContent="Parsing...";
   try{
     const buf=await file.arrayBuffer();
     const isPdf=/\.pdf$/i.test(file.name)||file.type==="application/pdf";
-    const parsed=isPdf?await parseOiPdf(buf):parseOiWorkbook(buf);
-    // Dedupe by strike (last wins) before this hits a bulk upsert — two rows for the same
-    // strike in one batch (e.g. a wrapped/duplicate line in the PDF) would otherwise make
-    // Supabase reject the whole upsert with "ON CONFLICT DO UPDATE command cannot affect row
-    // a second time," failing the sync for every strike in this upload, not just the dupe.
-    const dedupedParsed=[...new Map(parsed.map(r=>[r.strike,r])).values()];
-    const now=new Date().toISOString();
-    const incoming=dedupedParsed.map(r=>({date,strike:r.strike,callOi:r.callOi,putOi:r.putOi,updatedAt:now}));
-    // Capture which strikes this date had in Supabase before we replace it, so a re-upload with
-    // FEWER strikes than last time (e.g. a corrected export) can clean those up in the cloud too
-    // — upsert alone only adds/updates, it never removes rows for strikes no longer in the file.
-    const prevStrikesForDate=oiSnapshots.filter(o=>o.date===date).map(o=>o.strike);
-    const newStrikeSet=new Set(incoming.map(r=>r.strike));
-    const removedStrikes=prevStrikesForDate.filter(s=>!newStrikeSet.has(s));
-    oiSnapshots=[...oiSnapshots.filter(o=>o.date!==date),...incoming].sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.strike-b.strike);
-    saveOiSnapshots();
-    oiUploadStatus.textContent=`Loaded ${incoming.length} strikes for ${date}.`;
-    await syncOiUpsert(incoming);
-    if(removedStrikes.length)await syncOiDeleteStrikes(date,removedStrikes);
-    renderOi(date);
+    // The same file is scanned once per ticked DTE — one column not being found in this
+    // particular file (e.g. "2 DTE" isn't always a listed expiration) shouldn't abort the
+    // others, so each attempt is caught independently and reported in the combined status line.
+    const results=[];
+    for(const cfg of checked){
+      try{
+        // .slice(0) gives each attempt its own ArrayBuffer copy — pdf.js detaches (transfers)
+        // the buffer it's handed, so reusing the same one across multiple checked DTEs would
+        // make every parse after the first fail with "Cannot perform Construct on a detached
+        // ArrayBuffer."
+        const parsed=isPdf?await parseOiPdf(buf.slice(0),cfg.dte):parseOiWorkbook(buf.slice(0),cfg.dte);
+        // Dedupe by strike (last wins) before this hits a bulk upsert — two rows for the same
+        // strike in one batch (e.g. a wrapped/duplicate line in the PDF) would otherwise make
+        // Supabase reject the whole upsert with "ON CONFLICT DO UPDATE command cannot affect row
+        // a second time," failing the sync for every strike in this upload, not just the dupe.
+        const dedupedParsed=[...new Map(parsed.map(r=>[r.strike,r])).values()];
+        const now=new Date().toISOString();
+        const incoming=dedupedParsed.map(r=>({date,dte:cfg.dte,strike:r.strike,callOi:r.callOi,putOi:r.putOi,updatedAt:now}));
+        // Capture which strikes this date+dte had in Supabase before we replace it, so a
+        // re-upload with FEWER strikes than last time (e.g. a corrected export) can clean those
+        // up in the cloud too — upsert alone only adds/updates, never removes.
+        const prevStrikesForDate=oiSnapshots.filter(o=>o.date===date&&o.dte===cfg.dte).map(o=>o.strike);
+        const newStrikeSet=new Set(incoming.map(r=>r.strike));
+        const removedStrikes=prevStrikesForDate.filter(s=>!newStrikeSet.has(s));
+        oiSnapshots=[...oiSnapshots.filter(o=>!(o.date===date&&o.dte===cfg.dte)),...incoming]
+          .sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.dte-b.dte||a.strike-b.strike);
+        saveOiSnapshots();
+        await syncOiUpsert(incoming);
+        if(removedStrikes.length)await syncOiDeleteStrikes(date,cfg.dte,removedStrikes);
+        renderOiTab(cfg,date);
+        results.push(`${cfg.label}: loaded ${incoming.length} strikes`);
+      }catch(err){
+        results.push(`${cfg.label}: ${errMsg(err)}`);
+      }
+    }
+    oiUploadStatus.textContent=results.join(" · ");
   }catch(err){
     oiUploadStatus.textContent="Could not read this file: "+errMsg(err);
   }finally{
     oiUploadFile.value="";
   }
 });
-oiDeleteDate&&oiDeleteDate.addEventListener("click",async()=>{
-  const date=oiViewDate.value;
-  if(!date)return;
-  if(!confirm(`Delete all uploaded 0 DTE OI rows for ${date}?`))return;
-  oiSnapshots=oiSnapshots.filter(o=>o.date!==date);
-  saveOiSnapshots();
-  await syncOiDeleteDate(date);
-  renderOi();
+// Each tab's Viewing Date selector and Delete button are wired here (rather than by hand per
+// tab) so all three behave identically and stay in sync with OI_DTE_TABS if a tab is ever added.
+OI_DTE_TABS.forEach(cfg=>{
+  const viewDateEl=document.getElementById(cfg.prefix+"ViewDate");
+  const deleteBtn=document.getElementById(cfg.prefix+"DeleteDate");
+  viewDateEl&&viewDateEl.addEventListener("change",()=>renderOiTab(cfg));
+  deleteBtn&&deleteBtn.addEventListener("click",async()=>{
+    const date=viewDateEl.value;
+    if(!date)return;
+    if(!confirm(`Delete all uploaded ${cfg.label} rows for ${date}?`))return;
+    oiSnapshots=oiSnapshots.filter(o=>!(o.date===date&&o.dte===cfg.dte));
+    saveOiSnapshots();
+    await syncOiDeleteDate(date,cfg.dte);
+    renderOiTab(cfg);
+  });
 });
-oiViewDate&&oiViewDate.addEventListener("change",()=>renderOi());
 // Picks a "nice" round gridline step (1/2/5 × a power of 10) for ~targetCount divisions across
 // [vMin,vMax], the same rounding convention spreadsheet charts use for their value axis — plain
 // n/targetCount steps land on ugly numbers like 3,614.3.
@@ -3282,32 +3434,38 @@ function renderOiBarChart(containerId,rows,axisLabel,color,negColor,negLabelColo
 // Replicates the Feb-24 workbook's calculation exactly: per strike, Sum = Call OI + Put OI and
 // Diff = Call OI − Put OI, then each of those two columns summed down the whole strike ladder
 // for the day's totals — computed here at render time rather than stored (see the note on the
-// oi_snapshots table in supabase_schema.sql).
+// oi_snapshots table in supabase_schema.sql). Generic over cfg (one of OI_DTE_TABS) so the
+// three tabs share one implementation instead of three hand-copied render functions.
 // preferredDate lets a fresh upload jump the view straight to the date just uploaded, instead
 // of silently staying on whatever date happened to be selected before — the default fallback
 // (keep the previous selection, or fall back to the most recent date) is right for every OTHER
 // call site (tab switches, sync, delete) where nothing new was just added.
-function renderOi(preferredDate){
-  // Skip the DOM/SVG rebuild when the tab isn't visible — renderOi runs on every renderAll(),
-  // i.e. every tab switch and every session/entry save anywhere in the app, not just when the
-  // user is actually looking at this tab. showTab() removes the "hidden" class before calling
-  // renderAll(), so this still renders correctly the moment the user switches to this tab.
-  if(!oiViewDate||document.getElementById("oi").classList.contains("hidden"))return;
-  const dates=[...new Set(oiSnapshots.map(o=>o.date))].sort();
-  const prevSelected=preferredDate||oiViewDate.value;
-  oiViewDate.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join("");
+function renderOiTab(cfg,preferredDate){
+  const p=cfg.prefix;
+  const el=id=>document.getElementById(p+id);
+  const viewDateEl=el("ViewDate");
+  // Skip the DOM/SVG rebuild when this tab isn't visible — renderOiTab runs on every
+  // renderAll(), i.e. every tab switch and every session/entry save anywhere in the app, not
+  // just when the user is actually looking at this tab. showTab() removes the "hidden" class
+  // before calling renderAll(), so this still renders correctly the moment the user switches in.
+  if(!viewDateEl||document.getElementById(p).classList.contains("hidden"))return;
+  const dtRows=oiSnapshots.filter(o=>o.dte===cfg.dte);
+  const dates=[...new Set(dtRows.map(o=>o.date))].sort();
+  const prevSelected=preferredDate||viewDateEl.value;
+  viewDateEl.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join("");
   const date=dates.includes(prevSelected)?prevSelected:dates[dates.length-1];
-  if(date)oiViewDate.value=date;
-  const rows=oiSnapshots.filter(o=>o.date===date).sort((a,b)=>a.strike-b.strike);
+  if(date)viewDateEl.value=date;
+  const rows=dtRows.filter(o=>o.date===date).sort((a,b)=>a.strike-b.strike);
+  const totalsEl=el("Totals"),tableEl=el("Table"),netPutCallEl=el("NetPutCall"),totalVolumeEl=el("TotalVolume"),totalDiffEl=el("TotalDiff"),powerFactorEl=el("PowerFactor");
   if(!rows.length){
-    oiTotals.textContent=dates.length?"":"No 0DTE OI data uploaded yet.";
-    oiTable.innerHTML="";
-    if(oiNetPutCall)oiNetPutCall.textContent="—";
-    if(oiTotalVolume)oiTotalVolume.textContent="—";
-    if(oiTotalDiff){oiTotalDiff.textContent="—";oiTotalDiff.style.background="";oiTotalDiff.style.color=""}
-    if(oiPowerFactor){oiPowerFactor.textContent="—";oiPowerFactor.style.background="";oiPowerFactor.style.color=""}
-    renderOiBarChart("oiVolumeChartWrap",[]);
-    renderOiBarChart("oiDiffChartWrap",[]);
+    if(totalsEl)totalsEl.textContent=dates.length?"":`No ${cfg.label} data uploaded yet.`;
+    if(tableEl)tableEl.innerHTML="";
+    if(netPutCallEl)netPutCallEl.textContent="—";
+    if(totalVolumeEl)totalVolumeEl.textContent="—";
+    if(totalDiffEl){totalDiffEl.textContent="—";totalDiffEl.style.background="";totalDiffEl.style.color=""}
+    if(powerFactorEl){powerFactorEl.textContent="—";powerFactorEl.style.background="";powerFactorEl.style.color=""}
+    renderOiBarChart(p+"VolumeChartWrap",[]);
+    renderOiBarChart(p+"DiffChartWrap",[]);
     return;
   }
   let totalSum=0,totalDiff=0,totalCall=0,totalPut=0;
@@ -3316,27 +3474,28 @@ function renderOi(preferredDate){
     totalSum+=sum;totalDiff+=diff;totalCall+=r.callOi;totalPut+=r.putOi;
     return `<tr><td>${r.strike}</td><td style="text-align:right">${fmt(r.callOi,0)}</td><td style="text-align:right">${fmt(r.putOi,0)}</td><td style="text-align:right">${fmt(sum,0)}</td><td style="text-align:right">${fmt(diff,0)}</td></tr>`;
   }).join("");
-  oiTable.innerHTML=`<tr><th>Strike</th><th style="text-align:right">Call OI</th><th style="text-align:right">Put OI</th><th style="text-align:right">Sum (C+P)</th><th style="text-align:right">Diff (C-P)</th></tr>${body}`;
-  oiTotals.innerHTML=`<b>${date}</b> — Total Call OI: ${fmt(totalCall,0)} &nbsp;·&nbsp; Total Put OI: ${fmt(totalPut,0)} &nbsp;·&nbsp; Total OI (Sum): ${fmt(totalSum,0)} &nbsp;·&nbsp; Net Call&minus;Put (Diff): ${fmt(totalDiff,0)}`;
-  if(oiNetPutCall)oiNetPutCall.textContent=fmt(totalPut-totalCall,0);
-  if(oiTotalVolume)oiTotalVolume.textContent=fmt(totalSum,0);
-  if(oiTotalDiff){
-    oiTotalDiff.textContent=fmt(totalDiff,0);
-    oiTotalDiff.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
-    oiTotalDiff.style.color=totalDiff!==0?"#fff":"";
+  if(tableEl)tableEl.innerHTML=`<tr><th>Strike</th><th style="text-align:right">Call OI</th><th style="text-align:right">Put OI</th><th style="text-align:right">Sum (C+P)</th><th style="text-align:right">Diff (C-P)</th></tr>${body}`;
+  if(totalsEl)totalsEl.innerHTML=`<b>${date}</b> — Total Call OI: ${fmt(totalCall,0)} &nbsp;·&nbsp; Total Put OI: ${fmt(totalPut,0)} &nbsp;·&nbsp; Total OI (Sum): ${fmt(totalSum,0)} &nbsp;·&nbsp; Net Call&minus;Put (Diff): ${fmt(totalDiff,0)}`;
+  if(netPutCallEl)netPutCallEl.textContent=fmt(totalPut-totalCall,0);
+  if(totalVolumeEl)totalVolumeEl.textContent=fmt(totalSum,0);
+  if(totalDiffEl){
+    totalDiffEl.textContent=fmt(totalDiff,0);
+    totalDiffEl.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
+    totalDiffEl.style.color=totalDiff!==0?"#fff":"";
   }
   // Total Difference as a % of Total Volume — a normalized put/call skew: +100% would be pure
   // call OI, -100% pure put OI, 0% perfectly balanced. Reverse-engineered from the user's
   // reference spreadsheet (verified against its "Power factor" figures for two separate days).
-  if(oiPowerFactor){
-    oiPowerFactor.textContent=totalSum?pct(totalDiff/totalSum):"—";
-    oiPowerFactor.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
-    oiPowerFactor.style.color=totalDiff!==0?"#fff":"";
+  if(powerFactorEl){
+    powerFactorEl.textContent=totalSum?pct(totalDiff/totalSum):"—";
+    powerFactorEl.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
+    powerFactorEl.style.color=totalDiff!==0?"#fff":"";
   }
   const byStrikeDesc=[...rows].sort((a,b)=>b.strike-a.strike);
-  renderOiBarChart("oiVolumeChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),r=>r.value),"volume","var(--cyan)");
-  renderOiBarChart("oiDiffChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),r=>Math.abs(r.value)),"difference","var(--green)","#b91c1c","#fef2f2");
+  renderOiBarChart(p+"VolumeChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),r=>r.value),"volume","var(--cyan)");
+  renderOiBarChart(p+"DiffChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),r=>Math.abs(r.value)),"difference","var(--green)","#b91c1c","#fef2f2");
 }
+function renderAllOiTabs(){OI_DTE_TABS.forEach(cfg=>renderOiTab(cfg))}
 // fetchMacroYields() only actually hits the network once per calendar day (see its cache check)
 // and otherwise resolves instantly, so it's safe to call this on every one of these triggers —
 // boot, an hourly tick for tabs left open past midnight, regaining tab focus, and every session

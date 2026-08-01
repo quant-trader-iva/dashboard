@@ -374,22 +374,31 @@ create index if not exists trade_entries_date_idx on public.trade_entries(date);
 create index if not exists trade_entries_setup_type_idx on public.trade_entries(setup_type);
 create index if not exists trade_entries_user_id_idx on public.trade_entries(user_id);
 
--- 0DTE Open Interest snapshots — one row per strike per day, parsed client-side from a QuikStrike
--- Open Interest Matrix XLSX export (Gold 0 DTE column only; see parseOiWorkbook() in index.html).
--- Keyed by (user_id, date, strike) rather than a uuid id, since this is bulk-imported reference
--- data (re-uploading the same day should just overwrite that day's rows, not create duplicates)
--- rather than a hand-created record needing a stable id independent of its content.
+-- Open Interest snapshots — one row per strike per day per tracked DTE (0/2/3, one tab each in
+-- the app), parsed client-side from a QuikStrike Open Interest Matrix XLSX/PDF export (see
+-- parseOiWorkbook()/parseOiPdf() in index.html, called once per ticked DTE checkbox on upload).
+-- Keyed by (user_id, date, dte, strike) rather than a uuid id, since this is bulk-imported
+-- reference data (re-uploading the same day/DTE should just overwrite those rows, not accumulate
+-- duplicates) rather than a hand-created record needing a stable id independent of its content.
 -- call_oi/put_oi are the raw values read from the file; the row-level sum (call+put) and diff
 -- (call-put) from the Feb-24 workbook, plus the day's column totals, are computed in the app at
 -- render time rather than stored, so they can never drift from the raw numbers they're derived from.
+--
+-- Run this on an existing database that still has the single-DTE-only version of this table
+-- (primary key (user_id,date,strike), no dte column — every row from that version was 0DTE data,
+-- so it defaults to dte=0 and stays correct):
+--   alter table public.oi_snapshots add column if not exists dte numeric not null default 0;
+--   alter table public.oi_snapshots drop constraint if exists oi_snapshots_pkey;
+--   alter table public.oi_snapshots add primary key (user_id, date, dte, strike);
 create table if not exists public.oi_snapshots (
   user_id uuid references auth.users(id),
   date date not null,
+  dte numeric not null default 0,
   strike numeric not null,
   call_oi numeric,
   put_oi numeric,
   updated_at timestamptz default now(),
-  primary key (user_id, date, strike)
+  primary key (user_id, date, dte, strike)
 );
 
 alter table public.oi_snapshots enable row level security;
