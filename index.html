@@ -2738,7 +2738,10 @@ exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.
 // Screenshots are exported as a count only (not the image data itself) — base64 image data
 // doesn't belong in a CSV row; use Download Backup (JSON) to get the actual images out.
 exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entries_v1.csv",[[...teFieldNames.map(teKey),"institutionalTrades","mistakeTags","screenshotCount"].join(",")].concat(tradeEntries.map(e=>[...teFieldNames.map(name=>csvEscape(e[teKey(name)])),csvEscape(JSON.stringify(e.institutionalTrades||[])),csvEscape(JSON.stringify(e.mistakeTags||[])),csvEscape((e.screenshots||[]).length)].join(","))).join("\n"),"text/csv"));
-downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing()},null,2),"application/json"));
+// oiSnapshots is included here (unlike before Volume Level Tracking existed) because it now
+// holds hand-graded Hit/Outcome/tracked judgments that, unlike the raw Call/Put OI numbers,
+// can't be reconstructed by just re-uploading the original QuikStrike file.
+downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing(),oiSnapshots},null,2),"application/json"));
 importJson.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
   const data=JSON.parse(await f.text());
@@ -2747,8 +2750,9 @@ importJson.addEventListener("change",async e=>{
     sessions=data.sessions;
     if(Array.isArray(data.tradeEntries))tradeEntries=data.tradeEntries;
     if(data.posSizing){localStorage.setItem(POS_SIZING_KEY,JSON.stringify(data.posSizing));applyPosSizingToForm(data.posSizing);renderPosSizingSummary(data.posSizing)}
+    if(Array.isArray(data.oiSnapshots))oiSnapshots=data.oiSnapshots;
   }else{return alert("Invalid file")}
-  saveSessions();saveEntries();renderAll();
+  saveSessions();saveEntries();saveOiSnapshots();renderAll();
   const seen=new Set(),dupKeys=new Set();
   sessions.forEach(s=>{const k=s.date+"|"+s.sessionType;if(seen.has(k))dupKeys.add(k);else seen.add(k)});
   if(dupKeys.size)alert(`Warning: this backup has ${dupKeys.size} Date+Session Type combination(s) with more than one entry (e.g. ${[...dupKeys][0]}). Delete the extra entries in the Data tab to avoid duplicate rows.`);
@@ -2872,16 +2876,22 @@ async function syncEntryDelete(id){
   savePendingEntryDeletes();
   return ok;
 }
-function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,dte:o.dte,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,updated_at:o.updatedAt||new Date().toISOString()}}
+function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,dte:o.dte,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,hit:o.hit==null?null:o.hit,outcome:o.outcome||null,tracked:!!o.tracked,updated_at:o.updatedAt||new Date().toISOString()}}
 // call_oi/put_oi are `numeric` columns — PostgREST serializes those as JSON strings (to avoid
 // float-precision loss), not numbers, so this coerces them back before they hit any arithmetic
-// (renderOiTab's sums would otherwise silently do string concatenation on synced data).
-function fromOiDb(r){return{date:r.date,dte:Number(r.dte)||0,strike:Number(r.strike),callOi:Number(r.call_oi)||0,putOi:Number(r.put_oi)||0,updatedAt:r.updated_at}}
+// (renderOiTab's sums would otherwise silently do string concatenation on synced data). hit is a
+// real boolean column (not numeric), so it comes back as true/false/null already.
+function fromOiDb(r){return{date:r.date,dte:Number(r.dte)||0,strike:Number(r.strike),callOi:Number(r.call_oi)||0,putOi:Number(r.put_oi)||0,hit:r.hit==null?null:!!r.hit,outcome:r.outcome||null,tracked:!!r.tracked,updatedAt:r.updated_at}}
 async function syncOiUpsert(records){
   if(!supabaseClient||!authUser||!records.length)return false;
   return runSyncOp("oiupsert:bulk",
     ()=>supabaseClient.from("oi_snapshots").upsert(records.map(toOiDb),{onConflict:"user_id,date,dte,strike"}),
-    msg=>`Failed to sync Open Interest data to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+    // toOiDb always sends hit/outcome/tracked now — on a Supabase table that hasn't had the
+    // migration comment above oi_snapshots in supabase_schema.sql run yet, PostgREST rejects the
+    // whole batch with a "column ... schema cache" error, breaking ALL Open Interest sync (not
+    // just Volume Level Tracking) until that's run. Detected and called out explicitly here so
+    // that failure is self-diagnosing instead of reading like a generic network hiccup.
+    msg=>/column .* .* schema cache/i.test(msg)?`Failed to sync Open Interest data: your Supabase "oi_snapshots" table is missing the hit/outcome/tracked columns this version needs. Run the "alter table" statements from the comment above the oi_snapshots table in supabase_schema.sql, then click Sync Now in Settings. Your local copy is safe.`:`Failed to sync Open Interest data to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
 }
 // pendingOiDeletes entries are {date,dte} objects, not plain date strings, since a delete is now
 // scoped to one tab's data for a date, not every DTE's data for that date.
@@ -3227,6 +3237,35 @@ function renderOiSubpagesShell(){
           <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
           <div class="chartwrap" id="${p}DiffChartWrap" style="position:relative"></div>
         </div>
+        <div class="card span-12">
+          <h2>Volume Level Tracking</h2>
+          <p class="hint">Strikes flagged high-volume/high-difference above (amber) &mdash; mark whether price reached that strike and what happened after. Not every important level gets auto-flagged, so you can also add any strike from this date's ladder by hand below.</p>
+          <div class="toolbar">
+            <div><label>Add a Strike</label><input id="${p}AddStrike" type="number" step="any" placeholder="e.g. 2400"/></div>
+            <button id="${p}AddStrikeBtn">Track Level</button>
+          </div>
+          <p class="hint" id="${p}AddStrikeStatus"></p>
+          <div class="tablewrap"><table id="${p}LevelTable"></table></div>
+          <div style="display:flex;gap:10px;margin-top:14px;max-width:520px">
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Hit Rate</div>
+              <div style="font-size:20px;font-weight:800" id="${p}HitRate">&mdash;</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Continuation</div>
+              <div style="font-size:20px;font-weight:800;color:var(--green)" id="${p}ContPct">&mdash;</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Reversal</div>
+              <div style="font-size:20px;font-weight:800;color:var(--red)" id="${p}RevPct">&mdash;</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Levels Tracked</div>
+              <div style="font-size:20px;font-weight:800" id="${p}LevelsTracked">&mdash;</div>
+            </div>
+          </div>
+          <p class="hint" id="${p}DiffOutcomeSplit" style="margin-top:12px"></p>
+        </div>
       </div>
     </div>`;
   }).join("");
@@ -3277,13 +3316,29 @@ oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
         // a second time," failing the sync for every strike in this upload, not just the dupe.
         const dedupedParsed=[...new Map(parsed.map(r=>[r.strike,r])).values()];
         const now=new Date().toISOString();
-        const incoming=dedupedParsed.map(r=>({date,dte:cfg.dte,strike:r.strike,callOi:r.callOi,putOi:r.putOi,updatedAt:now}));
+        // Carry over any hit/outcome/tracked already marked for a strike (see Volume Level
+        // Tracking) across a re-upload of the same date+dte — a corrected export shouldn't
+        // silently wipe out level tracking the user already logged for strikes still present in
+        // the new file.
+        const prevRowsForDate=oiSnapshots.filter(o=>o.date===date&&o.dte===cfg.dte);
+        const prevByStrike=new Map(prevRowsForDate.map(o=>[o.strike,o]));
+        const newStrikeSet=new Set(dedupedParsed.map(r=>r.strike));
+        // Strikes this upload no longer lists AND that carry a Hit/Outcome or manual-track
+        // judgment — unlike a strike that simply had no tracking data (safe to drop silently,
+        // same as before), destroying one of these needs the user's say-so, mirroring the
+        // confirm() the "Delete This Date" button already requires for equivalent data loss.
+        const droppedGraded=prevRowsForDate.filter(o=>!newStrikeSet.has(o.strike)&&(o.hit!=null||o.tracked));
+        const keepDropped=droppedGraded.length&&!confirm(`This ${cfg.label} upload for ${date} no longer lists ${droppedGraded.length} strike(s) you've tracked (${droppedGraded.map(o=>o.strike).join(", ")}). Click OK to delete their Hit/Outcome tracking along with the stale row, or Cancel to leave those strikes untouched.`)?droppedGraded:[];
+        const incoming=[...dedupedParsed.map(r=>{
+          const prev=prevByStrike.get(r.strike);
+          return{date,dte:cfg.dte,strike:r.strike,callOi:r.callOi,putOi:r.putOi,hit:prev?prev.hit:null,outcome:prev?prev.outcome:null,tracked:prev?prev.tracked:false,updatedAt:now};
+        }),...keepDropped];
         // Capture which strikes this date+dte had in Supabase before we replace it, so a
         // re-upload with FEWER strikes than last time (e.g. a corrected export) can clean those
-        // up in the cloud too — upsert alone only adds/updates, never removes.
-        const prevStrikesForDate=oiSnapshots.filter(o=>o.date===date&&o.dte===cfg.dte).map(o=>o.strike);
-        const newStrikeSet=new Set(incoming.map(r=>r.strike));
-        const removedStrikes=prevStrikesForDate.filter(s=>!newStrikeSet.has(s));
+        // up in the cloud too — upsert alone only adds/updates, never removes. Strikes the user
+        // chose to keep (kept in `incoming` above) are excluded, so they're never deleted.
+        const finalStrikeSet=new Set(incoming.map(r=>r.strike));
+        const removedStrikes=prevRowsForDate.map(o=>o.strike).filter(s=>!finalStrikeSet.has(s));
         oiSnapshots=[...oiSnapshots.filter(o=>!(o.date===date&&o.dte===cfg.dte)),...incoming]
           .sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.dte-b.dte||a.strike-b.strike);
         saveOiSnapshots();
@@ -3309,6 +3364,7 @@ OI_DTE_TABS.forEach(cfg=>{
   const viewDateEl=document.getElementById(cfg.prefix+"ViewDate");
   const deleteBtn=document.getElementById(cfg.prefix+"DeleteDate");
   viewDateEl&&viewDateEl.addEventListener("change",()=>renderOiTab(cfg));
+  wireOiAddStrike(cfg);
   deleteBtn&&deleteBtn.addEventListener("click",async()=>{
     const date=viewDateEl.value;
     if(!date)return;
@@ -3438,6 +3494,7 @@ function renderOiTab(cfg,preferredDate){
     if(powerFactorEl){powerFactorEl.textContent="—";powerFactorEl.style.background="";powerFactorEl.style.color=""}
     renderOiBarChart(p+"VolumeChartWrap",[]);
     renderOiBarChart(p+"DiffChartWrap",[]);
+    renderOiLevelTracker(cfg,[],[],[],date);
     return;
   }
   let totalSum=0,totalDiff=0,totalCall=0,totalPut=0;
@@ -3463,11 +3520,145 @@ function renderOiTab(cfg,preferredDate){
     powerFactorEl.style.background=totalDiff<0?"#b91c1c":totalDiff>0?"var(--green)":"";
     powerFactorEl.style.color=totalDiff!==0?"#fff":"";
   }
-  const byStrikeDesc=[...rows].sort((a,b)=>b.strike-a.strike);
-  renderOiBarChart(p+"VolumeChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),r=>r.value),"volume","var(--cyan)");
-  renderOiBarChart(p+"DiffChartWrap",flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),r=>Math.abs(r.value)),"difference","var(--green)","#b91c1c","#fef2f2");
+  const{volFlagged,diffFlagged}=computeOiFlags(rows);
+  renderOiBarChart(p+"VolumeChartWrap",volFlagged,"volume","var(--cyan)");
+  renderOiBarChart(p+"DiffChartWrap",diffFlagged,"difference","var(--green)","#b91c1c","#fef2f2");
+  renderOiLevelTracker(cfg,rows,volFlagged,diffFlagged,date);
 }
 function renderAllOiTabs(){OI_DTE_TABS.forEach(cfg=>renderOiTab(cfg))}
+// Shared between renderOiTab (full chart render) and refreshOiLevelTracker (level-tracker-only
+// refresh after a Hit/Outcome/tracked edit) so both always agree on which strikes are "high."
+function computeOiFlags(rows){
+  const byStrikeDesc=[...rows].sort((a,b)=>b.strike-a.strike);
+  return{
+    volFlagged:flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi+r.putOi})),r=>r.value),
+    diffFlagged:flagHighOiRows(byStrikeDesc.map(r=>({strike:r.strike,value:r.callOi-r.putOi})),r=>Math.abs(r.value))
+  };
+}
+// Recomputes and redraws ONLY the Volume Level Tracking card for one date — used after a
+// Hit/Outcome/tracked edit, which never changes Call/Put OI, so rebuilding the Strike Ladder
+// table and both chart SVGs via the full renderOiTab would be pure wasted work.
+function refreshOiLevelTracker(cfg,date){
+  const rows=oiSnapshots.filter(o=>o.dte===cfg.dte&&o.date===date).sort((a,b)=>a.strike-b.strike);
+  const{volFlagged,diffFlagged}=computeOiFlags(rows);
+  renderOiLevelTracker(cfg,rows,volFlagged,diffFlagged,date);
+}
+// Strikes worth tracking are the union of whatever either chart above flagged as high (a strike
+// can be a "wall" in Volume, in Difference, or both) — reuses the same flagHighOiRows output the
+// charts already computed instead of re-deriving the mean/stdev threshold a second time.
+// Hit/Outcome are edited per date+strike (setOiHit/setOiOutcome below) for the currently viewed
+// date, but the stats beneath the table roll up every date logged for this DTE, so they build up
+// day over day instead of resetting whenever the Viewing Date changes.
+function renderOiLevelTracker(cfg,rows,volFlagged,diffFlagged,date){
+  const p=cfg.prefix;
+  const tableEl=document.getElementById(p+"LevelTable");
+  const hitRateEl=document.getElementById(p+"HitRate"),contPctEl=document.getElementById(p+"ContPct"),revPctEl=document.getElementById(p+"RevPct"),trackedEl=document.getElementById(p+"LevelsTracked"),splitEl=document.getElementById(p+"DiffOutcomeSplit");
+  if(!tableEl)return;
+  // Manually-tracked strikes (see setOiTrackStrike, wired to the "Track Level" button) join the
+  // auto-flagged set — lets a level that didn't cross the 1-stdev threshold still get tracked.
+  const autoHighSet=new Set([...volFlagged.filter(r=>r.high),...diffFlagged.filter(r=>r.high)].map(r=>r.strike));
+  const levelRows=rows.filter(r=>autoHighSet.has(r.strike)||r.tracked).sort((a,b)=>b.strike-a.strike);
+  if(!levelRows.length){
+    tableEl.innerHTML="";
+  }else{
+    const body=levelRows.map(r=>{
+      const diff=r.callOi-r.putOi;
+      const hitVal=r.hit===true?"yes":r.hit===false?"no":"";
+      const outcomeVal=r.outcome||"";
+      const diffColor=diff<0?"var(--red)":diff>0?"var(--green)":"inherit";
+      // Only a strike that's ONLY in the list because it was tracked by hand (not also
+      // auto-flagged) gets a remove control — an auto-flagged strike would just reappear next
+      // render anyway, so removing it would be confusing rather than useful.
+      const removeCell=(r.tracked&&!autoHighSet.has(r.strike))?`<td><button onclick="untrackOiStrike(${cfg.dte},'${date}',${r.strike})" title="Stop tracking this strike" style="padding:2px 8px;font-size:12px">&times;</button></td>`:"<td></td>";
+      return `<tr><td>${r.strike}</td><td style="text-align:right;color:${diffColor}">${fmt(diff,0)}</td>`
+        +`<td><select onchange="setOiHit(${cfg.dte},'${date}',${r.strike},this.value)">`
+        +`<option value=""${hitVal===""?" selected":""}>&mdash;</option>`
+        +`<option value="yes"${hitVal==="yes"?" selected":""}>Yes</option>`
+        +`<option value="no"${hitVal==="no"?" selected":""}>No</option></select></td>`
+        +`<td><select${hitVal!=="yes"?" disabled":""} onchange="setOiOutcome(${cfg.dte},'${date}',${r.strike},this.value)">`
+        +`<option value=""${outcomeVal===""?" selected":""}>&mdash;</option>`
+        +`<option value="continuation"${outcomeVal==="continuation"?" selected":""}>Continuation</option>`
+        +`<option value="reversal"${outcomeVal==="reversal"?" selected":""}>Reversal</option></select></td>${removeCell}</tr>`;
+    }).join("");
+    tableEl.innerHTML=`<tr><th>Strike</th><th style="text-align:right">Diff (C-P)</th><th>Hit</th><th>Outcome</th><th></th></tr>${body}`;
+  }
+  const tracked=oiSnapshots.filter(o=>o.dte===cfg.dte&&o.hit!=null);
+  const hits=tracked.filter(o=>o.hit===true);
+  const withOutcome=hits.filter(o=>o.outcome==="continuation"||o.outcome==="reversal");
+  const contCount=withOutcome.filter(o=>o.outcome==="continuation").length;
+  const revCount=withOutcome.filter(o=>o.outcome==="reversal").length;
+  if(trackedEl)trackedEl.textContent=fmt(tracked.length,0);
+  if(hitRateEl)hitRateEl.textContent=tracked.length?pct(hits.length/tracked.length):"—";
+  if(contPctEl)contPctEl.textContent=withOutcome.length?pct(contCount/withOutcome.length):"—";
+  if(revPctEl)revPctEl.textContent=withOutcome.length?pct(revCount/withOutcome.length):"—";
+  // Split by the sign of that strike's Diff (call-heavy vs put-heavy) to see whether skew
+  // direction predicts what happens once price actually reaches the level.
+  const callHeavy=withOutcome.filter(o=>(o.callOi-o.putOi)>0);
+  const putHeavy=withOutcome.filter(o=>(o.callOi-o.putOi)<0);
+  const rate=(list,outcome)=>list.length?pct(list.filter(o=>o.outcome===outcome).length/list.length):"—";
+  if(splitEl)splitEl.innerHTML=tracked.length?`<b>Call-heavy levels</b> (Diff&gt;0, n=${callHeavy.length}): Continuation ${rate(callHeavy,"continuation")} &middot; Reversal ${rate(callHeavy,"reversal")} &nbsp;&nbsp; <b>Put-heavy levels</b> (Diff&lt;0, n=${putHeavy.length}): Continuation ${rate(putHeavy,"continuation")} &middot; Reversal ${rate(putHeavy,"reversal")}`:"";
+}
+// Per-row promise chains, keyed by oiRowKey, so two fast edits to the SAME strike never have
+// their network upserts in flight at once — the second always awaits the first's response before
+// its own request goes out, guaranteeing Supabase processes them (and keeps) in edit order
+// instead of racing on whichever the server happens to respond to first.
+const oiRowSyncChains=new Map();
+// Shared find-row -> apply patch -> persist -> refresh sequence for every Hit/Outcome/tracked
+// edit (setOiHit/setOiOutcome/untrackOiStrike/wireOiAddStrike below) so the persist-and-refresh
+// logic only has to be right in one place. Refreshes the Volume Level Tracking card BEFORE
+// awaiting the network call (not after) so the UI — including the Outcome select's disabled
+// state — reflects the edit immediately, instead of staying stale for the round-trip.
+async function updateOiRow(dte,date,strike,patch){
+  const row=oiSnapshots.find(o=>o.dte===dte&&o.date===date&&o.strike===strike);
+  if(!row)return null;
+  Object.assign(row,patch,{updatedAt:new Date().toISOString()});
+  saveOiSnapshots();
+  const cfg=OI_DTE_TABS.find(c=>c.dte===dte);
+  refreshOiLevelTracker(cfg,date);
+  const key=oiRowKey(date,dte,strike);
+  const chain=(oiRowSyncChains.get(key)||Promise.resolve()).then(()=>syncOiUpsert([row]));
+  oiRowSyncChains.set(key,chain);
+  await chain;
+  return row;
+}
+// Setting Hit away from Yes clears Outcome, mirroring IB_HIT_TO_OUTCOME's existing behavior for
+// the Sessions tab's IB Hit/Outcome fields — otherwise a Reversal/Continuation judgment made for
+// one Yes grading could silently resurface if Hit is later toggled back to Yes.
+async function setOiHit(dte,date,strike,val){
+  const hit=val===""?null:val==="yes";
+  await updateOiRow(dte,date,strike,hit!==true?{hit,outcome:null}:{hit});
+}
+async function setOiOutcome(dte,date,strike,val){
+  await updateOiRow(dte,date,strike,{outcome:val===""?null:val});
+}
+// Also clears hit/outcome, not just tracked — the row is only ever offered a remove button when
+// it's about to vanish from the table entirely (see removeCell in renderOiLevelTracker), so
+// leaving a stale Hit/Outcome behind here would keep it counted in the aggregate stats forever
+// with no way back to the row to fix it.
+async function untrackOiStrike(dte,date,strike){
+  await updateOiRow(dte,date,strike,{tracked:false,hit:null,outcome:null});
+}
+// Only matches a strike that's actually in this date's uploaded ladder — a manually-tracked
+// level still needs real Call/Put OI to show a meaningful Diff and to be one of the strikes the
+// Strike Ladder/charts already know about, so a price with no OI row is rejected rather than
+// silently creating a fake one (which would also corrupt Total Volume/Total Difference/Power
+// Factor, all of which sum every row in oiSnapshots for the date).
+function wireOiAddStrike(cfg){
+  const p=cfg.prefix;
+  const input=document.getElementById(p+"AddStrike"),btn=document.getElementById(p+"AddStrikeBtn"),statusEl=document.getElementById(p+"AddStrikeStatus");
+  if(!btn)return;
+  btn.addEventListener("click",async()=>{
+    const viewDateEl=document.getElementById(p+"ViewDate");
+    const date=viewDateEl&&viewDateEl.value;
+    const strike=Number(input.value);
+    if(!date){statusEl.textContent="Pick a Viewing Date first.";return}
+    if(!input.value||!Number.isFinite(strike)){statusEl.textContent="Enter a strike price.";return}
+    if(!oiSnapshots.some(o=>o.dte===cfg.dte&&o.date===date&&o.strike===strike)){statusEl.textContent=`No ${cfg.label} data for strike ${strike} on ${date} — only strikes already in this date's uploaded ladder can be tracked.`;return}
+    input.value="";
+    statusEl.textContent=`Tracking strike ${strike}.`;
+    await updateOiRow(cfg.dte,date,strike,{tracked:true});
+  });
+}
 // fetchMacroYields() only actually hits the network once per calendar day (see its cache check)
 // and otherwise resolves instantly, so it's safe to call this on every one of these triggers —
 // boot, an hourly tick for tabs left open past midnight, regaining tab focus, and every session
