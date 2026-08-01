@@ -399,6 +399,18 @@ create index if not exists trade_entries_user_id_idx on public.trade_entries(use
 -- the same time as adding its OI_DTE_TABS entry, not a separate later step:
 --   alter table public.oi_snapshots drop constraint if exists oi_snapshots_dte_check;
 --   alter table public.oi_snapshots add constraint oi_snapshots_dte_check check (dte in (0,2,3,<new dte>));
+--
+-- hit/outcome track whether price actually reached a strike the app flagged as high-volume or
+-- high-difference (see flagHighOiRows() in index.html) and, if so, whether that level held
+-- (Continuation) or turned price the other way (Reversal) — set manually per strike from the
+-- Volume Level Tracking card, mirroring the existing ib_current_hit/ib_current_outcome pattern on
+-- trading_sessions. Nullable: most rows are never marked, only the strikes the user actually
+-- watched a level get hit. tracked marks a strike pinned into that same card by hand (via "Track
+-- Level") even though it wasn't auto-flagged — not every level worth watching crosses the
+-- 1-stdev threshold. Run this on an existing database that doesn't have these columns yet:
+--   alter table public.oi_snapshots add column if not exists hit boolean;
+--   alter table public.oi_snapshots add column if not exists outcome text check (outcome in ('continuation','reversal'));
+--   alter table public.oi_snapshots add column if not exists tracked boolean not null default false;
 create table if not exists public.oi_snapshots (
   user_id uuid references auth.users(id),
   date date not null,
@@ -406,6 +418,9 @@ create table if not exists public.oi_snapshots (
   strike numeric not null,
   call_oi numeric,
   put_oi numeric,
+  hit boolean,
+  outcome text check (outcome in ('continuation','reversal')),
+  tracked boolean not null default false,
   updated_at timestamptz default now(),
   primary key (user_id, date, dte, strike)
 );
