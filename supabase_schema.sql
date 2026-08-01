@@ -390,10 +390,19 @@ create index if not exists trade_entries_user_id_idx on public.trade_entries(use
 --   alter table public.oi_snapshots add column if not exists dte numeric not null default 0;
 --   alter table public.oi_snapshots drop constraint if exists oi_snapshots_pkey;
 --   alter table public.oi_snapshots add primary key (user_id, date, dte, strike);
+--   alter table public.oi_snapshots add constraint oi_snapshots_dte_check check (dte in (0,2,3));
+--
+-- The dte check constraint below ties inserts to the DTEs the app actually has a tab for
+-- (OI_DTE_TABS in index.html) — without it, a typo'd/stray dte value would insert successfully
+-- but never render in any tab, becoming invisible orphaned data with no UI to find or delete it.
+-- Adding a 4th tracked DTE means updating this constraint (drop + re-add with the new value) at
+-- the same time as adding its OI_DTE_TABS entry, not a separate later step:
+--   alter table public.oi_snapshots drop constraint if exists oi_snapshots_dte_check;
+--   alter table public.oi_snapshots add constraint oi_snapshots_dte_check check (dte in (0,2,3,<new dte>));
 create table if not exists public.oi_snapshots (
   user_id uuid references auth.users(id),
   date date not null,
-  dte numeric not null default 0,
+  dte numeric not null default 0 check (dte in (0,2,3)),
   strike numeric not null,
   call_oi numeric,
   put_oi numeric,

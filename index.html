@@ -37,6 +37,7 @@
     .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px}.toolbar>div{min-width:150px}
     details summary{cursor:pointer;font-weight:700;color:var(--cyan);padding:4px 0;list-style:revert}
     details summary:hover{opacity:.85}
+    input:disabled+.pill{opacity:.5;cursor:not-allowed}
     .session-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.session-buttons button{background:#1f2937}.session-buttons button.active{background:var(--cyan);color:#082f49}
     .dash-grid{display:grid;grid-template-columns:250px repeat(5,minmax(190px,1fr)) 350px;gap:0;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:#08111f}
     .cell{min-height:35px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px}
@@ -645,157 +646,13 @@
       <div><label>Date</label><input id="oiUploadDate" type="date"/></div>
       <label style="display:inline-flex;align-items:center;gap:8px;margin:0;cursor:pointer"><input id="oiUploadFile" type="file" accept=".xlsx,.pdf" style="display:none"><span class="pill">Upload XLSX / PDF</span></label>
     </div>
-    <div class="toolbar">
-      <label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="oiCheck0" type="checkbox" checked/> 0 DTE</label>
-      <label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="oiCheck2" type="checkbox"/> 2 DTE</label>
-      <label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="oiCheck3" type="checkbox"/> 3 DTE</label>
-    </div>
+    <div class="toolbar" id="oiChecksToolbar"><!-- generated from OI_DTE_TABS, see renderOiSubpagesShell() --></div>
     <p id="oiUploadStatus" class="hint"></p>
   </div>
 
-  <div class="subtabs">
-    <button class="subtab active" data-subtab="oi0">0DTE</button>
-    <button class="subtab" data-subtab="oi2">2DTE</button>
-    <button class="subtab" data-subtab="oi3">3DTE</button>
-  </div>
+  <div class="subtabs" id="oiSubtabsRow"><!-- generated from OI_DTE_TABS --></div>
 
-  <div id="oi0" class="oi-subpage">
-    <div class="card">
-      <h2>Strike Ladder</h2>
-      <div class="toolbar">
-        <div><label>Viewing Date</label><select id="oi0ViewDate"></select></div>
-        <button id="oi0DeleteDate" class="danger">Delete This Date</button>
-      </div>
-      <details id="oi0TableDetails">
-        <summary>Show strike-by-strike table</summary>
-        <div id="oi0Totals" class="hint" style="margin-top:10px"></div>
-        <div class="tablewrap"><table id="oi0Table"></table></div>
-      </details>
-    </div>
-    <div class="grid">
-      <div class="card span-12">
-        <h2>Net Put &minus; Call OI</h2>
-        <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-        <div style="text-align:center;margin-top:10px"><div class="value" id="oi0NetPutCall">&mdash;</div></div>
-        <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Total Volume</div>
-            <div style="font-size:20px;font-weight:800" id="oi0TotalVolume">&mdash;</div>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Total Difference</div>
-            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0TotalDiff">&mdash;</div>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Power Factor</div>
-            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0PowerFactor">&mdash;</div>
-          </div>
-        </div>
-      </div>
-      <div class="card span-6">
-        <h2>Volume by Strike</h2>
-        <p class="hint">Call OI + Put OI at each strike.</p>
-        <div class="chartwrap" id="oi0VolumeChartWrap" style="position:relative"></div>
-      </div>
-      <div class="card span-6">
-        <h2>Difference by Strike</h2>
-        <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-        <div class="chartwrap" id="oi0DiffChartWrap" style="position:relative"></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="oi2" class="oi-subpage hidden">
-    <div class="card">
-      <h2>Strike Ladder</h2>
-      <div class="toolbar">
-        <div><label>Viewing Date</label><select id="oi2ViewDate"></select></div>
-        <button id="oi2DeleteDate" class="danger">Delete This Date</button>
-      </div>
-      <details id="oi2TableDetails">
-        <summary>Show strike-by-strike table</summary>
-        <div id="oi2Totals" class="hint" style="margin-top:10px"></div>
-        <div class="tablewrap"><table id="oi2Table"></table></div>
-      </details>
-    </div>
-    <div class="grid">
-      <div class="card span-12">
-        <h2>Net Put &minus; Call OI</h2>
-        <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-        <div style="text-align:center;margin-top:10px"><div class="value" id="oi2NetPutCall">&mdash;</div></div>
-        <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Total Volume</div>
-            <div style="font-size:20px;font-weight:800" id="oi2TotalVolume">&mdash;</div>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Total Difference</div>
-            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2TotalDiff">&mdash;</div>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Power Factor</div>
-            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2PowerFactor">&mdash;</div>
-          </div>
-        </div>
-      </div>
-      <div class="card span-6">
-        <h2>Volume by Strike</h2>
-        <p class="hint">Call OI + Put OI at each strike.</p>
-        <div class="chartwrap" id="oi2VolumeChartWrap" style="position:relative"></div>
-      </div>
-      <div class="card span-6">
-        <h2>Difference by Strike</h2>
-        <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-        <div class="chartwrap" id="oi2DiffChartWrap" style="position:relative"></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="oi3" class="oi-subpage hidden">
-    <div class="card">
-      <h2>Strike Ladder</h2>
-      <div class="toolbar">
-        <div><label>Viewing Date</label><select id="oi3ViewDate"></select></div>
-        <button id="oi3DeleteDate" class="danger">Delete This Date</button>
-      </div>
-      <details id="oi3TableDetails">
-        <summary>Show strike-by-strike table</summary>
-        <div id="oi3Totals" class="hint" style="margin-top:10px"></div>
-        <div class="tablewrap"><table id="oi3Table"></table></div>
-      </details>
-    </div>
-    <div class="grid">
-      <div class="card span-12">
-        <h2>Net Put &minus; Call OI</h2>
-        <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-        <div style="text-align:center;margin-top:10px"><div class="value" id="oi3NetPutCall">&mdash;</div></div>
-        <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Total Volume</div>
-            <div style="font-size:20px;font-weight:800" id="oi3TotalVolume">&mdash;</div>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Total Difference</div>
-            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3TotalDiff">&mdash;</div>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div class="hint" style="margin:0">Power Factor</div>
-            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3PowerFactor">&mdash;</div>
-          </div>
-        </div>
-      </div>
-      <div class="card span-6">
-        <h2>Volume by Strike</h2>
-        <p class="hint">Call OI + Put OI at each strike.</p>
-        <div class="chartwrap" id="oi3VolumeChartWrap" style="position:relative"></div>
-      </div>
-      <div class="card span-6">
-        <h2>Difference by Strike</h2>
-        <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-        <div class="chartwrap" id="oi3DiffChartWrap" style="position:relative"></div>
-      </div>
-    </div>
-  </div>
+  <div id="oiSubpagesRow"><!-- generated from OI_DTE_TABS: one .oi-subpage per tracked DTE --></div>
 </section>
 
 <section id="settings" class="page hidden">
@@ -833,6 +690,8 @@ const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const OI_STORAGE_KEY="trading_projection_oi_snapshots_v2";
 const PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v2";
+const LEGACY_OI_STORAGE_KEY="trading_projection_oi_snapshots_v1";
+const LEGACY_PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
 // Read from the ibCurrentOutcome select's own <option> list (same convention as outcomeMix()
 // reading #outcome's options below) so a renamed/added outcome option flows through everywhere —
@@ -873,11 +732,28 @@ function loadPendingEntryDeletes(){try{return JSON.parse(localStorage.getItem(PE
 function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KEY,JSON.stringify(pendingEntryDeletes))}
 // oiSnapshots rows are keyed by date+dte+strike (not a uuid id) — see the matching note on the
 // oi_snapshots table in supabase_schema.sql for why: re-uploading a date should overwrite it,
-// not accumulate duplicate rows. Storage key bumped to v2 when the dte column was added — old
-// v1 data was single-DTE-only (0DTE) and small enough to just re-upload rather than migrate.
-function loadOiSnapshots(){try{return JSON.parse(localStorage.getItem(OI_STORAGE_KEY)||"[]")}catch{return[]}}
+// not accumulate duplicate rows. Storage key bumped to v2 when the dte column was added — every
+// v1 row was single-DTE-only (0DTE), so migration just tags each with dte:0, same convention as
+// loadSessions()'s LEGACY_STORAGE_KEY fallback below.
+function loadOiSnapshots(){
+  try{
+    const cur=localStorage.getItem(OI_STORAGE_KEY);
+    if(cur)return JSON.parse(cur);
+    const legacy=localStorage.getItem(LEGACY_OI_STORAGE_KEY);
+    if(legacy){const data=JSON.parse(legacy).map(o=>({...o,dte:0}));localStorage.setItem(OI_STORAGE_KEY,JSON.stringify(data));return data}
+    return[]
+  }catch{return[]}
+}
 function saveOiSnapshots(){localStorage.setItem(OI_STORAGE_KEY,JSON.stringify(oiSnapshots))}
-function loadPendingOiDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_OI_DELETES_KEY)||"[]")}catch{return[]}}
+function loadPendingOiDeletes(){
+  try{
+    const cur=localStorage.getItem(PENDING_OI_DELETES_KEY);
+    if(cur)return JSON.parse(cur);
+    const legacy=localStorage.getItem(LEGACY_PENDING_OI_DELETES_KEY);
+    if(legacy){const data=JSON.parse(legacy).map(date=>({date,dte:0}));localStorage.setItem(PENDING_OI_DELETES_KEY,JSON.stringify(data));return data}
+    return[]
+  }catch{return[]}
+}
 function savePendingOiDeletes(){localStorage.setItem(PENDING_OI_DELETES_KEY,JSON.stringify(pendingOiDeletes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
@@ -3010,6 +2886,9 @@ async function syncOiUpsert(records){
 // pendingOiDeletes entries are {date,dte} objects, not plain date strings, since a delete is now
 // scoped to one tab's data for a date, not every DTE's data for that date.
 function oiPendingKey(date,dte){return date+"|"+dte}
+// Every composite OI key in the file builds on oiPendingKey (never a separate hand-rolled
+// concat) so a future change to the date+dte format only has to happen in one place.
+function oiRowKey(date,dte,strike){return oiPendingKey(date,dte)+"|"+strike}
 async function syncOiDeleteDate(date,dte){
   if(!supabaseClient||!authUser)return false;
   const key=oiPendingKey(date,dte);
@@ -3027,7 +2906,7 @@ async function syncOiDeleteDate(date,dte){
 // would be wrong here since we're simultaneously uploading fresh rows for this exact date+dte.
 async function syncOiDeleteStrikes(date,dte,strikes){
   if(!supabaseClient||!authUser||!strikes.length)return false;
-  return runSyncOp("oideletestrikes:"+date+"|"+dte,
+  return runSyncOp("oideletestrikes:"+oiPendingKey(date,dte),
     ()=>supabaseClient.from("oi_snapshots").delete().eq("date",date).eq("dte",dte).in("strike",strikes),
     msg=>`Failed to remove ${strikes.length} stale Open Interest row(s) from the cloud for ${date}: ${msg}. Your local copy is correct — click Sync Now in Settings to retry.`);
 }
@@ -3039,7 +2918,7 @@ async function syncOiFromCloud(){
     const pendingKeys=new Set(pendingOiDeletes.map(p=>oiPendingKey(p.date,p.dte)));
     const map=new Map();
     [...oiSnapshots,...data.map(fromOiDb)].filter(o=>!pendingKeys.has(oiPendingKey(o.date,o.dte))).forEach(o=>{
-      const key=o.date+"|"+o.dte+"|"+o.strike;
+      const key=oiRowKey(o.date,o.dte,o.strike);
       const existing=map.get(key);
       if(!existing||(o.updatedAt||"")>=(existing.updatedAt||""))map.set(key,o);
     });
@@ -3222,11 +3101,19 @@ async function parseOiPdf(arrayBuffer,targetDte){
   if(!strikeHdr)throw new Error('Could not find a "STRIKE" column header in this PDF — is this the Open Interest Matrix export?');
   const strikeX=strikeHdr.x,page=strikeHdr.page;
   const targetDigits=String(targetDte);
+  const isDigitToken=s=>/^\d+$/.test(s);
   let dteZero=null;
   for(const it of items){
     if(it.str!==targetDigits||it.page!==page)continue;
     const dte=items.find(d=>d.str==="DTE"&&d.page===it.page&&near(d.y,it.y,0.5)&&d.x>it.x&&d.x-(it.x+it.w)<6);
-    if(dte){dteZero=it;break}
+    if(!dte)continue;
+    // Guard against a multi-digit label rendered as separate per-digit runs (e.g. "12 DTE" split
+    // into "1"+"2") — if another digit-only token sits immediately to this one's left on the same
+    // row, this match is actually the tail of a longer number, not a standalone targetDte, so it
+    // must be rejected rather than mistaken for e.g. "2 DTE".
+    const precedingDigit=items.find(d=>d.page===it.page&&isDigitToken(d.str)&&near(d.y,it.y,0.5)&&d.x<it.x&&it.x-(d.x+d.w)<2);
+    if(precedingDigit)continue;
+    dteZero=it;break;
   }
   if(!dteZero)throw new Error(`Could not find a "${dteLabel}" column in this PDF.`);
   const approxColX=dteZero.x,dteRowY=dteZero.y;
@@ -3275,14 +3162,76 @@ async function parseOiPdf(arrayBuffer,targetDte){
   rows.sort((a,b)=>a.strike-b.strike);
   return rows;
 }
-// One config per DTE tab — drives the checkboxes on the shared upload panel (in the 0DTE
-// section) and the per-tab DOM id prefixes used by renderOiTab/wireOiTab below, so adding a
-// 4th tracked DTE later is a one-line addition here plus a new HTML section, not new JS logic.
+// One config per DTE tab — drives the checkboxes, sub-tab buttons, and per-tab DOM id prefixes
+// used by renderOiSubpagesShell()/renderOiTab() below, so adding a 4th tracked DTE really is a
+// one-line addition here: the HTML for its checkbox, sub-tab button, and full subpage (Strike
+// Ladder + Net Put-Call OI + charts) is generated from this array, not hand-copied per DTE.
 const OI_DTE_TABS=[
   {dte:0,prefix:"oi0",checkboxId:"oiCheck0",label:"0 DTE"},
   {dte:2,prefix:"oi2",checkboxId:"oiCheck2",label:"2 DTE"},
   {dte:3,prefix:"oi3",checkboxId:"oiCheck3",label:"3 DTE"}
 ];
+// Builds the checkbox row, sub-tab button strip, and one full .oi-subpage block per OI_DTE_TABS
+// entry, and injects them into the empty containers left in the HTML — must run before anything
+// below looks up a generated element (the .subtab click wiring, the checkbox lookups in the
+// upload handler, and the per-tab ViewDate/DeleteDate wiring all depend on this having run first).
+function renderOiSubpagesShell(){
+  document.getElementById("oiChecksToolbar").innerHTML=OI_DTE_TABS.map(cfg=>
+    `<label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="${cfg.checkboxId}" type="checkbox"${cfg.dte===0?" checked":""}/> ${cfg.label}</label>`
+  ).join("");
+  document.getElementById("oiSubtabsRow").innerHTML=OI_DTE_TABS.map((cfg,i)=>
+    `<button class="subtab${i===0?" active":""}" data-subtab="${cfg.prefix}">${cfg.label.replace(" ","")}</button>`
+  ).join("");
+  document.getElementById("oiSubpagesRow").innerHTML=OI_DTE_TABS.map((cfg,i)=>{
+    const p=cfg.prefix;
+    return `<div id="${p}" class="oi-subpage${i===0?"":" hidden"}">
+      <div class="card">
+        <h2>Strike Ladder</h2>
+        <div class="toolbar">
+          <div><label>Viewing Date</label><select id="${p}ViewDate"></select></div>
+          <button id="${p}DeleteDate" class="danger">Delete This Date</button>
+        </div>
+        <details id="${p}TableDetails">
+          <summary>Show strike-by-strike table</summary>
+          <div id="${p}Totals" class="hint" style="margin-top:10px"></div>
+          <div class="tablewrap"><table id="${p}Table"></table></div>
+        </details>
+      </div>
+      <div class="grid">
+        <div class="card span-12">
+          <h2>Net Put &minus; Call OI</h2>
+          <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+          <div style="text-align:center;margin-top:10px"><div class="value" id="${p}NetPutCall">&mdash;</div></div>
+          <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Total Volume</div>
+              <div style="font-size:20px;font-weight:800" id="${p}TotalVolume">&mdash;</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Total Difference</div>
+              <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="${p}TotalDiff">&mdash;</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div class="hint" style="margin:0">Power Factor</div>
+              <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="${p}PowerFactor">&mdash;</div>
+            </div>
+          </div>
+        </div>
+        <div class="card span-6">
+          <h2>Volume by Strike</h2>
+          <p class="hint">Call OI + Put OI at each strike.</p>
+          <div class="chartwrap" id="${p}VolumeChartWrap" style="position:relative"></div>
+        </div>
+        <div class="card span-6">
+          <h2>Difference by Strike</h2>
+          <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+          <div class="chartwrap" id="${p}DiffChartWrap" style="position:relative"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+renderOiSubpagesShell();
 // Second-level tab strip nested inside the single "Options OI" page — deliberately a separate
 // class (.subtab/.oi-subpage) from the app's main .tab/.page pair, and a separate click-handler
 // loop, so this switching can never get mixed up with (or accidentally hijack) the main nav's
@@ -3301,6 +3250,11 @@ oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
   const checked=OI_DTE_TABS.filter(cfg=>document.getElementById(cfg.checkboxId).checked);
   if(!date){oiUploadStatus.textContent="Pick a date before uploading.";oiUploadFile.value="";return}
   if(!checked.length){oiUploadStatus.textContent="Tick at least one DTE checkbox before uploading.";oiUploadFile.value="";return}
+  // Disabled for the whole upload — which can now be several sequential network round-trips, one
+  // per ticked DTE — so selecting a second file mid-upload can't start a race against oiSnapshots
+  // while this pass is still reading/writing it (both invocations would read-modify-write the
+  // same array with no locking).
+  oiUploadFile.disabled=true;
   oiUploadStatus.textContent="Parsing...";
   try{
     const buf=await file.arrayBuffer();
@@ -3311,11 +3265,12 @@ oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
     const results=[];
     for(const cfg of checked){
       try{
-        // .slice(0) gives each attempt its own ArrayBuffer copy — pdf.js detaches (transfers)
-        // the buffer it's handed, so reusing the same one across multiple checked DTEs would
-        // make every parse after the first fail with "Cannot perform Construct on a detached
-        // ArrayBuffer."
-        const parsed=isPdf?await parseOiPdf(buf.slice(0),cfg.dte):parseOiWorkbook(buf.slice(0),cfg.dte);
+        // PDF parses get their own ArrayBuffer copy via .slice(0) — pdf.js detaches (transfers)
+        // the buffer it's handed, so reusing the same one across multiple checked DTEs would make
+        // every parse after the first fail with "Cannot perform Construct on a detached
+        // ArrayBuffer." XLSX.read doesn't detach its input, so the XLSX path reuses buf directly
+        // — copying it there would just be wasted work on every checked box.
+        const parsed=isPdf?await parseOiPdf(buf.slice(0),cfg.dte):parseOiWorkbook(buf,cfg.dte);
         // Dedupe by strike (last wins) before this hits a bulk upsert — two rows for the same
         // strike in one batch (e.g. a wrapped/duplicate line in the PDF) would otherwise make
         // Supabase reject the whole upsert with "ON CONFLICT DO UPDATE command cannot affect row
@@ -3345,6 +3300,7 @@ oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
     oiUploadStatus.textContent="Could not read this file: "+errMsg(err);
   }finally{
     oiUploadFile.value="";
+    oiUploadFile.disabled=false;
   }
 });
 // Each tab's Viewing Date selector and Delete button are wired here (rather than by hand per
@@ -3454,18 +3410,23 @@ function renderOiTab(cfg,preferredDate){
   const p=cfg.prefix;
   const el=id=>document.getElementById(p+id);
   const viewDateEl=el("ViewDate");
-  // Skip the DOM/SVG rebuild when this sub-tab isn't visible — renderOiTab runs on every
-  // renderAll(), i.e. every tab switch and every session/entry save anywhere in the app, not
-  // just when the user is actually looking at this tab. Two levels of hidden to check: the main
-  // "Options OI" page itself, and (independently) which of the three DTE sub-tabs is selected
-  // within it — both classList.add("hidden") on their own toggle, so either one hides this.
-  if(!viewDateEl||document.getElementById("oi").classList.contains("hidden")||document.getElementById(p).classList.contains("hidden"))return;
+  if(!viewDateEl)return;
+  // The date-list/selection update always runs, even while this sub-tab is hidden — an upload
+  // targeting a currently-inactive DTE (e.g. ticking "2 DTE" while viewing 0DTE) still needs
+  // viewDateEl.value to land on preferredDate now, so that switching to that sub-tab later picks
+  // it up via the prevSelected fallback below instead of silently reverting to an older date.
   const dtRows=oiSnapshots.filter(o=>o.dte===cfg.dte);
   const dates=[...new Set(dtRows.map(o=>o.date))].sort();
   const prevSelected=preferredDate||viewDateEl.value;
   viewDateEl.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join("");
   const date=dates.includes(prevSelected)?prevSelected:dates[dates.length-1];
   if(date)viewDateEl.value=date;
+  // Skip the expensive table/SVG rebuild when this sub-tab isn't visible — renderOiTab runs on
+  // every renderAll(), i.e. every tab switch and every session/entry save anywhere in the app,
+  // not just when the user is actually looking at this tab. Two levels of hidden to check: the
+  // main "Options OI" page itself, and (independently) which of the three DTE sub-tabs is
+  // selected within it — both classList.add("hidden") on their own toggle, so either hides this.
+  if(document.getElementById("oi").classList.contains("hidden")||document.getElementById(p).classList.contains("hidden"))return;
   const rows=dtRows.filter(o=>o.date===date).sort((a,b)=>a.strike-b.strike);
   const totalsEl=el("Totals"),tableEl=el("Table"),netPutCallEl=el("NetPutCall"),totalVolumeEl=el("TotalVolume"),totalDiffEl=el("TotalDiff"),powerFactorEl=el("PowerFactor");
   if(!rows.length){
