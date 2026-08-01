@@ -19,6 +19,7 @@
     header{position:sticky;top:0;z-index:50;background:rgba(2,6,23,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:14px 18px;display:flex;justify-content:space-between;gap:12px;align-items:center}
     h1{margin:0;font-size:20px}.hint{color:var(--muted);font-size:13px;line-height:1.4}
     .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .subtabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 14px;padding-top:14px;border-top:1px solid var(--line)}
     button{border:0;border-radius:10px;padding:10px 12px;background:#334155;color:white;font-weight:800;cursor:pointer}
     button:hover{filter:brightness(1.12)}button.active,.primary{background:var(--orange);color:white}.good{background:var(--green);color:#052e16}.danger{background:var(--red);color:white}
     main{max-width:1800px;margin:0 auto;padding:18px}.page{display:block}.hidden{display:none}
@@ -119,9 +120,7 @@
   </div>
   <div class="tabs">
     <button class="tab" data-tab="macro">Macro</button>
-    <button class="tab" data-tab="oi0">0DTE</button>
-    <button class="tab" data-tab="oi2">2DTE</button>
-    <button class="tab" data-tab="oi3">3DTE</button>
+    <button class="tab" data-tab="oi">Options OI</button>
     <button class="tab active" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="entry">New Session</button>
     <button class="tab" data-tab="data">Data</button>
@@ -638,10 +637,10 @@
   </div>
 </section>
 
-<section id="oi0" class="page hidden">
+<section id="oi" class="page hidden">
   <div class="card">
     <h2>Open Interest &mdash; Upload</h2>
-    <p class="hint">Upload the XLSX or PDF Open Interest Matrix export from QuikStrike (Gold OG|GC). Tick which DTE column(s) to extract &mdash; the same file is scanned once per ticked box and each result is routed to that column's own tab (0DTE / 2DTE / 3DTE). Every other expiration in the file is ignored. Re-uploading a date overwrites that date's rows for whichever columns are ticked.</p>
+    <p class="hint">Upload the XLSX or PDF Open Interest Matrix export from QuikStrike (Gold OG|GC). Tick which DTE column(s) to extract &mdash; the same file is scanned once per ticked box and each result is routed to that column's own sub-tab below (0DTE / 2DTE / 3DTE). Every other expiration in the file is ignored. Re-uploading a date overwrites that date's rows for whichever columns are ticked.</p>
     <div class="toolbar">
       <div><label>Date</label><input id="oiUploadDate" type="date"/></div>
       <label style="display:inline-flex;align-items:center;gap:8px;margin:0;cursor:pointer"><input id="oiUploadFile" type="file" accept=".xlsx,.pdf" style="display:none"><span class="pill">Upload XLSX / PDF</span></label>
@@ -653,147 +652,148 @@
     </div>
     <p id="oiUploadStatus" class="hint"></p>
   </div>
-  <div class="card">
-    <h2>Strike Ladder</h2>
-    <div class="toolbar">
-      <div><label>Viewing Date</label><select id="oi0ViewDate"></select></div>
-      <button id="oi0DeleteDate" class="danger">Delete This Date</button>
-    </div>
-    <details id="oi0TableDetails">
-      <summary>Show strike-by-strike table</summary>
-      <div id="oi0Totals" class="hint" style="margin-top:10px"></div>
-      <div class="tablewrap"><table id="oi0Table"></table></div>
-    </details>
-  </div>
-  <div class="grid">
-    <div class="card span-12">
-      <h2>Net Put &minus; Call OI</h2>
-      <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-      <div style="text-align:center;margin-top:10px"><div class="value" id="oi0NetPutCall">&mdash;</div></div>
-      <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Total Volume</div>
-          <div style="font-size:20px;font-weight:800" id="oi0TotalVolume">&mdash;</div>
-        </div>
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Total Difference</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0TotalDiff">&mdash;</div>
-        </div>
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Power Factor</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0PowerFactor">&mdash;</div>
-        </div>
-      </div>
-    </div>
-    <div class="card span-6">
-      <h2>Volume by Strike</h2>
-      <p class="hint">Call OI + Put OI at each strike.</p>
-      <div class="chartwrap" id="oi0VolumeChartWrap" style="position:relative"></div>
-    </div>
-    <div class="card span-6">
-      <h2>Difference by Strike</h2>
-      <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-      <div class="chartwrap" id="oi0DiffChartWrap" style="position:relative"></div>
-    </div>
-  </div>
-</section>
 
-<section id="oi2" class="page hidden">
-  <div class="card">
-    <h2>2DTE Open Interest</h2>
-    <p class="hint">Uploaded from the <b>0DTE</b> tab &mdash; tick "2 DTE" there when uploading a file to populate this tab.</p>
+  <div class="subtabs">
+    <button class="subtab active" data-subtab="oi0">0DTE</button>
+    <button class="subtab" data-subtab="oi2">2DTE</button>
+    <button class="subtab" data-subtab="oi3">3DTE</button>
   </div>
-  <div class="card">
-    <h2>Strike Ladder</h2>
-    <div class="toolbar">
-      <div><label>Viewing Date</label><select id="oi2ViewDate"></select></div>
-      <button id="oi2DeleteDate" class="danger">Delete This Date</button>
-    </div>
-    <details id="oi2TableDetails">
-      <summary>Show strike-by-strike table</summary>
-      <div id="oi2Totals" class="hint" style="margin-top:10px"></div>
-      <div class="tablewrap"><table id="oi2Table"></table></div>
-    </details>
-  </div>
-  <div class="grid">
-    <div class="card span-12">
-      <h2>Net Put &minus; Call OI</h2>
-      <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-      <div style="text-align:center;margin-top:10px"><div class="value" id="oi2NetPutCall">&mdash;</div></div>
-      <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Total Volume</div>
-          <div style="font-size:20px;font-weight:800" id="oi2TotalVolume">&mdash;</div>
-        </div>
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Total Difference</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2TotalDiff">&mdash;</div>
-        </div>
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Power Factor</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2PowerFactor">&mdash;</div>
-        </div>
-      </div>
-    </div>
-    <div class="card span-6">
-      <h2>Volume by Strike</h2>
-      <p class="hint">Call OI + Put OI at each strike.</p>
-      <div class="chartwrap" id="oi2VolumeChartWrap" style="position:relative"></div>
-    </div>
-    <div class="card span-6">
-      <h2>Difference by Strike</h2>
-      <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-      <div class="chartwrap" id="oi2DiffChartWrap" style="position:relative"></div>
-    </div>
-  </div>
-</section>
 
-<section id="oi3" class="page hidden">
-  <div class="card">
-    <h2>3DTE Open Interest</h2>
-    <p class="hint">Uploaded from the <b>0DTE</b> tab &mdash; tick "3 DTE" there when uploading a file to populate this tab.</p>
-  </div>
-  <div class="card">
-    <h2>Strike Ladder</h2>
-    <div class="toolbar">
-      <div><label>Viewing Date</label><select id="oi3ViewDate"></select></div>
-      <button id="oi3DeleteDate" class="danger">Delete This Date</button>
+  <div id="oi0" class="oi-subpage">
+    <div class="card">
+      <h2>Strike Ladder</h2>
+      <div class="toolbar">
+        <div><label>Viewing Date</label><select id="oi0ViewDate"></select></div>
+        <button id="oi0DeleteDate" class="danger">Delete This Date</button>
+      </div>
+      <details id="oi0TableDetails">
+        <summary>Show strike-by-strike table</summary>
+        <div id="oi0Totals" class="hint" style="margin-top:10px"></div>
+        <div class="tablewrap"><table id="oi0Table"></table></div>
+      </details>
     </div>
-    <details id="oi3TableDetails">
-      <summary>Show strike-by-strike table</summary>
-      <div id="oi3Totals" class="hint" style="margin-top:10px"></div>
-      <div class="tablewrap"><table id="oi3Table"></table></div>
-    </details>
-  </div>
-  <div class="grid">
-    <div class="card span-12">
-      <h2>Net Put &minus; Call OI</h2>
-      <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
-      <div style="text-align:center;margin-top:10px"><div class="value" id="oi3NetPutCall">&mdash;</div></div>
-      <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Total Volume</div>
-          <div style="font-size:20px;font-weight:800" id="oi3TotalVolume">&mdash;</div>
-        </div>
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Total Difference</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3TotalDiff">&mdash;</div>
-        </div>
-        <div style="flex:1;text-align:center">
-          <div class="hint" style="margin:0">Power Factor</div>
-          <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3PowerFactor">&mdash;</div>
+    <div class="grid">
+      <div class="card span-12">
+        <h2>Net Put &minus; Call OI</h2>
+        <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+        <div style="text-align:center;margin-top:10px"><div class="value" id="oi0NetPutCall">&mdash;</div></div>
+        <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Total Volume</div>
+            <div style="font-size:20px;font-weight:800" id="oi0TotalVolume">&mdash;</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Total Difference</div>
+            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0TotalDiff">&mdash;</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Power Factor</div>
+            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi0PowerFactor">&mdash;</div>
+          </div>
         </div>
       </div>
+      <div class="card span-6">
+        <h2>Volume by Strike</h2>
+        <p class="hint">Call OI + Put OI at each strike.</p>
+        <div class="chartwrap" id="oi0VolumeChartWrap" style="position:relative"></div>
+      </div>
+      <div class="card span-6">
+        <h2>Difference by Strike</h2>
+        <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+        <div class="chartwrap" id="oi0DiffChartWrap" style="position:relative"></div>
+      </div>
     </div>
-    <div class="card span-6">
-      <h2>Volume by Strike</h2>
-      <p class="hint">Call OI + Put OI at each strike.</p>
-      <div class="chartwrap" id="oi3VolumeChartWrap" style="position:relative"></div>
+  </div>
+
+  <div id="oi2" class="oi-subpage hidden">
+    <div class="card">
+      <h2>Strike Ladder</h2>
+      <div class="toolbar">
+        <div><label>Viewing Date</label><select id="oi2ViewDate"></select></div>
+        <button id="oi2DeleteDate" class="danger">Delete This Date</button>
+      </div>
+      <details id="oi2TableDetails">
+        <summary>Show strike-by-strike table</summary>
+        <div id="oi2Totals" class="hint" style="margin-top:10px"></div>
+        <div class="tablewrap"><table id="oi2Table"></table></div>
+      </details>
     </div>
-    <div class="card span-6">
-      <h2>Difference by Strike</h2>
-      <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
-      <div class="chartwrap" id="oi3DiffChartWrap" style="position:relative"></div>
+    <div class="grid">
+      <div class="card span-12">
+        <h2>Net Put &minus; Call OI</h2>
+        <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+        <div style="text-align:center;margin-top:10px"><div class="value" id="oi2NetPutCall">&mdash;</div></div>
+        <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Total Volume</div>
+            <div style="font-size:20px;font-weight:800" id="oi2TotalVolume">&mdash;</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Total Difference</div>
+            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2TotalDiff">&mdash;</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Power Factor</div>
+            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi2PowerFactor">&mdash;</div>
+          </div>
+        </div>
+      </div>
+      <div class="card span-6">
+        <h2>Volume by Strike</h2>
+        <p class="hint">Call OI + Put OI at each strike.</p>
+        <div class="chartwrap" id="oi2VolumeChartWrap" style="position:relative"></div>
+      </div>
+      <div class="card span-6">
+        <h2>Difference by Strike</h2>
+        <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+        <div class="chartwrap" id="oi2DiffChartWrap" style="position:relative"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="oi3" class="oi-subpage hidden">
+    <div class="card">
+      <h2>Strike Ladder</h2>
+      <div class="toolbar">
+        <div><label>Viewing Date</label><select id="oi3ViewDate"></select></div>
+        <button id="oi3DeleteDate" class="danger">Delete This Date</button>
+      </div>
+      <details id="oi3TableDetails">
+        <summary>Show strike-by-strike table</summary>
+        <div id="oi3Totals" class="hint" style="margin-top:10px"></div>
+        <div class="tablewrap"><table id="oi3Table"></table></div>
+      </details>
+    </div>
+    <div class="grid">
+      <div class="card span-12">
+        <h2>Net Put &minus; Call OI</h2>
+        <p class="hint">Total Put OI minus Total Call OI across the strike ladder &mdash; positive means put-heavy, negative means call-heavy.</p>
+        <div style="text-align:center;margin-top:10px"><div class="value" id="oi3NetPutCall">&mdash;</div></div>
+        <div style="display:flex;gap:10px;margin-top:14px;max-width:400px;margin-left:auto;margin-right:auto">
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Total Volume</div>
+            <div style="font-size:20px;font-weight:800" id="oi3TotalVolume">&mdash;</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Total Difference</div>
+            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3TotalDiff">&mdash;</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div class="hint" style="margin:0">Power Factor</div>
+            <div style="font-size:20px;font-weight:800;display:inline-block;padding:2px 10px;border-radius:6px" id="oi3PowerFactor">&mdash;</div>
+          </div>
+        </div>
+      </div>
+      <div class="card span-6">
+        <h2>Volume by Strike</h2>
+        <p class="hint">Call OI + Put OI at each strike.</p>
+        <div class="chartwrap" id="oi3VolumeChartWrap" style="position:relative"></div>
+      </div>
+      <div class="card span-6">
+        <h2>Difference by Strike</h2>
+        <p class="hint">Call OI &minus; Put OI at each strike &mdash; bars right of the zero line are call-heavy, bars left are put-heavy.</p>
+        <div class="chartwrap" id="oi3DiffChartWrap" style="position:relative"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -3283,6 +3283,16 @@ const OI_DTE_TABS=[
   {dte:2,prefix:"oi2",checkboxId:"oiCheck2",label:"2 DTE"},
   {dte:3,prefix:"oi3",checkboxId:"oiCheck3",label:"3 DTE"}
 ];
+// Second-level tab strip nested inside the single "Options OI" page — deliberately a separate
+// class (.subtab/.oi-subpage) from the app's main .tab/.page pair, and a separate click-handler
+// loop, so this switching can never get mixed up with (or accidentally hijack) the main nav's
+// document.querySelectorAll(".tab") wiring below.
+document.querySelectorAll(".subtab").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".oi-subpage").forEach(p=>p.classList.add("hidden"));
+  document.getElementById(b.dataset.subtab).classList.remove("hidden");
+  document.querySelectorAll(".subtab").forEach(x=>x.classList.toggle("active",x===b));
+  renderAllOiTabs();
+}));
 if(oiUploadDate&&!oiUploadDate.value)oiUploadDate.valueAsDate=new Date();
 oiUploadFile&&oiUploadFile.addEventListener("change",async()=>{
   const file=oiUploadFile.files[0];
@@ -3444,11 +3454,12 @@ function renderOiTab(cfg,preferredDate){
   const p=cfg.prefix;
   const el=id=>document.getElementById(p+id);
   const viewDateEl=el("ViewDate");
-  // Skip the DOM/SVG rebuild when this tab isn't visible — renderOiTab runs on every
+  // Skip the DOM/SVG rebuild when this sub-tab isn't visible — renderOiTab runs on every
   // renderAll(), i.e. every tab switch and every session/entry save anywhere in the app, not
-  // just when the user is actually looking at this tab. showTab() removes the "hidden" class
-  // before calling renderAll(), so this still renders correctly the moment the user switches in.
-  if(!viewDateEl||document.getElementById(p).classList.contains("hidden"))return;
+  // just when the user is actually looking at this tab. Two levels of hidden to check: the main
+  // "Options OI" page itself, and (independently) which of the three DTE sub-tabs is selected
+  // within it — both classList.add("hidden") on their own toggle, so either one hides this.
+  if(!viewDateEl||document.getElementById("oi").classList.contains("hidden")||document.getElementById(p).classList.contains("hidden"))return;
   const dtRows=oiSnapshots.filter(o=>o.dte===cfg.dte);
   const dates=[...new Set(dtRows.map(o=>o.date))].sort();
   const prevSelected=preferredDate||viewDateEl.value;
