@@ -57,6 +57,17 @@
 --   alter table public.trading_sessions add column if not exists ib_current_outcome text check (ib_current_outcome in ('Reversal','Continuation') or ib_current_outcome is null);
 --   alter table public.trading_sessions add column if not exists ib_prev_outcome text check (ib_prev_outcome in ('Reversal','Continuation') or ib_prev_outcome is null);
 --   alter table public.trading_sessions add column if not exists ib_past_outcome text check (ib_past_outcome in ('Reversal','Continuation') or ib_past_outcome is null);
+--
+-- Run this on an existing database to add the Opening Letters columns — London/New York session
+-- open, first 60 and 90 minutes of TPO letters A/B/C. letter_*_dir_* is which way Letter B or C
+-- moved (Up/Down/Balance) at that window mark; open_outcome is how the open itself resolved
+-- (Up/Down/Balanced). Do this BEFORE deploying the matching app update — toDb() sends all five
+-- columns on every session upsert, the same as every other column addition above:
+--   alter table public.trading_sessions add column if not exists letter_b_dir_60 text check (letter_b_dir_60 in ('Up','Down','Balance') or letter_b_dir_60 is null);
+--   alter table public.trading_sessions add column if not exists letter_c_dir_60 text check (letter_c_dir_60 in ('Up','Down','Balance') or letter_c_dir_60 is null);
+--   alter table public.trading_sessions add column if not exists letter_b_dir_90 text check (letter_b_dir_90 in ('Up','Down','Balance') or letter_b_dir_90 is null);
+--   alter table public.trading_sessions add column if not exists letter_c_dir_90 text check (letter_c_dir_90 in ('Up','Down','Balance') or letter_c_dir_90 is null);
+--   alter table public.trading_sessions add column if not exists open_outcome text check (open_outcome in ('Up','Down','Balanced') or open_outcome is null);
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -99,6 +110,14 @@ create table if not exists public.trading_sessions (
   ib_prev_outcome text check (ib_prev_outcome in ('Reversal','Continuation') or ib_prev_outcome is null),
   ib_past_hit text check (ib_past_hit in ('Yes','No') or ib_past_hit is null),
   ib_past_outcome text check (ib_past_outcome in ('Reversal','Continuation') or ib_past_outcome is null),
+
+  -- Opening Letters: London/New York open, first 60/90 minutes of TPO letters A/B/C.
+  letter_b_dir_60 text check (letter_b_dir_60 in ('Up','Down','Balance') or letter_b_dir_60 is null),
+  letter_c_dir_60 text check (letter_c_dir_60 in ('Up','Down','Balance') or letter_c_dir_60 is null),
+  letter_b_dir_90 text check (letter_b_dir_90 in ('Up','Down','Balance') or letter_b_dir_90 is null),
+  letter_c_dir_90 text check (letter_c_dir_90 in ('Up','Down','Balance') or letter_c_dir_90 is null),
+  open_outcome text check (open_outcome in ('Up','Down','Balanced') or open_outcome is null),
+
   ny_high numeric,
   ny_low numeric,
   extreme_high numeric,
