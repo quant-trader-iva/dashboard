@@ -253,8 +253,6 @@
         <div><label>Past Session Outcome After IB Hit</label><select id="ibPastOutcome"><option value="">—</option><option>Reversal</option><option>Continuation</option></select></div>
 
         <div><label>Letter B Direction (60m) <span class="hint" style="font-weight:400">(London/New York open, first hour TPO letters)</span></label><select id="letterBDir60"><option value="">—</option><option>Up</option><option>Down</option><option>Balance</option></select></div>
-        <div><label>Letter C Direction (60m)</label><select id="letterCDir60"><option value="">—</option><option>Up</option><option>Down</option><option>Balance</option></select></div>
-        <div><label>Letter B Direction (90m)</label><select id="letterBDir90"><option value="">—</option><option>Up</option><option>Down</option><option>Balance</option></select></div>
         <div><label>Letter C Direction (90m)</label><select id="letterCDir90"><option value="">—</option><option>Up</option><option>Down</option><option>Balance</option></select></div>
         <div><label>Open Outcome <span class="hint" style="font-weight:400">(how the open resolved)</span></label><select id="openOutcome"><option value="">—</option><option>Up</option><option>Down</option><option>Balanced</option></select></div>
 
@@ -721,12 +719,11 @@ const IB_HIT_TO_OUTCOME=Object.fromEntries(IB_SLOTS.map(s=>[s.hitKey,s.outcomeKe
 // IB_OUTCOME_OPTS above) so the grid's editable cells and the stats table share one option list.
 const LETTER_DIR_OPTS=[...document.getElementById("letterBDir60").options].map(o=>o.value);
 const OPEN_OUTCOME_OPTS=[...document.getElementById("openOutcome").options].map(o=>o.value);
-// London/New York open, first 60 and 90 minutes of TPO letters — which letter+window slot maps to
-// which field, so the dashboard grid rows and the Opening Letters stats table share one mapping.
+// London/New York open, TPO letters — Letter B is always graded at the 60m mark and Letter C at
+// the 90m mark, so each letter has exactly one window slot/field, shared by the dashboard grid
+// rows and the Opening Letters stats table.
 const LETTER_SLOTS=[
   {label:"Letter B (60m)",dirKey:"letterBDir60"},
-  {label:"Letter C (60m)",dirKey:"letterCDir60"},
-  {label:"Letter B (90m)",dirKey:"letterBDir90"},
   {label:"Letter C (90m)",dirKey:"letterCDir90"}
 ];
 // Single source of truth for "the five trading weekdays" — bestDayStat, renderEdgeDecay, and the
@@ -778,7 +775,7 @@ function savePendingOiDeletes(){localStorage.setItem(PENDING_OI_DELETES_KEY,JSON
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
 let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir60","letterBDir90","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
@@ -2279,8 +2276,7 @@ function renderProjectionGrid(){
     ["Current Session IB Hit",null,"cream","ibCurrentHit","select"],["Current Session Outcome After IB Hit",null,"cream","ibCurrentOutcome","select",IB_OUTCOME_OPTS],
     ["Previous Session IB Hit",null,"cream","ibPrevHit","select"],["Previous Session Outcome After IB Hit",null,"cream","ibPrevOutcome","select",IB_OUTCOME_OPTS],
     ["Past Session IB Hit",null,"cream","ibPastHit","select"],["Past Session Outcome After IB Hit",null,"cream","ibPastOutcome","select",IB_OUTCOME_OPTS],
-    ["Letter B Direction (60m)",null,"cream","letterBDir60","select",LETTER_DIR_OPTS],["Letter C Direction (60m)",null,"cream","letterCDir60","select",LETTER_DIR_OPTS],
-    ["Letter B Direction (90m)",null,"cream","letterBDir90","select",LETTER_DIR_OPTS],["Letter C Direction (90m)",null,"cream","letterCDir90","select",LETTER_DIR_OPTS],
+    ["Letter B Direction (60m)",null,"cream","letterBDir60","select",LETTER_DIR_OPTS],["Letter C Direction (90m)",null,"cream","letterCDir90","select",LETTER_DIR_OPTS],
     ["Open Outcome",null,"cream","openOutcome","select",OPEN_OUTCOME_OPTS],
     ["London High",s=>fmt(s.londonHigh),"orange"],["London Low",s=>fmt(s.londonLow),"orange"],["London Range",s=>fmt(s.londonRange),"brown"],
     ["New York High",s=>fmt(s.nyHigh),"orange"],["New York Low",s=>fmt(s.nyLow),"orange"],["New York Range",s=>fmt(s.nyRange),"brown"],
@@ -2412,30 +2408,31 @@ function renderIbStats(){
   }).join("");
   ibOutcomeTable.innerHTML=outcomeThead+`<tbody>${outcomeBody}</tbody>`;
 }
-// One row per Direction+Outcome pair — restricted to the sessions where the given letter/window
-// slot (dirKey) was graded dir, so each Outcome row's percentage is a share of that same-direction
-// group (the three Outcome rows under one Direction always add up to 100%).
-function letterOutcomeStat(arr,dirKey,dir,outcome){
-  const matched=arr.filter(s=>s[dirKey]===dir);
+// All Outcome rows for one Direction — restricted to sessions where the given letter/window slot
+// (dirKey) was graded dir AND Open Outcome was filled in (a session with dirKey set but no Open
+// Outcome yet would otherwise inflate n without ever landing in an outcome bucket, so the three
+// Outcome rows wouldn't actually sum to 100%). Filters once and maps every outcome option over that
+// one result, the same shape as ibOutcomeMix above, instead of re-filtering per outcome option.
+function letterOutcomeStats(arr,dirKey,dir,outcomeOpts){
+  const matched=arr.filter(s=>s[dirKey]===dir&&outcomeOpts.includes(s.openOutcome));
   const n=matched.length;
   if(!n)return null;
-  return{n,rate:matched.filter(s=>s.openOutcome===outcome).length/n};
+  return{n,rates:outcomeOpts.map(outcome=>matched.filter(s=>s.openOutcome===outcome).length/n)};
 }
-// London/New York only — Weekly/Daily sessions never fill in the letter/open-outcome fields, so
-// they'd only ever show as empty rows.
+// Intraday sessions only (INTRADAY_SESSIONS) — Weekly/Daily sessions never fill in the
+// letter/open-outcome fields, so they'd only ever show as empty rows. Reads plain fields only
+// (sessionType, the letter directions, openOutcome), so no need for enrich()'s computed fields.
 function renderLetterOutcomeStats(){
-  const arr=enrich(sessions).filter(s=>s.sessionType==="London"||s.sessionType==="New York");
+  const arr=sessions.filter(s=>INTRADAY_SESSIONS.includes(s.sessionType));
   const dirOpts=LETTER_DIR_OPTS.filter(Boolean);
   const outcomeOpts=OPEN_OUTCOME_OPTS.filter(Boolean);
   const rows=[];
-  ["London","New York"].forEach(session=>{
+  INTRADAY_SESSIONS.forEach(session=>{
     const bySession=arr.filter(s=>s.sessionType===session);
     LETTER_SLOTS.forEach(({label,dirKey})=>{
       dirOpts.forEach(dir=>{
-        outcomeOpts.forEach(outcome=>{
-          const stat=letterOutcomeStat(bySession,dirKey,dir,outcome);
-          if(stat)rows.push({session,label,dir,outcome,...stat});
-        });
+        const stat=letterOutcomeStats(bySession,dirKey,dir,outcomeOpts);
+        if(stat)outcomeOpts.forEach((outcome,i)=>rows.push({session,label,dir,outcome,n:stat.n,rate:stat.rates[i]}));
       });
     });
   });
@@ -2910,8 +2907,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_60:s.letterCDir60||null,letter_b_dir_90:s.letterBDir90||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir60:r.letter_c_dir_60,letterBDir90:r.letter_b_dir_90,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,mfe_r:e.mfeR,mae_r:e.maeR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,h1_candle_hour:e.h1CandleHour||null,h1_delta:e.h1Delta,h1_poc:e.h1Poc,h1_vah:e.h1Vah,h1_val:e.h1Val,h1_candle_pattern:e.h1CandlePattern||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],emotional_state:e.emotionalState||null,plan_adherence:e.planAdherence||null,mistake_tags:e.mistakeTags||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
 function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,mfeR:r.mfe_r,maeR:r.mae_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,h1CandleHour:r.h1_candle_hour,h1Delta:r.h1_delta,h1Poc:r.h1_poc,h1Vah:r.h1_vah,h1Val:r.h1_val,h1CandlePattern:r.h1_candle_pattern,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],emotionalState:r.emotional_state,planAdherence:r.plan_adherence,mistakeTags:r.mistake_tags||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
