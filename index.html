@@ -1122,16 +1122,15 @@ function macroRegimeForDate(dateStr,lookback=5){
   return{deltaBps,label:deltaBps>3?"Rising":deltaBps<-3?"Falling":"Flat"};
 }
 function macroRegimeBadgeColor(label){return label==="Rising"?["#dc2626","white"]:label==="Falling"?["#16a34a","white"]:["#334155","white"]}
-// Small inline up/down/flat marker for the "N sessions ago" stat rows — same red=rising/
-// green=falling color convention as the regime badges (rising = historically a headwind for
-// gold, falling = tailwind), just as a compact arrow next to a single number instead of a pill.
-// `diff` is null when there isn't a prior point to compare against yet.
+// Small inline up/down/flat marker for the "N sessions ago" stat rows — standard price
+// convention (rising = green, falling = red), just as a compact arrow next to a single number
+// instead of a pill. `diff` is null when there isn't a prior point to compare against yet.
 const MACRO_TREND_THRESHOLD=0.005;
 function trendArrowHtml(diff,threshold){
   if(diff==null)return"";
   const up=diff>threshold,down=diff<-threshold;
   const symbol=up?"&#9650;":down?"&#9660;":"&#8212;";
-  const color=up?"#dc2626":down?"#16a34a":"#94a3b8";
+  const color=up?"#16a34a":down?"#dc2626":"#94a3b8";
   return ` <span style="color:${color};font-size:12px">${symbol}</span>`;
 }
 function fmtMacroDate(d){const[,m,dd]=d.split("-");const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return months[parseInt(m,10)-1]+" "+parseInt(dd,10)}
