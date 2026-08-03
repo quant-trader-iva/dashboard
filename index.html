@@ -642,6 +642,17 @@
 
   <div class="grid" style="margin-top:14px">
     <div class="card span-12">
+      <h2>Import This Week's Releases <span style="font-weight:400">(Forex Factory, USD, High/Medium impact)</span></h2>
+      <p class="hint" style="margin-bottom:12px">Pulls this week's economic calendar from Forex Factory's public feed — event name, date, forecast, and prior. It does not provide the Actual value once a release prints, so Actual and the Positive/Negative surprise tag are still entered by hand below. This is an unofficial feed (not a supported API), so it can occasionally change format or be temporarily unavailable.</p>
+      <div class="toolbar">
+        <button type="button" id="ffFetchBtn">Fetch This Week's USD Releases</button>
+        <button type="button" id="ffImportBtn" class="primary hidden">Import Selected</button>
+      </div>
+      <p id="ffStatus" class="hint"></p>
+      <div class="tablewrap hidden" id="ffPreviewWrap"><table id="ffPreviewTable"></table></div>
+    </div>
+
+    <div class="card span-12">
       <h2>Log a release</h2>
       <p class="hint" style="margin-bottom:12px">One row per event. Pick the month it belongs to — the monthly outcome is set separately below, once, per month.</p>
       <form id="macroNewsForm" class="form-grid">
@@ -2965,6 +2976,89 @@ macroNewsForm.addEventListener("submit",async ev=>{
   saveMacroEvents();
   await syncMacroEventUpsert([record]);
   ev.target.reset();
+  renderMacroNews();
+});
+// Forex Factory's public weekly calendar feed — unofficial/unauthenticated (no supported API
+// exists for this), so treated as best-effort: wrapped in try/catch with a plain-English fallback
+// message rather than assumed to always succeed. Confirmed live that it never carries an "actual"
+// field even for already-released events (checked against a same-day ISM print), only
+// forecast/previous — hence Actual and Surprise staying manual entry after import.
+const FF_CALENDAR_URL="https://nfs.faireconomy.media/ff_calendar_thisweek.json";
+let ffCandidates=[];
+// Strips units Forex Factory appends (%, K, M) down to a bare number, e.g. "175K"->175,
+// "-0.2%"->-0.2 — the K/M scale is lost, but forecast/prior/actual are only ever compared to each
+// other in the same units, and the original text is kept in the imported record's notes.
+function parseFfNumber(raw){
+  if(raw==null||raw==="")return null;
+  const v=parseFloat(String(raw).replace(/[^0-9eE+\-.]/g,""));
+  return Number.isFinite(v)?v:null;
+}
+function ffDupKey(name,date){return(name||"").trim().toLowerCase()+"|"+(date||"").slice(0,10)}
+function macroEventExists(name,date){const key=ffDupKey(name,date);return macroEvents.some(e=>ffDupKey(e.name,e.date)===key)}
+ffFetchBtn.addEventListener("click",async()=>{
+  ffFetchBtn.disabled=true;
+  ffStatus.textContent="Fetching this week's calendar from Forex Factory…";
+  ffImportBtn.classList.add("hidden");
+  ffPreviewWrap.classList.add("hidden");
+  try{
+    const res=await fetch(FF_CALENDAR_URL);
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    ffCandidates=data.filter(e=>e.country==="USD"&&(e.impact==="High"||e.impact==="Medium")).map(e=>({
+      title:e.title,date:e.date,impact:e.impact,
+      forecastRaw:e.forecast||"",previousRaw:e.previous||"",
+      forecast:parseFfNumber(e.forecast),prior:parseFfNumber(e.previous)
+    }));
+    if(!ffCandidates.length){
+      ffStatus.textContent="No USD High/Medium impact releases found in this week's feed.";
+    }else{
+      ffStatus.textContent=`Found ${ffCandidates.length} USD release${ffCandidates.length>1?"s":""} this week. Untick any you don't want, then Import Selected.`;
+      renderFfPreview();
+      ffPreviewWrap.classList.remove("hidden");
+      ffImportBtn.classList.remove("hidden");
+    }
+  }catch(err){
+    ffStatus.textContent=`Failed to fetch the Forex Factory calendar: ${err.message||err}. This is an unofficial feed and can be temporarily unavailable — try again shortly, or enter releases by hand below.`;
+  }finally{
+    ffFetchBtn.disabled=false;
+  }
+});
+function renderFfPreview(){
+  ffPreviewTable.innerHTML=`<thead><tr><th></th><th>Event</th><th>Date</th><th>Forecast</th><th>Prior</th><th>Impact</th></tr></thead><tbody>${ffCandidates.map((c,i)=>{
+    const dup=macroEventExists(c.title,c.date);
+    return`<tr>
+      <td><input type="checkbox" class="ffPick" data-i="${i}" ${dup?"disabled":"checked"}/></td>
+      <td>${escapeHtml(c.title)}${dup?`<div class="hint">Already logged</div>`:""}</td>
+      <td>${formatDMY(c.date.slice(0,10))}</td>
+      <td>${escapeHtml(c.forecastRaw)||"—"}</td>
+      <td>${escapeHtml(c.previousRaw)||"—"}</td>
+      <td>${c.impact}</td>
+    </tr>`
+  }).join("")}</tbody>`;
+}
+ffImportBtn.addEventListener("click",async()=>{
+  const picks=[...ffPreviewTable.querySelectorAll(".ffPick:checked")].map(cb=>ffCandidates[Number(cb.dataset.i)]);
+  if(!picks.length)return;
+  const now=new Date().toISOString();
+  const records=picks.map(c=>({
+    id:crypto.randomUUID(),
+    month:c.date.slice(0,7),
+    name:c.title,
+    date:c.date.slice(0,10),
+    forecast:c.forecast,
+    prior:c.prior,
+    actual:null,
+    surprise:"",
+    notes:`Imported from Forex Factory — forecast ${c.forecastRaw||"—"}, prior ${c.previousRaw||"—"}.`,
+    updatedAt:now
+  }));
+  macroEvents.push(...records);
+  saveMacroEvents();
+  await syncMacroEventUpsert(records);
+  ffStatus.textContent=`Imported ${records.length} release${records.length>1?"s":""}. Fill in Actual and Surprise once each one prints.`;
+  ffCandidates=[];
+  ffPreviewWrap.classList.add("hidden");
+  ffImportBtn.classList.add("hidden");
   renderMacroNews();
 });
 function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
