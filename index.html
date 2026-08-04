@@ -2340,11 +2340,7 @@ ${line("London",pct(hitRate(e.filter(s=>s.sessionType==="London"),"frHit")))}
 ${line("New York",pct(hitRate(e.filter(s=>s.sessionType==="New York"),"frHit")))}
 </div>`
 }
-// Shared Up/Down/Balanced -> bull/bear/neutral color-class mapping, used by biasCls below and by
-// macroOutcomeClass (Macro News tab) — `fallback` differs per caller: biasCls treats anything
-// else as neutral, macroOutcomeClass treats anything else (e.g. a still-pending "") as no class.
-function upDownBalancedClass(v,fallback){return v==="Up"?"bull":v==="Down"?"bear":v==="Balanced"?"neutral":fallback}
-function biasCls(s){return upDownBalancedClass(s.bias,"neutral")}
+function biasCls(s){return s.bias==="Up"?"bull":s.bias==="Down"?"bear":"neutral"}
 
 function buildColumns(arr,session){
   if(session==="All"){
@@ -2863,7 +2859,7 @@ function macroMonthLabel(m){
   const[y,mo]=m.split("-");
   return new Date(Number(y),Number(mo)-1,1).toLocaleDateString(undefined,{month:"short",year:"numeric"})
 }
-function macroOutcomeClass(o){return upDownBalancedClass(o,"")}
+function macroOutcomeClass(o){return o==="Up"?"bull":o==="Down"?"bear":o==="Balanced"?"neutral":""}
 function macroSurprisePillHtml(s){
   if(!s)return`<span class="pill pending">Pending</span>`;
   const cls=s==="Positive"?"bull":s==="Negative"?"bear":"neutral";
@@ -3474,16 +3470,11 @@ async function fullSync(){
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
   for(const p of [...pendingOiDeletes]){await syncOiDeleteDate(p.date,p.dte)}
   for(const id of [...pendingMacroEventDeletes]){await syncMacroEventDelete(id)}
-  // These five hit disjoint tables with no data dependency between them, so run them concurrently
-  // (same Promise.all pattern already used for fetchMacroYields/fetchDxy above) instead of paying
-  // for five sequential round-trips on every "Sync Now" click.
-  const[ok,entryOk,oiOk,macroEventOk,monthOutcomeOk]=await Promise.all([
-    syncSessionsFromCloud(),
-    syncEntriesFromCloud(),
-    syncOiFromCloud(),
-    syncMacroEventsFromCloud(),
-    syncMonthOutcomesFromCloud()
-  ]);
+  const ok=await syncSessionsFromCloud();
+  const entryOk=await syncEntriesFromCloud();
+  const oiOk=await syncOiFromCloud();
+  const macroEventOk=await syncMacroEventsFromCloud();
+  const monthOutcomeOk=await syncMonthOutcomesFromCloud();
   if(ok&&entryOk&&oiOk&&macroEventOk&&monthOutcomeOk){
     syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
   }else{
