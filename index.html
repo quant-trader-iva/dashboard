@@ -50,7 +50,7 @@
     .subhead{background:#3E7F8C;color:white;font-weight:900}.ref{background:var(--purple);color:white;font-weight:900}.pink{background:var(--magenta);color:white}.yellow{background:var(--yellow);color:#111827}.cream{background:var(--cream);color:#111827}.brown{background:var(--brown);color:white}.orange{background:#f6b26b;color:white;font-weight:800}
     .bull{background:#16a34a;color:white}.bear{background:#dc2626;color:white}.neutral{background:#334155;color:white}
     .pill.bull{background:#16a34a}.pill.bear{background:#dc2626}.pill.neutral{background:#334155}.pill.pending{background:transparent;border:1px dashed var(--line);color:var(--muted)}
-    .outcome-dot{width:7px;height:7px;border-radius:999px;display:inline-block;margin-right:5px}.outcome-dot.bull{background:#16a34a}.outcome-dot.bear{background:#dc2626}.outcome-dot.neutral{background:#94a3b8}
+    .outcome-dot{width:7px;height:7px;border-radius:999px;display:inline-block;margin-right:5px}.outcome-dot.bull{background:#16a34a}.outcome-dot.bear{background:#dc2626}.outcome-dot.neutral{background:#64748b}
     .stackbar{display:flex;height:20px;border-radius:6px;overflow:hidden;background:#1f2937}
     .stackbar>div{display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:900;color:white;min-width:0;overflow:hidden}
     .stackbar .seg-bull{background:#16a34a}.stackbar .seg-bear{background:#dc2626}.stackbar .seg-neutral{background:#64748b}
@@ -679,7 +679,7 @@
         </div>
         <div><label>Notes</label><input id="mnNotes" placeholder="optional"/></div>
       </form>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="primary" type="submit" form="macroNewsForm">Add Release</button></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="primary" type="submit" form="macroNewsForm" id="macroNewsSubmitBtn">Add Release</button></div>
     </div>
 
     <div class="card span-12">
@@ -2340,7 +2340,11 @@ ${line("London",pct(hitRate(e.filter(s=>s.sessionType==="London"),"frHit")))}
 ${line("New York",pct(hitRate(e.filter(s=>s.sessionType==="New York"),"frHit")))}
 </div>`
 }
-function biasCls(s){return s.bias==="Up"?"bull":s.bias==="Down"?"bear":"neutral"}
+// Shared Up/Down/Balanced -> bull/bear/neutral color-class mapping, used by biasCls below and by
+// macroOutcomeClass (Macro News tab) — `fallback` differs per caller: biasCls treats anything
+// else as neutral, macroOutcomeClass treats anything else (e.g. a still-pending "") as no class.
+function upDownBalancedClass(v,fallback){return v==="Up"?"bull":v==="Down"?"bear":v==="Balanced"?"neutral":fallback}
+function biasCls(s){return upDownBalancedClass(s.bias,"neutral")}
 
 function buildColumns(arr,session){
   if(session==="All"){
@@ -2859,7 +2863,7 @@ function macroMonthLabel(m){
   const[y,mo]=m.split("-");
   return new Date(Number(y),Number(mo)-1,1).toLocaleDateString(undefined,{month:"short",year:"numeric"})
 }
-function macroOutcomeClass(o){return o==="Up"?"bull":o==="Down"?"bear":o==="Balanced"?"neutral":""}
+function macroOutcomeClass(o){return upDownBalancedClass(o,"")}
 function macroSurprisePillHtml(s){
   if(!s)return`<span class="pill pending">Pending</span>`;
   const cls=s==="Positive"?"bull":s==="Negative"?"bear":"neutral";
@@ -2874,7 +2878,10 @@ async function setMacroMonthOutcome(month,outcome){
   await syncMonthOutcomeUpsert([row]);
 }
 function macroAllMonths(){
-  const set=new Set(monthOutcomes.filter(o=>o.outcome).map(o=>o.month));
+  // Includes every month that has ever had an outcome row created (even if it's since been
+  // reverted back to "" / Pending) — not just ones with a truthy outcome — so a month a user
+  // touched doesn't silently disappear from the list once its last event is deleted.
+  const set=new Set(monthOutcomes.map(o=>o.month));
   macroEvents.forEach(e=>{if(e.month)set.add(e.month)});
   return[...set].sort();
 }
@@ -2909,7 +2916,7 @@ function renderMacroEventTable(){
     return`<tr>
       <td>${macroMonthLabel(e.month)}</td>
       <td><b>${escapeHtml(e.name)}</b>${e.notes?`<div class="hint">${escapeHtml(e.notes)}</div>`:""}</td>
-      <td>${e.date?formatDMY(e.date):"—"}</td>
+      <td>${e.date?escapeHtml(formatDMY(e.date)):"—"}</td>
       <td>${e.forecast??"—"}</td>
       <td>${e.prior??"—"}</td>
       <td>${e.actual??"—"}</td>
@@ -2961,22 +2968,29 @@ macroNewsForm.addEventListener("submit",async ev=>{
   ev.preventDefault();
   const month=mnMonth.value, name=mnName.value.trim();
   if(!month||!name)return;
-  const record={
-    id:crypto.randomUUID(),
-    month,name,
-    date:mnDate.value||null,
-    forecast:mnForecast.value?Number(mnForecast.value):null,
-    prior:mnPrior.value?Number(mnPrior.value):null,
-    actual:mnActual.value?Number(mnActual.value):null,
-    surprise:mnSurprise.value||"",
-    notes:mnNotes.value.trim(),
-    updatedAt:new Date().toISOString()
-  };
-  macroEvents.push(record);
-  saveMacroEvents();
-  await syncMacroEventUpsert([record]);
-  ev.target.reset();
-  renderMacroNews();
+  // Disabled for the duration of the sync so a double-click/Enter-mash before the network
+  // round-trip resolves can't resubmit the same still-filled-in fields as a second record.
+  macroNewsSubmitBtn.disabled=true;
+  try{
+    const record={
+      id:crypto.randomUUID(),
+      month,name,
+      date:mnDate.value||null,
+      forecast:mnForecast.value?Number(mnForecast.value):null,
+      prior:mnPrior.value?Number(mnPrior.value):null,
+      actual:mnActual.value?Number(mnActual.value):null,
+      surprise:mnSurprise.value||"",
+      notes:mnNotes.value.trim(),
+      updatedAt:new Date().toISOString()
+    };
+    macroEvents.push(record);
+    saveMacroEvents();
+    await syncMacroEventUpsert([record]);
+    ev.target.reset();
+    renderMacroNews();
+  }finally{
+    macroNewsSubmitBtn.disabled=false;
+  }
 });
 // Forex Factory's public weekly calendar feed — unofficial/unauthenticated (no supported API
 // exists for this), so treated as best-effort: wrapped in try/catch with a plain-English fallback
@@ -2993,8 +3007,11 @@ function parseFfNumber(raw){
   const v=parseFloat(String(raw).replace(/[^0-9eE+\-.]/g,""));
   return Number.isFinite(v)?v:null;
 }
-function ffDupKey(name,date){return(name||"").trim().toLowerCase()+"|"+(date||"").slice(0,10)}
-function macroEventExists(name,date){const key=ffDupKey(name,date);return macroEvents.some(e=>ffDupKey(e.name,e.date)===key)}
+// Keyed by name+month rather than name+date: a manually logged release's Release Date field is
+// optional, so keying on the exact date would fail to flag it as a duplicate of an otherwise
+// identical Forex-Factory-imported row for the same event and month.
+function ffDupKey(name,month){return(name||"").trim().toLowerCase()+"|"+(month||"")}
+function macroEventExists(name,month){const key=ffDupKey(name,month);return macroEvents.some(e=>ffDupKey(e.name,e.month)===key)}
 ffFetchBtn.addEventListener("click",async()=>{
   ffFetchBtn.disabled=true;
   ffStatus.textContent="Fetching this week's calendar from Forex Factory…";
@@ -3004,8 +3021,11 @@ ffFetchBtn.addEventListener("click",async()=>{
     const res=await fetch(FF_CALENDAR_URL);
     if(!res.ok)throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
-    ffCandidates=data.filter(e=>e.country==="USD"&&(e.impact==="High"||e.impact==="Medium")).map(e=>({
-      title:e.title,date:e.date,impact:e.impact,
+    // title/date are required — macro_news_events.name/month are NOT NULL columns, and this feed's
+    // own comments elsewhere note it can change format without notice, so a row missing either is
+    // dropped here rather than risking a null hitting the database on import.
+    ffCandidates=data.filter(e=>e.country==="USD"&&(e.impact==="High"||e.impact==="Medium")&&e.title&&e.date).map(e=>({
+      title:e.title,date:e.date,month:e.date.slice(0,7),impact:e.impact,
       forecastRaw:e.forecast||"",previousRaw:e.previous||"",
       forecast:parseFfNumber(e.forecast),prior:parseFfNumber(e.previous)
     }));
@@ -3025,41 +3045,51 @@ ffFetchBtn.addEventListener("click",async()=>{
 });
 function renderFfPreview(){
   ffPreviewTable.innerHTML=`<thead><tr><th></th><th>Event</th><th>Date</th><th>Forecast</th><th>Prior</th><th>Impact</th></tr></thead><tbody>${ffCandidates.map((c,i)=>{
-    const dup=macroEventExists(c.title,c.date);
+    const dup=macroEventExists(c.title,c.month);
     return`<tr>
       <td><input type="checkbox" class="ffPick" data-i="${i}" ${dup?"disabled":"checked"}/></td>
       <td>${escapeHtml(c.title)}${dup?`<div class="hint">Already logged</div>`:""}</td>
-      <td>${formatDMY(c.date.slice(0,10))}</td>
+      <td>${escapeHtml(formatDMY(c.date.slice(0,10)))}</td>
       <td>${escapeHtml(c.forecastRaw)||"—"}</td>
       <td>${escapeHtml(c.previousRaw)||"—"}</td>
-      <td>${c.impact}</td>
+      <td>${escapeHtml(c.impact)}</td>
     </tr>`
   }).join("")}</tbody>`;
 }
 ffImportBtn.addEventListener("click",async()=>{
   const picks=[...ffPreviewTable.querySelectorAll(".ffPick:checked")].map(cb=>ffCandidates[Number(cb.dataset.i)]);
   if(!picks.length)return;
-  const now=new Date().toISOString();
-  const records=picks.map(c=>({
-    id:crypto.randomUUID(),
-    month:c.date.slice(0,7),
-    name:c.title,
-    date:c.date.slice(0,10),
-    forecast:c.forecast,
-    prior:c.prior,
-    actual:null,
-    surprise:"",
-    notes:`Imported from Forex Factory — forecast ${c.forecastRaw||"—"}, prior ${c.previousRaw||"—"}.`,
-    updatedAt:now
-  }));
-  macroEvents.push(...records);
-  saveMacroEvents();
-  await syncMacroEventUpsert(records);
-  ffStatus.textContent=`Imported ${records.length} release${records.length>1?"s":""}. Fill in Actual and Surprise once each one prints.`;
-  ffCandidates=[];
-  ffPreviewWrap.classList.add("hidden");
-  ffImportBtn.classList.add("hidden");
-  renderMacroNews();
+  // Disabled for the duration of the sync — same double-click guard as the fetch button — so a
+  // second click before the network round-trip resolves can't re-read the same checked boxes and
+  // push a second duplicate batch.
+  ffImportBtn.disabled=true;
+  try{
+    const now=new Date().toISOString();
+    const records=picks.map(c=>({
+      id:crypto.randomUUID(),
+      month:c.month,
+      name:c.title,
+      date:c.date.slice(0,10),
+      forecast:c.forecast,
+      prior:c.prior,
+      actual:null,
+      surprise:"",
+      notes:`Imported from Forex Factory — forecast ${c.forecastRaw||"—"}, prior ${c.previousRaw||"—"}.`,
+      updatedAt:now
+    }));
+    macroEvents.push(...records);
+    saveMacroEvents();
+    await syncMacroEventUpsert(records);
+    ffStatus.textContent=`Imported ${records.length} release${records.length>1?"s":""}. Fill in Actual and Surprise once each one prints.`;
+    ffCandidates=[];
+    ffPreviewWrap.classList.add("hidden");
+    ffImportBtn.classList.add("hidden");
+    renderMacroNews();
+  }catch(err){
+    ffStatus.textContent=`Failed to import: ${err.message||err}. Nothing else was changed — try again.`;
+  }finally{
+    ffImportBtn.disabled=false;
+  }
 });
 function renderTable(id,arr){const e=enrich(arr);document.getElementById(id).innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Day</th><th>Ref Source</th><th>Ref High</th><th>Ref Low</th><th>FR</th><th>HR</th><th>QR</th><th>ER</th><th>Current Range</th><th>London</th><th>New York</th><th>R</th><th>Actions</th></tr></thead><tbody>${e.map(s=>`<tr><td>${formatDMY(s.date)}</td><td>${s.sessionType||""}</td><td>${s.day||""}</td><td>${s.referenceLabel||""}</td><td>${fmt(s.referenceHigh)}</td><td>${fmt(s.referenceLow)}</td><td>${s.frHit||""}</td><td>${s.hrHit||""}</td><td>${s.qrHit||""}</td><td>${s.erHit||""}</td><td>${fmt(s.currentRange)}</td><td>${fmt(s.londonRange)}</td><td>${fmt(s.nyRange)}</td><td>${fmt(s.resultR)}</td><td><button onclick="editSession('${s.id}')">Edit</button> <button class="danger" onclick="deleteSession('${s.id}')">Delete</button></td></tr>`).join("")}</tbody>`}
 window.editSession=id=>{const s=sessions.find(x=>x.id===id);if(s)sessionToForm(s)}
@@ -3444,11 +3474,16 @@ async function fullSync(){
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
   for(const p of [...pendingOiDeletes]){await syncOiDeleteDate(p.date,p.dte)}
   for(const id of [...pendingMacroEventDeletes]){await syncMacroEventDelete(id)}
-  const ok=await syncSessionsFromCloud();
-  const entryOk=await syncEntriesFromCloud();
-  const oiOk=await syncOiFromCloud();
-  const macroEventOk=await syncMacroEventsFromCloud();
-  const monthOutcomeOk=await syncMonthOutcomesFromCloud();
+  // These five hit disjoint tables with no data dependency between them, so run them concurrently
+  // (same Promise.all pattern already used for fetchMacroYields/fetchDxy above) instead of paying
+  // for five sequential round-trips on every "Sync Now" click.
+  const[ok,entryOk,oiOk,macroEventOk,monthOutcomeOk]=await Promise.all([
+    syncSessionsFromCloud(),
+    syncEntriesFromCloud(),
+    syncOiFromCloud(),
+    syncMacroEventsFromCloud(),
+    syncMonthOutcomesFromCloud()
+  ]);
   if(ok&&entryOk&&oiOk&&macroEventOk&&monthOutcomeOk){
     syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
   }else{
