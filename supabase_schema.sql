@@ -461,3 +461,78 @@ create policy "delete own oi snapshots" on public.oi_snapshots
 for delete using (auth.uid() = user_id);
 
 create index if not exists oi_snapshots_date_idx on public.oi_snapshots(date);
+
+-- Macro News Outcome Tracker — Macro News tab. macro_news_events logs individual first-week-of-
+-- month releases (CPI, PMI, NFP, ...) with forecast/prior/actual and a hand-entered Positive/
+-- Negative/Neutral surprise tag (set once the release prints — direction of "positive" varies by
+-- event and instrument, so this is a judgment call, not auto-derived from actual vs forecast).
+-- Keyed by uuid id like trade_entries, since it's a hand-created log entry.
+-- Existing databases: run both this table and macro_month_outcomes below once to add them.
+create table if not exists public.macro_news_events (
+  id uuid primary key,
+  user_id uuid references auth.users(id),
+  month text not null,
+  name text not null,
+  release_date date,
+  forecast numeric,
+  prior numeric,
+  actual numeric,
+  surprise text check (surprise in ('Positive','Negative','Neutral') or surprise is null),
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.macro_news_events enable row level security;
+
+drop policy if exists "select own macro news events" on public.macro_news_events;
+drop policy if exists "insert own macro news events" on public.macro_news_events;
+drop policy if exists "update own macro news events" on public.macro_news_events;
+drop policy if exists "delete own macro news events" on public.macro_news_events;
+
+create policy "select own macro news events" on public.macro_news_events
+for select using (auth.uid() = user_id);
+
+create policy "insert own macro news events" on public.macro_news_events
+for insert with check (auth.uid() = user_id);
+
+create policy "update own macro news events" on public.macro_news_events
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own macro news events" on public.macro_news_events
+for delete using (auth.uid() = user_id);
+
+create index if not exists macro_news_events_month_idx on public.macro_news_events(month);
+create index if not exists macro_news_events_user_id_idx on public.macro_news_events(user_id);
+
+-- macro_month_outcomes records how price actually behaved that calendar month (Up/Down/
+-- Balanced) — one row per user per month, set once the month closes. Every macro_news_events row
+-- for that month is scored against this. Keyed by (user_id, month) rather than a uuid id, same
+-- "natural key, no accumulation" convention as oi_snapshots above — a month either has a
+-- recorded outcome or it doesn't.
+create table if not exists public.macro_month_outcomes (
+  user_id uuid references auth.users(id),
+  month text not null,
+  outcome text check (outcome in ('Up','Down','Balanced') or outcome is null),
+  updated_at timestamptz default now(),
+  primary key (user_id, month)
+);
+
+alter table public.macro_month_outcomes enable row level security;
+
+drop policy if exists "select own macro month outcomes" on public.macro_month_outcomes;
+drop policy if exists "insert own macro month outcomes" on public.macro_month_outcomes;
+drop policy if exists "update own macro month outcomes" on public.macro_month_outcomes;
+drop policy if exists "delete own macro month outcomes" on public.macro_month_outcomes;
+
+create policy "select own macro month outcomes" on public.macro_month_outcomes
+for select using (auth.uid() = user_id);
+
+create policy "insert own macro month outcomes" on public.macro_month_outcomes
+for insert with check (auth.uid() = user_id);
+
+create policy "update own macro month outcomes" on public.macro_month_outcomes
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own macro month outcomes" on public.macro_month_outcomes
+for delete using (auth.uid() = user_id);
