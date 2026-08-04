@@ -656,6 +656,7 @@
       <h2>Log a release</h2>
       <p class="hint" style="margin-bottom:12px">One row per event. Pick the month it belongs to — the monthly outcome is set separately below, once, per month.</p>
       <form id="macroNewsForm" class="form-grid">
+        <input type="hidden" id="mnRecordId"/>
         <div><label>Month</label><input id="mnMonth" type="month" required/></div>
         <div><label>Event</label><input id="mnName" list="macroNewsEventSuggestions" placeholder="e.g. CPI" required/>
           <datalist id="macroNewsEventSuggestions">
@@ -679,7 +680,10 @@
         </div>
         <div><label>Notes</label><input id="mnNotes" placeholder="optional"/></div>
       </form>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="primary" type="submit" form="macroNewsForm" id="macroNewsSubmitBtn">Add Release</button></div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
+        <button type="button" id="mnCancelEditBtn" class="hidden">Cancel Edit</button>
+        <button class="primary" type="submit" form="macroNewsForm" id="macroNewsSubmitBtn">Add Release</button>
+      </div>
     </div>
 
     <div class="card span-12">
@@ -2918,15 +2922,39 @@ function renderMacroEventTable(){
       <td>${e.actual??"—"}</td>
       <td>${macroSurprisePillHtml(e.surprise)}</td>
       <td>${outcome?`<span class="pill ${macroOutcomeClass(outcome)}">${outcome}</span>`:`<span class="pill pending">Pending</span>`}</td>
-      <td><button class="danger" onclick="deleteMacroEvent('${e.id}')">Delete</button></td>
+      <td><button onclick="editMacroEvent('${e.id}')">Edit</button> <button class="danger" onclick="deleteMacroEvent('${e.id}')">Delete</button></td>
     </tr>`
   }).join("")}</tbody>`;
 }
+function resetMacroNewsForm(){
+  macroNewsForm.reset();
+  mnRecordId.value="";
+  macroNewsSubmitBtn.textContent="Add Release";
+  mnCancelEditBtn.classList.add("hidden");
+}
+window.editMacroEvent=id=>{
+  const e=macroEvents.find(x=>x.id===id);
+  if(!e)return;
+  mnRecordId.value=e.id;
+  mnMonth.value=e.month||"";
+  mnName.value=e.name||"";
+  mnDate.value=e.date||"";
+  mnForecast.value=e.forecast??"";
+  mnPrior.value=e.prior??"";
+  mnActual.value=e.actual??"";
+  mnSurprise.value=e.surprise||"";
+  mnNotes.value=e.notes||"";
+  macroNewsSubmitBtn.textContent="Update Release";
+  mnCancelEditBtn.classList.remove("hidden");
+  mnMonth.scrollIntoView({behavior:"smooth",block:"center"});
+};
+mnCancelEditBtn.addEventListener("click",resetMacroNewsForm);
 window.deleteMacroEvent=async id=>{
   if(!confirm("Delete this release?"))return;
   macroEvents=macroEvents.filter(e=>e.id!==id);
   saveMacroEvents();
   await syncMacroEventDelete(id);
+  if(mnRecordId.value===id)resetMacroNewsForm();
   renderMacroNews();
 };
 function renderMacroNewsStats(){
@@ -2968,8 +2996,9 @@ macroNewsForm.addEventListener("submit",async ev=>{
   // round-trip resolves can't resubmit the same still-filled-in fields as a second record.
   macroNewsSubmitBtn.disabled=true;
   try{
+    const editingId=mnRecordId.value;
     const record={
-      id:crypto.randomUUID(),
+      id:editingId||crypto.randomUUID(),
       month,name,
       date:mnDate.value||null,
       forecast:mnForecast.value?Number(mnForecast.value):null,
@@ -2979,10 +3008,11 @@ macroNewsForm.addEventListener("submit",async ev=>{
       notes:mnNotes.value.trim(),
       updatedAt:new Date().toISOString()
     };
-    macroEvents.push(record);
+    const idx=editingId?macroEvents.findIndex(x=>x.id===editingId):-1;
+    if(idx>-1)macroEvents[idx]=record;else macroEvents.push(record);
     saveMacroEvents();
     await syncMacroEventUpsert([record]);
-    ev.target.reset();
+    resetMacroNewsForm();
     renderMacroNews();
   }finally{
     macroNewsSubmitBtn.disabled=false;
