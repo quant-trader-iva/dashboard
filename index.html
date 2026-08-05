@@ -2894,10 +2894,25 @@ async function setMacroMonthOutcome(month,outcome){
 function macroAllMonths(){
   // Includes every month that has ever had an outcome row created (even if it's since been
   // reverted back to "" / Pending) — not just ones with a truthy outcome — so a month a user
-  // touched doesn't silently disappear from the list once its last event is deleted.
+  // touched doesn't silently disappear from the list once its last event is deleted. weekOutcomes
+  // is included for the same reason: a month can be touched there (Week 1-4 set) without ever
+  // getting a monthOutcomes row, and losing macroEvents shouldn't make those week rows vanish
+  // from the UI while they keep re-syncing in the background.
   const set=new Set(monthOutcomes.map(o=>o.month));
   macroEvents.forEach(e=>{if(e.month)set.add(e.month)});
+  weekOutcomes.forEach(o=>{if(o.month)set.add(o.month)});
   return[...set].sort();
+}
+// Shared Pending/Up/Down/Balanced <select> markup for both the Monthly and Weekly Outcome
+// tables — cls picks which class the click handlers below query for, dataAttrs carries
+// whichever data-* identifiers that table's change handler needs to read back.
+function outcomeSelectHtml(cls,dataAttrs,outcome){
+  return`<select ${dataAttrs} class="${cls}">
+        <option value="" ${!outcome?"selected":""}>Pending</option>
+        <option value="Up" ${outcome==="Up"?"selected":""}>Up</option>
+        <option value="Down" ${outcome==="Down"?"selected":""}>Down</option>
+        <option value="Balanced" ${outcome==="Balanced"?"selected":""}>Balanced</option>
+      </select>`;
 }
 function renderMacroMonths(){
   const months=macroAllMonths();
@@ -2909,12 +2924,7 @@ function renderMacroMonths(){
     return`<div class="macronews-monthrow">
       <div><b>${macroMonthLabel(m)}</b></div>
       <div class="hint" title="${escapeHtml(names)}">${evs.length} release${evs.length===1?"":"s"} &mdash; ${escapeHtml(names)}</div>
-      <div><select data-month="${m}" class="macroOutcomeSelect">
-        <option value="" ${!outcome?"selected":""}>Pending</option>
-        <option value="Up" ${outcome==="Up"?"selected":""}>Up</option>
-        <option value="Down" ${outcome==="Down"?"selected":""}>Down</option>
-        <option value="Balanced" ${outcome==="Balanced"?"selected":""}>Balanced</option>
-      </select></div>
+      <div>${outcomeSelectHtml("macroOutcomeSelect",`data-month="${m}"`,outcome)}</div>
       <div></div>
     </div>`
   }).join("");
@@ -2927,7 +2937,11 @@ function renderMacroMonths(){
 function daysInMonth(m){
   if(!m)return 30;
   const[y,mo]=m.split("-").map(Number);
-  return new Date(y,mo,0).getDate();
+  const d=new Date(y,mo,0).getDate();
+  // A malformed month string (missing "-MM", non-numeric, ...) makes y/mo come out NaN, and
+  // an Invalid Date's getDate() is NaN too — falls back to the same "assume a long month"
+  // default as the empty-string case above, rather than NaN silently comparing as <=28.
+  return Number.isFinite(d)?d:30;
 }
 function monthWeekCount(m){return daysInMonth(m)>28?5:4}
 function macroWeekOutcome(month,week){const row=weekOutcomes.find(o=>o.month===month&&o.week===week);return row?row.outcome:""}
@@ -2941,17 +2955,19 @@ async function setMacroWeekOutcome(month,week,outcome){
 function renderMacroWeekTable(){
   const months=macroAllMonths();
   if(!months.length){macroWeekTable.innerHTML=`<tbody><tr><td class="hint">No months logged yet.</td></tr></tbody>`;return}
+  // Built once per render rather than doing a linear weekOutcomes.find() per cell (up to
+  // months.length*5 scans otherwise).
+  const outcomeByKey=new Map(weekOutcomes.map(o=>[o.month+"|"+o.week,o.outcome]));
   macroWeekTable.innerHTML=`<thead><tr><th>Month</th><th>Week 1</th><th>Week 2</th><th>Week 3</th><th>Week 4</th><th>Week 5</th></tr></thead><tbody>${months.map(m=>{
     const weekCount=monthWeekCount(m);
     const cells=[1,2,3,4,5].map(w=>{
-      if(w>weekCount)return`<td class="hint">—</td>`;
-      const outcome=macroWeekOutcome(m,w);
-      return`<td><select data-month="${m}" data-week="${w}" class="macroWeekSelect">
-        <option value="" ${!outcome?"selected":""}>Pending</option>
-        <option value="Up" ${outcome==="Up"?"selected":""}>Up</option>
-        <option value="Down" ${outcome==="Down"?"selected":""}>Down</option>
-        <option value="Balanced" ${outcome==="Balanced"?"selected":""}>Balanced</option>
-      </select></td>`;
+      const outcome=outcomeByKey.get(m+"|"+w)||"";
+      // Week columns past this month's real week count stay blank UNLESS a row already exists
+      // there (e.g. synced in from another device/build with a different week-count reading) —
+      // shown instead of hidden so it stays visible and editable rather than a permanently
+      // orphaned row that keeps re-syncing with no way to see or clear it.
+      if(w>weekCount&&!outcome)return`<td class="hint">—</td>`;
+      return`<td>${outcomeSelectHtml("macroWeekSelect",`data-month="${m}" data-week="${w}"`,outcome)}</td>`;
     }).join("");
     return`<tr><td><b>${macroMonthLabel(m)}</b></td>${cells}</tr>`;
   }).join("")}</tbody>`;
@@ -3218,7 +3234,15 @@ importJson.addEventListener("change",async e=>{
     if(Array.isArray(data.oiSnapshots))oiSnapshots=data.oiSnapshots;
     if(Array.isArray(data.macroEvents))macroEvents=data.macroEvents;
     if(Array.isArray(data.monthOutcomes))monthOutcomes=data.monthOutcomes;
-    if(Array.isArray(data.weekOutcomes))weekOutcomes=data.weekOutcomes;
+    // Sanitized on import (unlike the arrays above) because week/outcome feed straight into a
+    // DB check constraint (week between 1 and 5, outcome in Up/Down/Balanced) — an unvalidated
+    // row from a hand-edited or corrupted backup would otherwise import cleanly, then fail every
+    // subsequent sync with no way to find or fix the specific bad row.
+    if(Array.isArray(data.weekOutcomes)){
+      weekOutcomes=data.weekOutcomes
+        .map(o=>({month:o&&o.month,week:o&&Number(o.week),outcome:o&&["Up","Down","Balanced"].includes(o.outcome)?o.outcome:"",updatedAt:(o&&o.updatedAt)||new Date().toISOString()}))
+        .filter(o=>o.month&&Number.isInteger(o.week)&&o.week>=1&&o.week<=5);
+    }
   }else{return alert("Invalid file")}
   saveSessions();saveEntries();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();saveWeekOutcomes();renderAll();
   const seen=new Set(),dupKeys=new Set();
