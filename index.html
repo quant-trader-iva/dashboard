@@ -646,6 +646,7 @@
       <p class="hint" id="ivNote" style="margin-bottom:12px"></p>
       <div class="grid" id="ivSummary" style="margin-bottom:14px"></div>
       <div class="tablewrap"><table id="ivTable"></table></div>
+      <div id="ivDxySpark" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:18px;align-items:center;flex-wrap:wrap"></div>
     </div>
 
     <div class="card span-12">
@@ -3105,39 +3106,94 @@ function renderMacroNewsStats(){
 function normalizeEventName(s){
   return String(s||"").toLowerCase().replace(/\(.*?\)/g," ").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
 }
+// Plain substring containment (see normalizeEventName above) only catches cases where one name is
+// literally a prefix/suffix of the other, e.g. "CPI" inside "CPI m/m" — it misses the recurring
+// high-impact releases where Forex Factory's title and a trader's shorthand share no common
+// substring at all ("Non-Farm Employment Change" vs "NFP"). These groups patch that gap for the
+// handful of events that recur every month; anything not listed here still falls back to plain
+// substring matching below.
+const IV_EVENT_ALIASES=[
+  ["cpi","consumer price index"],
+  ["core cpi","core consumer price index"],
+  ["nfp","non farm payrolls","non farm employment change","nonfarm payrolls"],
+  ["unemployment rate","jobless rate"],
+  ["ism manufacturing pmi","ism manufacturing","manufacturing pmi"],
+  ["ism services pmi","ism services","ism non manufacturing pmi","services pmi"],
+  ["retail sales","core retail sales"],
+  ["fomc rate decision","fomc","federal funds rate","interest rate decision","fed interest rate decision"]
+];
+function canonicalEventKeys(name){
+  const norm=normalizeEventName(name);
+  if(!norm)return[];
+  const group=IV_EVENT_ALIASES.find(g=>g.some(k=>norm===k||norm.includes(k)||k.includes(norm)));
+  return group?[norm,...group]:[norm];
+}
 function findNewsHistoryForTitle(byType,title){
-  const norm=normalizeEventName(title);
-  if(!norm)return null;
+  const titleKeys=canonicalEventKeys(title);
+  if(!titleKeys.length)return null;
   let best=null;
   for(const t of byType.values()){
-    const evNorm=normalizeEventName(t.name);
-    if(!evNorm)continue;
-    if(evNorm===norm||evNorm.includes(norm)||norm.includes(evNorm)){
-      if(!best||t.sessions.length>best.sessions.length)best=t;
-    }
+    const evKeys=canonicalEventKeys(t.name);
+    if(!evKeys.length)continue;
+    const matches=titleKeys.some(a=>evKeys.some(b=>a===b||a.includes(b)||b.includes(a)));
+    if(matches&&(!best||t.sessions.length>best.sessions.length))best=t;
   }
   return best?eventTypeStats(best.sessions):null;
 }
 // Below this many matched historical sessions, the breach rate is noise — shown as "too thin to
 // score" instead of a number that looks more confident than it is.
 const IV_MIN_HISTORY_N=5;
+const IV_MOVE_TIERS=[{label:"Low",bg:"#334155",fg:"#cbd5e1"},{label:"Moderate",bg:"#f6b26b",fg:"#111827"},{label:"Elevated",bg:"#dc2626",fg:"white"}];
+const IV_UNRATED={label:"Unrated",bg:"#334155",fg:"#cbd5e1"};
 function ivExpectedMove(stats,dxyRegime){
-  if(!stats||stats.n<IV_MIN_HISTORY_N)return{label:"Unrated",bg:"#334155",fg:"#cbd5e1"};
+  if(!stats||stats.n<IV_MIN_HISTORY_N)return IV_UNRATED;
   const breach=Math.max(stats.breaksHigh||0,stats.breaksLow||0);
   let tier=breach>=0.6?2:breach>=0.35?1:0;
   // A Rising/Falling DXY regime nudges the tier up one notch (capped at Elevated) — a directional
   // dollar trend into a print reads as added, not neutral, risk. Flat leaves the event's own
   // historical breach rate untouched.
   if(dxyRegime&&dxyRegime.label!=="Flat")tier=Math.min(2,tier+1);
-  return[{label:"Low",bg:"#334155",fg:"#cbd5e1"},{label:"Moderate",bg:"#f6b26b",fg:"#111827"},{label:"Elevated",bg:"#dc2626",fg:"white"}][tier];
+  return IV_MOVE_TIERS[tier];
+}
+// Rolls the per-event badges into one weekly headline — the worst-case tier among rated events,
+// same "Unrated" fallback as a single event when nothing this week has enough history to score.
+function ivWeekOutlook(rows){
+  const rated=rows.map(r=>r.move.label).filter(l=>l!=="Unrated");
+  if(!rated.length)return IV_UNRATED;
+  return IV_MOVE_TIERS.find(t=>rated.includes(t.label))||IV_MOVE_TIERS[rated.includes("Elevated")?2:rated.includes("Moderate")?1:0];
+}
+function ivWeekdayLabel(dateStr){
+  const d=new Date(dateStr+"T00:00:00");
+  return isNaN(d)?"":d.toLocaleDateString(undefined,{weekday:"short"});
+}
+// Compact inline sparkline (no axes/gridlines/hover — this is a summary card, not the full Macro
+// tab DXY chart which already covers that in detail) over the same window as the Macro tab default.
+function ivDxySparklineSvg(series,windowSize){
+  const data=series.slice(-windowSize);
+  if(data.length<2)return"";
+  const W=260,H=46,pad=4;
+  const vals=data.map(d=>d.value);
+  const vMin=Math.min(...vals),vMax=Math.max(...vals);
+  const span=vMax-vMin||1;
+  const n=data.length;
+  const x=i=>pad+(W-2*pad)*(i/(n-1));
+  const y=v=>pad+(H-2*pad)*(1-(v-vMin)/span);
+  const path=data.map((d,i)=>(i===0?"M":"L")+x(i).toFixed(1)+","+y(d.value).toFixed(1)).join(" ");
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:220px;height:${H}px;display:block">
+    <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="${x(n-1).toFixed(1)}" cy="${y(data[n-1].value).toFixed(1)}" r="3.5" fill="#38bdf8"/>
+  </svg>`;
 }
 function renderIncomingVolatility(){
-  const noteEl=document.getElementById("ivNote"),summaryEl=document.getElementById("ivSummary"),tableEl=document.getElementById("ivTable");
+  const noteEl=document.getElementById("ivNote"),summaryEl=document.getElementById("ivSummary"),tableEl=document.getElementById("ivTable"),sparkEl=document.getElementById("ivDxySpark");
   if(!tableEl)return;
   const cal=ivCalendarCache;
   const events=(cal&&cal.events)||[];
   const dxySer=dxySeries();
   const dxyLatest=dxySer.length?dxySer[dxySer.length-1]:null;
+  // Only today's regime exists to reason about — these are upcoming releases, so there's no
+  // historical "regime at the moment it printed" to look up per row, unlike the breach stats
+  // above. Every row shares this same current reading.
   const dxyRegime=dxyLatest?dxyRegimeForDate(dxyLatest.date,5):null;
   const byType=newsEventTypeMap(enrich(sessions).filter(s=>s.sessionType==="Daily"));
   const rows=events.map(e=>{
@@ -3145,6 +3201,7 @@ function renderIncomingVolatility(){
     return{...e,stats,move:ivExpectedMove(stats,dxyRegime)};
   });
   const highCount=rows.filter(r=>r.impact==="High").length;
+  const outlook=ivWeekOutlook(rows);
 
   if(!cal){
     noteEl.textContent="Loading this week's USD calendar…";
@@ -3160,27 +3217,34 @@ function renderIncomingVolatility(){
   const dxyRegimeLabel=dxyRegime?dxyRegime.label:"n/a";
   const[dxyBg,dxyFg]=dxyRegime?macroRegimeBadgeColor(dxyRegime.label):["#334155","#cbd5e1"];
   summaryEl.innerHTML=`
+    <div class="metric span-3"><div class="label">Week outlook</div><div class="value"><span class="pill" style="background:${outlook.bg};color:${outlook.fg}">${outlook.label}</span></div></div>
     <div class="metric span-3"><div class="label">High-impact releases</div><div class="value">${highCount}</div></div>
-    <div class="metric span-3"><div class="label">Total USD releases</div><div class="value">${events.length}</div></div>
     <div class="metric span-3"><div class="label">DXY (synthetic)</div><div class="value">${dxyValText}</div></div>
     <div class="metric span-3"><div class="label">DXY 5-session regime</div><div class="value"><span class="pill" style="background:${dxyBg};color:${dxyFg}">${dxyRegimeLabel}</span></div></div>
   `;
 
-  if(!events.length){tableEl.innerHTML="";return}
-  tableEl.innerHTML=`<thead><tr><th>Date</th><th>Event</th><th>Impact</th><th>Historical avg range</th><th>Breach freq (n)</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
+  if(!events.length){tableEl.innerHTML="";if(sparkEl)sparkEl.innerHTML="";return}
+  tableEl.innerHTML=`<thead><tr><th>Day</th><th>Date</th><th>Event</th><th>Impact</th><th>Historical avg range</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
     const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?fmt(r.stats.avgRange)
       :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n}, too thin to score</span>`
       :`<span class="hint">no history logged</span>`;
     const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
     return`<tr>
+      <td><b>${ivWeekdayLabel(r.date)}</b></td>
       <td>${escapeHtml(formatDMY(r.date))}</td>
       <td><b>${escapeHtml(r.title)}</b></td>
       <td>${impactBadge(r.impact)}</td>
       <td>${statsCell}</td>
       <td>${breachCell}</td>
+      <td><span class="pill" style="background:${dxyBg};color:${dxyFg}">${dxyRegimeLabel}</span></td>
       <td><span class="pill" style="background:${r.move.bg};color:${r.move.fg}">${r.move.label}</span></td>
     </tr>`
   }).join("")}</tbody>`;
+  if(sparkEl){
+    sparkEl.innerHTML=dxySer.length>=2
+      ?`<span class="hint">DXY, last ${Math.min(21,dxySer.length)} sessions</span>${ivDxySparklineSvg(dxySer,21)}`
+      :"";
+  }
 }
 function renderMacroNews(){renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
 macroNewsForm.addEventListener("submit",async ev=>{
