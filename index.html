@@ -693,6 +693,12 @@
     </div>
 
     <div class="card span-12">
+      <h2>Weekly Outcome</h2>
+      <p class="hint" style="margin-bottom:12px">Break each month down by week — Week 1 is the release week, through Week 4 (or Week 5, for months with a partial fifth week).</p>
+      <div class="tablewrap"><table id="macroWeekTable"></table></div>
+    </div>
+
+    <div class="card span-12">
       <h2>Release Log</h2>
       <div class="tablewrap"><table id="macroNewsTable"></table></div>
     </div>
@@ -788,6 +794,7 @@ const LEGACY_PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v1";
 const MACRO_EVENTS_KEY="trading_projection_macro_events_v1";
 const PENDING_MACRO_EVENT_DELETES_KEY="trading_projection_pending_macro_event_deletes_v1";
 const MONTH_OUTCOMES_KEY="trading_projection_month_outcomes_v1";
+const WEEK_OUTCOMES_KEY="trading_projection_week_outcomes_v1";
 const SESSION_ORDER=["Weekly","Daily","London","New York"];
 // Read from the ibCurrentOutcome select's own <option> list (same convention as outcomeMix()
 // reading #outcome's options below) so a renamed/added outcome option flows through everywhere —
@@ -872,11 +879,18 @@ function loadPendingMacroEventDeletes(){try{return JSON.parse(localStorage.getIt
 function savePendingMacroEventDeletes(){localStorage.setItem(PENDING_MACRO_EVENT_DELETES_KEY,JSON.stringify(pendingMacroEventDeletes))}
 function loadMonthOutcomes(){try{return JSON.parse(localStorage.getItem(MONTH_OUTCOMES_KEY)||"[]")}catch{return[]}}
 function saveMonthOutcomes(){localStorage.setItem(MONTH_OUTCOMES_KEY,JSON.stringify(monthOutcomes))}
+// weekOutcomes breaks a month down further into calendar weeks (Week 1 = days 1-7 ... Week 5 =
+// days 29-31, only present for months with more than 28 days) — a finer-grained companion to
+// monthOutcomes, tracked as its own array since a month's overall outcome and a specific week's
+// outcome are different judgments entered independently.
+function loadWeekOutcomes(){try{return JSON.parse(localStorage.getItem(WEEK_OUTCOMES_KEY)||"[]")}catch{return[]}}
+function saveWeekOutcomes(){localStorage.setItem(WEEK_OUTCOMES_KEY,JSON.stringify(weekOutcomes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
 let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
 let macroEvents=loadMacroEvents(), pendingMacroEventDeletes=loadPendingMacroEventDeletes();
 let monthOutcomes=loadMonthOutcomes();
+let weekOutcomes=loadWeekOutcomes();
 const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
@@ -2908,6 +2922,43 @@ function renderMacroMonths(){
     sel.addEventListener("change",async()=>{await setMacroMonthOutcome(sel.dataset.month,sel.value);renderMacroNews()});
   });
 }
+// Week 1 = days 1-7, Week 2 = 8-14, Week 3 = 15-21, Week 4 = 22-28, Week 5 = 29-31 — Week 5 only
+// exists for months with more than 28 days (every month except a non-leap-year February).
+function daysInMonth(m){
+  if(!m)return 30;
+  const[y,mo]=m.split("-").map(Number);
+  return new Date(y,mo,0).getDate();
+}
+function monthWeekCount(m){return daysInMonth(m)>28?5:4}
+function macroWeekOutcome(month,week){const row=weekOutcomes.find(o=>o.month===month&&o.week===week);return row?row.outcome:""}
+async function setMacroWeekOutcome(month,week,outcome){
+  let row=weekOutcomes.find(o=>o.month===month&&o.week===week);
+  if(row){row.outcome=outcome;row.updatedAt=new Date().toISOString()}
+  else{row={month,week,outcome,updatedAt:new Date().toISOString()};weekOutcomes.push(row)}
+  saveWeekOutcomes();
+  await syncWeekOutcomeUpsert([row]);
+}
+function renderMacroWeekTable(){
+  const months=macroAllMonths();
+  if(!months.length){macroWeekTable.innerHTML=`<tbody><tr><td class="hint">No months logged yet.</td></tr></tbody>`;return}
+  macroWeekTable.innerHTML=`<thead><tr><th>Month</th><th>Week 1</th><th>Week 2</th><th>Week 3</th><th>Week 4</th><th>Week 5</th></tr></thead><tbody>${months.map(m=>{
+    const weekCount=monthWeekCount(m);
+    const cells=[1,2,3,4,5].map(w=>{
+      if(w>weekCount)return`<td class="hint">—</td>`;
+      const outcome=macroWeekOutcome(m,w);
+      return`<td><select data-month="${m}" data-week="${w}" class="macroWeekSelect">
+        <option value="" ${!outcome?"selected":""}>Pending</option>
+        <option value="Up" ${outcome==="Up"?"selected":""}>Up</option>
+        <option value="Down" ${outcome==="Down"?"selected":""}>Down</option>
+        <option value="Balanced" ${outcome==="Balanced"?"selected":""}>Balanced</option>
+      </select></td>`;
+    }).join("");
+    return`<tr><td><b>${macroMonthLabel(m)}</b></td>${cells}</tr>`;
+  }).join("")}</tbody>`;
+  macroWeekTable.querySelectorAll(".macroWeekSelect").forEach(sel=>{
+    sel.addEventListener("change",async()=>{await setMacroWeekOutcome(sel.dataset.month,Number(sel.dataset.week),sel.value);renderMacroNews()});
+  });
+}
 function renderMacroEventTable(){
   const rows=[...macroEvents].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.month||"").localeCompare(a.month||""));
   if(!rows.length){macroNewsTable.innerHTML=`<tbody><tr><td class="hint">No releases logged yet.</td></tr></tbody>`;return}
@@ -2987,7 +3038,7 @@ function renderMacroNewsStats(){
     </div>`
   }).join("");
 }
-function renderMacroNews(){renderMacroMonths();renderMacroEventTable();renderMacroNewsStats()}
+function renderMacroNews(){renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
 macroNewsForm.addEventListener("submit",async ev=>{
   ev.preventDefault();
   const month=mnMonth.value, name=mnName.value.trim();
@@ -3155,7 +3206,7 @@ exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entri
 // oiSnapshots is included here (unlike before Volume Level Tracking existed) because it now
 // holds hand-graded Hit/Outcome/tracked judgments that, unlike the raw Call/Put OI numbers,
 // can't be reconstructed by just re-uploading the original QuikStrike file.
-downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing(),oiSnapshots,macroEvents,monthOutcomes},null,2),"application/json"));
+downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing(),oiSnapshots,macroEvents,monthOutcomes,weekOutcomes},null,2),"application/json"));
 importJson.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
   const data=JSON.parse(await f.text());
@@ -3167,8 +3218,9 @@ importJson.addEventListener("change",async e=>{
     if(Array.isArray(data.oiSnapshots))oiSnapshots=data.oiSnapshots;
     if(Array.isArray(data.macroEvents))macroEvents=data.macroEvents;
     if(Array.isArray(data.monthOutcomes))monthOutcomes=data.monthOutcomes;
+    if(Array.isArray(data.weekOutcomes))weekOutcomes=data.weekOutcomes;
   }else{return alert("Invalid file")}
-  saveSessions();saveEntries();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();renderAll();
+  saveSessions();saveEntries();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();saveWeekOutcomes();renderAll();
   const seen=new Set(),dupKeys=new Set();
   sessions.forEach(s=>{const k=s.date+"|"+s.sessionType;if(seen.has(k))dupKeys.add(k);else seen.add(k)});
   if(dupKeys.size)alert(`Warning: this backup has ${dupKeys.size} Date+Session Type combination(s) with more than one entry (e.g. ${[...dupKeys][0]}). Delete the extra entries in the Data tab to avoid duplicate rows.`);
@@ -3419,6 +3471,34 @@ async function syncMonthOutcomesFromCloud(){
     return false;
   }
 }
+function toWeekOutcomeDb(o){return{user_id:authUser?authUser.id:null,month:o.month,week:o.week,outcome:o.outcome||null,updated_at:o.updatedAt||new Date().toISOString()}}
+function fromWeekOutcomeDb(r){return{month:r.month,week:Number(r.week),outcome:r.outcome,updatedAt:r.updated_at}}
+async function syncWeekOutcomeUpsert(records){
+  if(!supabaseClient||!authUser||!records.length)return false;
+  const key=records.length===1?"weekoutcomeupsert:"+records[0].month+":"+records[0].week:"weekoutcomeupsert:bulk";
+  return runSyncOp(key,
+    ()=>supabaseClient.from("macro_week_outcomes").upsert(records.map(toWeekOutcomeDb),{onConflict:"user_id,month,week"}),
+    msg=>`Failed to sync ${records.length} weekly outcome${records.length>1?"s":""} to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`);
+}
+async function syncWeekOutcomesFromCloud(){
+  try{
+    const {data,error}=await supabaseClient.from("macro_week_outcomes").select("*").order("month",{ascending:true});
+    if(error){showSyncError("fullsync:weekoutcomes:select","Failed to load Weekly Outcomes: "+error.message);return false}
+    clearSyncError("fullsync:weekoutcomes:select");
+    const map=new Map();
+    [...weekOutcomes,...data.map(fromWeekOutcomeDb)].forEach(o=>{
+      const key=o.month+"|"+o.week;
+      const existing=map.get(key);
+      if(!existing||(o.updatedAt||"")>=(existing.updatedAt||""))map.set(key,o);
+    });
+    weekOutcomes=[...map.values()].sort((a,b)=>(a.month||"").localeCompare(b.month||"")||a.week-b.week);
+    saveWeekOutcomes();
+    return await syncWeekOutcomeUpsert(weekOutcomes);
+  }catch(err){
+    showSyncError("fullsync:weekoutcomes:select","Failed to load Weekly Outcomes: "+errMsg(err));
+    return false;
+  }
+}
 let syncErrors=new Map();
 function renderSyncErrors(){
   if(!syncErrors.size){syncErrorBanner.classList.add("hidden");syncErrorBanner.textContent="";return}
@@ -3505,10 +3585,11 @@ async function fullSync(){
   const oiOk=await syncOiFromCloud();
   const macroEventOk=await syncMacroEventsFromCloud();
   const monthOutcomeOk=await syncMonthOutcomesFromCloud();
-  if(ok&&entryOk&&oiOk&&macroEventOk&&monthOutcomeOk){
+  const weekOutcomeOk=await syncWeekOutcomesFromCloud();
+  if(ok&&entryOk&&oiOk&&macroEventOk&&monthOutcomeOk&&weekOutcomeOk){
     syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
   }else{
-    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!oiOk&&"Open Interest data",!macroEventOk&&"macro news releases",!monthOutcomeOk&&"monthly outcomes"].filter(Boolean).join(" and ");
+    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!oiOk&&"Open Interest data",!macroEventOk&&"macro news releases",!monthOutcomeOk&&"monthly outcomes",!weekOutcomeOk&&"weekly outcomes"].filter(Boolean).join(" and ");
     syncStatus.textContent=`Sync failed for ${failed} — see the banner above for details.`;
   }
   renderAll();

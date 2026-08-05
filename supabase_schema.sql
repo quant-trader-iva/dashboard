@@ -536,3 +536,36 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "delete own macro month outcomes" on public.macro_month_outcomes
 for delete using (auth.uid() = user_id);
+
+-- macro_week_outcomes breaks a month down further into calendar weeks (Week 1 = days 1-7 ... Week
+-- 5 = days 29-31, only present for months with more than 28 days) — a finer-grained companion to
+-- macro_month_outcomes above, tracked as its own table since a month's overall outcome and a
+-- specific week's outcome are different judgments recorded independently. Keyed by (user_id,
+-- month, week), same natural-key convention as macro_month_outcomes.
+create table if not exists public.macro_week_outcomes (
+  user_id uuid references auth.users(id),
+  month text not null,
+  week smallint not null check (week between 1 and 5),
+  outcome text check (outcome in ('Up','Down','Balanced') or outcome is null),
+  updated_at timestamptz default now(),
+  primary key (user_id, month, week)
+);
+
+alter table public.macro_week_outcomes enable row level security;
+
+drop policy if exists "select own macro week outcomes" on public.macro_week_outcomes;
+drop policy if exists "insert own macro week outcomes" on public.macro_week_outcomes;
+drop policy if exists "update own macro week outcomes" on public.macro_week_outcomes;
+drop policy if exists "delete own macro week outcomes" on public.macro_week_outcomes;
+
+create policy "select own macro week outcomes" on public.macro_week_outcomes
+for select using (auth.uid() = user_id);
+
+create policy "insert own macro week outcomes" on public.macro_week_outcomes
+for insert with check (auth.uid() = user_id);
+
+create policy "update own macro week outcomes" on public.macro_week_outcomes
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own macro week outcomes" on public.macro_week_outcomes
+for delete using (auth.uid() = user_id);
