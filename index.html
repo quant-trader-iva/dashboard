@@ -3049,7 +3049,7 @@ function renderMacroNewsStats(){
       <div class="stackbar">
         ${up?`<div class="seg-bull" style="flex-basis:${pctOf(up)}%">${pctOf(up)>=10?pctOf(up)+"% Up":""}</div>`:""}
         ${down?`<div class="seg-bear" style="flex-basis:${pctOf(down)}%">${pctOf(down)>=10?pctOf(down)+"% Down":""}</div>`:""}
-        ${bal?`<div class="seg-neutral" style="flex-basis:${pctOf(bal)}%">${pctOf(bal)>=10?pctOf(bal)+"% Bal.":""}</div>`:""}
+        ${bal?`<div class="seg-neutral" style="flex-basis:${pctOf(bal)}%">${pctOf(bal)>=10?pctOf(bal)+"% Balanced":""}</div>`:""}
       </div>
     </div>`
   }).join("");
