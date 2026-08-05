@@ -642,6 +642,13 @@
 
   <div class="grid" style="margin-top:14px">
     <div class="card span-12">
+      <h2>Incoming Volatility</h2>
+      <p class="hint" id="ivNote" style="margin-bottom:12px"></p>
+      <div class="grid" id="ivSummary" style="margin-bottom:14px"></div>
+      <div class="tablewrap"><table id="ivTable"></table></div>
+    </div>
+
+    <div class="card span-12">
       <h2>Import This Week's Releases <span style="font-weight:400">(Forex Factory, USD, High/Medium impact)</span></h2>
       <p class="hint" style="margin-bottom:12px">Pulls this week's economic calendar from Forex Factory's public feed — event name, date, forecast, and prior. It does not provide the Actual value once a release prints, so Actual and the Positive/Negative surprise tag are still entered by hand below. This is an unofficial feed (not a supported API), so it can occasionally change format or be temporarily unavailable.</p>
       <div class="toolbar">
@@ -1471,6 +1478,36 @@ function renderDxy(){
     return `<tr><td>${w}</td><td style="text-align:right">${valText}</td><td style="text-align:right">${deltaText}</td><td>${badge}</td></tr>`;
   }).join("");
   changeRowsEl.innerHTML=`<div class="tablewrap"><table><tr><th>Sessions</th><th style="text-align:right">DXY</th><th style="text-align:right">&Delta;</th><th>Regime</th></tr>${rows}</table></div>`;
+}
+// --- Incoming Volatility calendar (Macro News tab) ---
+// Same Forex Factory feed the manual "Fetch This Week's USD Releases" button uses, but pulled
+// independently on a daily cache (same TTL/backoff shape as fetchDxy above) so the Incoming
+// Volatility card has data without the user first clicking Fetch. FF_CALENDAR_URL is declared
+// further down the script, alongside the manual-import flow it's shared with — safe to reference
+// here since this function only runs once the whole script (and that const) has executed.
+const IV_CALENDAR_CACHE_KEY="macroIncomingCalendarCache_v1";
+let ivCalendarCache=loadIvCalendarCache();
+function loadIvCalendarCache(){try{return JSON.parse(localStorage.getItem(IV_CALENDAR_CACHE_KEY)||"null")}catch{return null}}
+function saveIvCalendarCache(c){try{localStorage.setItem(IV_CALENDAR_CACHE_KEY,JSON.stringify(c))}catch{}}
+async function fetchIncomingCalendar(force){
+  const today=new Date().toISOString().slice(0,10);
+  if(!force&&ivCalendarCache&&!ivCalendarCache.error&&ivCalendarCache.fetchedDate===today)return ivCalendarCache;
+  if(!force&&ivCalendarCache&&ivCalendarCache.error&&ivCalendarCache.lastAttemptAt&&Date.now()-ivCalendarCache.lastAttemptAt<MACRO_RETRY_BACKOFF_MS)return ivCalendarCache;
+  try{
+    const res=await fetchWithTimeout(FF_CALENDAR_URL);
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const events=data.filter(e=>e.country==="USD"&&(e.impact==="High"||e.impact==="Medium")&&e.title&&e.date)
+      .map(e=>({title:e.title,date:e.date.slice(0,10),impact:e.impact}))
+      .sort((a,b)=>a.date.localeCompare(b.date));
+    ivCalendarCache={fetchedDate:today,events,lastAttemptAt:Date.now()};
+    saveIvCalendarCache(ivCalendarCache);
+  }catch(err){
+    if(!ivCalendarCache)ivCalendarCache={fetchedDate:null,events:[]};
+    ivCalendarCache.error=errMsg(err);
+    ivCalendarCache.lastAttemptAt=Date.now();
+  }
+  return ivCalendarCache;
 }
 function renderMacro(){
   const statusEl=document.getElementById("macroStatus");
@@ -2831,17 +2868,10 @@ function eventTypeStats(arr){
     breaksLow:n?withData.filter(s=>s.low<s.referenceLow).length/n:null
   };
 }
-function renderNewsImpact(){
-  const dailyAll=enrich(sessions).filter(s=>s.sessionType==="Daily");
-  const daily=dailyAll.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
-  const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
-  const noNews=daily.filter(s=>!(s.newsEvents||[]).length);
-  const ndnn=[{label:"News Day",...newsBreachStats(newsDay)},{label:"No News",...newsBreachStats(noNews)}];
-  const ndnnNStyles=heatCol(ndnn,r=>({value:r.n}));
-  const ndnnAvgStyles=heatCol(ndnn,r=>r.n?{value:r.avgRange,n:r.n}:null);
-  const ndnnHighStyles=heatCol(ndnn,r=>r.n?{value:r.breaksHigh,n:r.n}:null);
-  const ndnnLowStyles=heatCol(ndnn,r=>r.n?{value:r.breaksLow,n:r.n}:null);
-  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${ndnn.map((r,i)=>`<tr><td>${r.label}</td><td style="${ndnnNStyles[i]}">${r.n}</td><td style="${ndnnAvgStyles[i]}">${r.n?fmt(r.avgRange):""}</td><td style="${ndnnHighStyles[i]}">${r.n?pct(r.breaksHigh):""}</td><td style="${ndnnLowStyles[i]}">${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
+// Groups Daily sessions by the news events logged on them (New Session's "News Events" list) —
+// shared by renderNewsImpact and the Incoming Volatility card, so the same historical avg
+// range/breach data backs both instead of two independent computations drifting apart.
+function newsEventTypeMap(dailyAll){
   const byType=new Map();
   dailyAll.forEach(s=>{
     const seenKeys=new Set();
@@ -2856,6 +2886,20 @@ function renderNewsImpact(){
       t.entries.push({session:s,time:ev.time});
     });
   });
+  return byType;
+}
+function renderNewsImpact(){
+  const dailyAll=enrich(sessions).filter(s=>s.sessionType==="Daily");
+  const daily=dailyAll.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
+  const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
+  const noNews=daily.filter(s=>!(s.newsEvents||[]).length);
+  const ndnn=[{label:"News Day",...newsBreachStats(newsDay)},{label:"No News",...newsBreachStats(noNews)}];
+  const ndnnNStyles=heatCol(ndnn,r=>({value:r.n}));
+  const ndnnAvgStyles=heatCol(ndnn,r=>r.n?{value:r.avgRange,n:r.n}:null);
+  const ndnnHighStyles=heatCol(ndnn,r=>r.n?{value:r.breaksHigh,n:r.n}:null);
+  const ndnnLowStyles=heatCol(ndnn,r=>r.n?{value:r.breaksLow,n:r.n}:null);
+  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${ndnn.map((r,i)=>`<tr><td>${r.label}</td><td style="${ndnnNStyles[i]}">${r.n}</td><td style="${ndnnAvgStyles[i]}">${r.n?fmt(r.avgRange):""}</td><td style="${ndnnHighStyles[i]}">${r.n?pct(r.breaksHigh):""}</td><td style="${ndnnLowStyles[i]}">${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
+  const byType=newsEventTypeMap(dailyAll);
   const rows=[...byType.values()].map(t=>({
     name:t.name,
     impact:t.impacts.size>1?"Mixed":[...t.impacts][0],
@@ -3054,7 +3098,91 @@ function renderMacroNewsStats(){
     </div>`
   }).join("");
 }
-function renderMacroNews(){renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
+// --- Incoming Volatility card ---
+// Strips parentheticals and punctuation so a Forex Factory title ("Non-Farm Employment Change")
+// can still line up against a shorthand name typed into a session's News Events list ("NFP") via
+// substring containment below — an exact match would miss almost everything in practice.
+function normalizeEventName(s){
+  return String(s||"").toLowerCase().replace(/\(.*?\)/g," ").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+}
+function findNewsHistoryForTitle(byType,title){
+  const norm=normalizeEventName(title);
+  if(!norm)return null;
+  let best=null;
+  for(const t of byType.values()){
+    const evNorm=normalizeEventName(t.name);
+    if(!evNorm)continue;
+    if(evNorm===norm||evNorm.includes(norm)||norm.includes(evNorm)){
+      if(!best||t.sessions.length>best.sessions.length)best=t;
+    }
+  }
+  return best?eventTypeStats(best.sessions):null;
+}
+// Below this many matched historical sessions, the breach rate is noise — shown as "too thin to
+// score" instead of a number that looks more confident than it is.
+const IV_MIN_HISTORY_N=5;
+function ivExpectedMove(stats,dxyRegime){
+  if(!stats||stats.n<IV_MIN_HISTORY_N)return{label:"Unrated",bg:"#334155",fg:"#cbd5e1"};
+  const breach=Math.max(stats.breaksHigh||0,stats.breaksLow||0);
+  let tier=breach>=0.6?2:breach>=0.35?1:0;
+  // A Rising/Falling DXY regime nudges the tier up one notch (capped at Elevated) — a directional
+  // dollar trend into a print reads as added, not neutral, risk. Flat leaves the event's own
+  // historical breach rate untouched.
+  if(dxyRegime&&dxyRegime.label!=="Flat")tier=Math.min(2,tier+1);
+  return[{label:"Low",bg:"#334155",fg:"#cbd5e1"},{label:"Moderate",bg:"#f6b26b",fg:"#111827"},{label:"Elevated",bg:"#dc2626",fg:"white"}][tier];
+}
+function renderIncomingVolatility(){
+  const noteEl=document.getElementById("ivNote"),summaryEl=document.getElementById("ivSummary"),tableEl=document.getElementById("ivTable");
+  if(!tableEl)return;
+  const cal=ivCalendarCache;
+  const events=(cal&&cal.events)||[];
+  const dxySer=dxySeries();
+  const dxyLatest=dxySer.length?dxySer[dxySer.length-1]:null;
+  const dxyRegime=dxyLatest?dxyRegimeForDate(dxyLatest.date,5):null;
+  const byType=newsEventTypeMap(enrich(sessions).filter(s=>s.sessionType==="Daily"));
+  const rows=events.map(e=>{
+    const stats=findNewsHistoryForTitle(byType,e.title);
+    return{...e,stats,move:ivExpectedMove(stats,dxyRegime)};
+  });
+  const highCount=rows.filter(r=>r.impact==="High").length;
+
+  if(!cal){
+    noteEl.textContent="Loading this week's USD calendar…";
+  }else if(cal.error&&!events.length){
+    noteEl.textContent=`Couldn't load this week's calendar: ${cal.error}. This mirrors the Forex Factory feed below — try Fetch This Week's USD Releases instead, or retry shortly.`;
+  }else if(!events.length){
+    noteEl.textContent="No USD High/Medium impact releases scheduled this week.";
+  }else{
+    noteEl.textContent=`${events.length} USD release${events.length>1?"s":""} scheduled this week. Expected move blends each event's own historical breach rate — from Daily sessions tagged with that event in New Session — with the current DXY regime.`;
+  }
+
+  const dxyValText=dxyLatest?dxyLatest.value.toFixed(2):"—";
+  const dxyRegimeLabel=dxyRegime?dxyRegime.label:"n/a";
+  const[dxyBg,dxyFg]=dxyRegime?macroRegimeBadgeColor(dxyRegime.label):["#334155","#cbd5e1"];
+  summaryEl.innerHTML=`
+    <div class="metric span-3"><div class="label">High-impact releases</div><div class="value">${highCount}</div></div>
+    <div class="metric span-3"><div class="label">Total USD releases</div><div class="value">${events.length}</div></div>
+    <div class="metric span-3"><div class="label">DXY (synthetic)</div><div class="value">${dxyValText}</div></div>
+    <div class="metric span-3"><div class="label">DXY 5-session regime</div><div class="value"><span class="pill" style="background:${dxyBg};color:${dxyFg}">${dxyRegimeLabel}</span></div></div>
+  `;
+
+  if(!events.length){tableEl.innerHTML="";return}
+  tableEl.innerHTML=`<thead><tr><th>Date</th><th>Event</th><th>Impact</th><th>Historical avg range</th><th>Breach freq (n)</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
+    const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?fmt(r.stats.avgRange)
+      :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n}, too thin to score</span>`
+      :`<span class="hint">no history logged</span>`;
+    const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
+    return`<tr>
+      <td>${escapeHtml(formatDMY(r.date))}</td>
+      <td><b>${escapeHtml(r.title)}</b></td>
+      <td>${impactBadge(r.impact)}</td>
+      <td>${statsCell}</td>
+      <td>${breachCell}</td>
+      <td><span class="pill" style="background:${r.move.bg};color:${r.move.fg}">${r.move.label}</span></td>
+    </tr>`
+  }).join("")}</tbody>`;
+}
+function renderMacroNews(){renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
 macroNewsForm.addEventListener("submit",async ev=>{
   ev.preventDefault();
   const month=mnMonth.value, name=mnName.value.trim();
@@ -4268,10 +4396,11 @@ function reportDxyFetchResult(){
   }
 }
 async function refreshMacroYields(){
-  await Promise.all([fetchMacroYields(),fetchDxy()]);
+  await Promise.all([fetchMacroYields(),fetchDxy(),fetchIncomingCalendar()]);
   reportMacroFetchResult();
   reportDxyFetchResult();
   try{renderMacro()}catch(err){console.error("renderMacro failed:",err)}
+  try{renderMacroNews()}catch(err){console.error("renderMacroNews failed:",err)}
 }
 // Awaited by the session-save handler so a newly saved session can attach today's reading.
 const macroFetchPromise=refreshMacroYields();
