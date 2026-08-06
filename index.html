@@ -256,6 +256,8 @@
         <div><label>POC</label><input id="poc" type="number" step="0.01"/></div>
         <div><label>VPOC</label><input id="vpoc" type="number" step="0.01"/></div>
 
+        <div><label>IB High <span class="hint" style="font-weight:400">(Initial Balance)</span></label><input id="ibHigh" type="number" step="0.01"/></div>
+        <div><label>IB Low <span class="hint" style="font-weight:400">(Initial Balance)</span></label><input id="ibLow" type="number" step="0.01"/></div>
         <div><label>Current Session IB Hit</label><select id="ibCurrentHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
         <div><label>Current Session Outcome After IB Hit</label><select id="ibCurrentOutcome"><option value="">—</option><option>Reversal</option><option>Continuation</option></select></div>
         <div><label>Previous Session IB Hit</label><select id="ibPrevHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
@@ -642,6 +644,14 @@
 
   <div class="grid" style="margin-top:14px">
     <div class="card span-12">
+      <h2>Incoming Volatility</h2>
+      <p class="hint" id="ivNote" style="margin-bottom:12px"></p>
+      <div class="grid" id="ivSummary" style="margin-bottom:14px"></div>
+      <div class="tablewrap"><table id="ivTable"></table></div>
+      <div id="ivDxySpark" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:18px;align-items:center;flex-wrap:wrap"></div>
+    </div>
+
+    <div class="card span-12">
       <h2>Import This Week's Releases <span style="font-weight:400">(Forex Factory, USD, High/Medium impact)</span></h2>
       <p class="hint" style="margin-bottom:12px">Pulls this week's economic calendar from Forex Factory's public feed — event name, date, forecast, and prior. It does not provide the Actual value once a release prints, so Actual and the Positive/Negative surprise tag are still entered by hand below. This is an unofficial feed (not a supported API), so it can occasionally change format or be temporarily unavailable.</p>
       <div class="toolbar">
@@ -891,7 +901,7 @@ let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
 let macroEvents=loadMacroEvents(), pendingMacroEventDeletes=loadPendingMacroEventDeletes();
 let monthOutcomes=loadMonthOutcomes();
 let weekOutcomes=loadWeekOutcomes();
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
@@ -1105,6 +1115,7 @@ function enrich(arr){
     referenceLabel:referenceLabel(s), referenceHigh:referenceHigh(s), referenceLow:referenceLow(s), referenceRange:referenceRange(s),
     fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
     currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
+    ibRange:Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)?s.ibHigh-s.ibLow:null,
     londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
     volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s),
     totalRangeHit:totalRangeHit(s)
@@ -1471,6 +1482,36 @@ function renderDxy(){
     return `<tr><td>${w}</td><td style="text-align:right">${valText}</td><td style="text-align:right">${deltaText}</td><td>${badge}</td></tr>`;
   }).join("");
   changeRowsEl.innerHTML=`<div class="tablewrap"><table><tr><th>Sessions</th><th style="text-align:right">DXY</th><th style="text-align:right">&Delta;</th><th>Regime</th></tr>${rows}</table></div>`;
+}
+// --- Incoming Volatility calendar (Macro News tab) ---
+// Same Forex Factory feed the manual "Fetch This Week's USD Releases" button uses, but pulled
+// independently on a daily cache (same TTL/backoff shape as fetchDxy above) so the Incoming
+// Volatility card has data without the user first clicking Fetch. FF_CALENDAR_URL is declared
+// further down the script, alongside the manual-import flow it's shared with — safe to reference
+// here since this function only runs once the whole script (and that const) has executed.
+const IV_CALENDAR_CACHE_KEY="macroIncomingCalendarCache_v1";
+let ivCalendarCache=loadIvCalendarCache();
+function loadIvCalendarCache(){try{return JSON.parse(localStorage.getItem(IV_CALENDAR_CACHE_KEY)||"null")}catch{return null}}
+function saveIvCalendarCache(c){try{localStorage.setItem(IV_CALENDAR_CACHE_KEY,JSON.stringify(c))}catch{}}
+async function fetchIncomingCalendar(force){
+  const today=new Date().toISOString().slice(0,10);
+  if(!force&&ivCalendarCache&&!ivCalendarCache.error&&ivCalendarCache.fetchedDate===today)return ivCalendarCache;
+  if(!force&&ivCalendarCache&&ivCalendarCache.error&&ivCalendarCache.lastAttemptAt&&Date.now()-ivCalendarCache.lastAttemptAt<MACRO_RETRY_BACKOFF_MS)return ivCalendarCache;
+  try{
+    const res=await fetchWithTimeout(FF_CALENDAR_URL);
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const events=data.filter(e=>e.country==="USD"&&(e.impact==="High"||e.impact==="Medium")&&e.title&&e.date)
+      .map(e=>({title:e.title,date:e.date.slice(0,10),impact:e.impact}))
+      .sort((a,b)=>a.date.localeCompare(b.date));
+    ivCalendarCache={fetchedDate:today,events,lastAttemptAt:Date.now()};
+    saveIvCalendarCache(ivCalendarCache);
+  }catch(err){
+    if(!ivCalendarCache)ivCalendarCache={fetchedDate:null,events:[]};
+    ivCalendarCache.error=errMsg(err);
+    ivCalendarCache.lastAttemptAt=Date.now();
+  }
+  return ivCalendarCache;
 }
 function renderMacro(){
   const statusEl=document.getElementById("macroStatus");
@@ -2090,7 +2131,7 @@ function setNewsEventsInForm(events){
   newsEventsList.innerHTML="";
   (events||[]).forEach(ev=>addNewsEventRow(ev.name,ev.impact,ev.time));
 }
-function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));IB_SLOTS.forEach(({hitKey,outcomeKey})=>{if(o[hitKey]!=="Yes")o[outcomeKey]=""});o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
+function formToSession(){let o={};fields.forEach(f=>{const el=document.getElementById(f);if(el)o[f]=el.value});["prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","low","poc","vpoc","ibHigh","ibLow","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore"].forEach(k=>o[k]=n(o[k]));IB_SLOTS.forEach(({hitKey,outcomeKey})=>{if(o[hitKey]!=="Yes")o[outcomeKey]=""});o.id=recordId.value||crypto.randomUUID();o.updatedAt=new Date().toISOString();o.newsEvents=getNewsEventsFromForm();return o}
 function sessionToForm(s){recordId.value=s.id||"";fields.forEach(f=>{const el=document.getElementById(f); if(el)el.value=s[f]??""});setNewsEventsInForm(s.newsEvents);updateReferenceFields();entryFormError.style.display="none";showTab("entry")}
 function resetEntryForm(){entryForm.reset();recordId.value="";setDefaultDate();setNewsEventsInForm([]);updateReferenceFields();entryFormError.style.display="none"}
 
@@ -2387,6 +2428,7 @@ function renderProjectionGrid(){
     ["Close Range - Open Price",s=>fmt(s.closeRangeOpen),""],["Close Range - Close Price",s=>fmt(s.closeRangeClose),""],["Total Volume",s=>fmt(s.volume,0),"yellow"],
     ["Current Session High",s=>fmt(s.high),""],["Current Session Low",s=>fmt(s.low),""],["Current Session Range",s=>fmt(s.currentRange),""],
     ["Current H-L Half Range",s=>fmt(s.currentHalfRange),"curr"],["Current H-L Quarter Range",s=>fmt(s.currentQuarterRange),"curr"],["Current H-L Eighth Range",s=>fmt(s.currentEighthRange),"curr"],
+    ["IB High",s=>fmt(s.ibHigh),""],["IB Low",s=>fmt(s.ibLow),""],["IB Range",s=>fmt(s.ibRange),""],
     ["FR — Full Reference Range",s=>fmt(s.fullRange),"pink"],["HR — Half Reference Range",s=>fmt(s.halfRange),"pink"],["QR — Quarter Reference Range",s=>fmt(s.quarterRange),"pink"],["ER — Eighth Reference Range",s=>fmt(s.eighthRange),"pink"],
     ["Current Session IB Hit",null,"cream","ibCurrentHit","select"],["Current Session Outcome After IB Hit",null,"cream","ibCurrentOutcome","select",IB_OUTCOME_OPTS],
     ["Previous Session IB Hit",null,"cream","ibPrevHit","select"],["Previous Session Outcome After IB Hit",null,"cream","ibPrevOutcome","select",IB_OUTCOME_OPTS],
@@ -2831,17 +2873,10 @@ function eventTypeStats(arr){
     breaksLow:n?withData.filter(s=>s.low<s.referenceLow).length/n:null
   };
 }
-function renderNewsImpact(){
-  const dailyAll=enrich(sessions).filter(s=>s.sessionType==="Daily");
-  const daily=dailyAll.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
-  const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
-  const noNews=daily.filter(s=>!(s.newsEvents||[]).length);
-  const ndnn=[{label:"News Day",...newsBreachStats(newsDay)},{label:"No News",...newsBreachStats(noNews)}];
-  const ndnnNStyles=heatCol(ndnn,r=>({value:r.n}));
-  const ndnnAvgStyles=heatCol(ndnn,r=>r.n?{value:r.avgRange,n:r.n}:null);
-  const ndnnHighStyles=heatCol(ndnn,r=>r.n?{value:r.breaksHigh,n:r.n}:null);
-  const ndnnLowStyles=heatCol(ndnn,r=>r.n?{value:r.breaksLow,n:r.n}:null);
-  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${ndnn.map((r,i)=>`<tr><td>${r.label}</td><td style="${ndnnNStyles[i]}">${r.n}</td><td style="${ndnnAvgStyles[i]}">${r.n?fmt(r.avgRange):""}</td><td style="${ndnnHighStyles[i]}">${r.n?pct(r.breaksHigh):""}</td><td style="${ndnnLowStyles[i]}">${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
+// Groups Daily sessions by the news events logged on them (New Session's "News Events" list) —
+// shared by renderNewsImpact and the Incoming Volatility card, so the same historical avg
+// range/breach data backs both instead of two independent computations drifting apart.
+function newsEventTypeMap(dailyAll){
   const byType=new Map();
   dailyAll.forEach(s=>{
     const seenKeys=new Set();
@@ -2856,6 +2891,20 @@ function renderNewsImpact(){
       t.entries.push({session:s,time:ev.time});
     });
   });
+  return byType;
+}
+function renderNewsImpact(){
+  const dailyAll=enrich(sessions).filter(s=>s.sessionType==="Daily");
+  const daily=dailyAll.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
+  const newsDay=daily.filter(s=>(s.newsEvents||[]).length>0);
+  const noNews=daily.filter(s=>!(s.newsEvents||[]).length);
+  const ndnn=[{label:"News Day",...newsBreachStats(newsDay)},{label:"No News",...newsBreachStats(noNews)}];
+  const ndnnNStyles=heatCol(ndnn,r=>({value:r.n}));
+  const ndnnAvgStyles=heatCol(ndnn,r=>r.n?{value:r.avgRange,n:r.n}:null);
+  const ndnnHighStyles=heatCol(ndnn,r=>r.n?{value:r.breaksHigh,n:r.n}:null);
+  const ndnnLowStyles=heatCol(ndnn,r=>r.n?{value:r.breaksLow,n:r.n}:null);
+  newsDayTable.innerHTML=`<thead><tr><th></th><th>n</th><th>Avg Range</th><th>Breaks Prior High</th><th>Breaks Prior Low</th></tr></thead><tbody>${ndnn.map((r,i)=>`<tr><td>${r.label}</td><td style="${ndnnNStyles[i]}">${r.n}</td><td style="${ndnnAvgStyles[i]}">${r.n?fmt(r.avgRange):""}</td><td style="${ndnnHighStyles[i]}">${r.n?pct(r.breaksHigh):""}</td><td style="${ndnnLowStyles[i]}">${r.n?pct(r.breaksLow):""}</td></tr>`).join("")}</tbody>`;
+  const byType=newsEventTypeMap(dailyAll);
   const rows=[...byType.values()].map(t=>({
     name:t.name,
     impact:t.impacts.size>1?"Mixed":[...t.impacts][0],
@@ -3054,7 +3103,200 @@ function renderMacroNewsStats(){
     </div>`
   }).join("");
 }
-function renderMacroNews(){renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
+// --- Incoming Volatility card ---
+// Strips parentheticals and punctuation so a Forex Factory title ("Non-Farm Employment Change")
+// can still line up against a shorthand name typed into a session's News Events list ("NFP") via
+// substring containment below — an exact match would miss almost everything in practice.
+function normalizeEventName(s){
+  return String(s||"").toLowerCase().replace(/\(.*?\)/g," ").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+}
+// Plain substring containment (see normalizeEventName above) only catches cases where one name is
+// literally a prefix/suffix of the other, e.g. "CPI" inside "CPI m/m" — it misses the recurring
+// high-impact releases where Forex Factory's title and a trader's shorthand share no common
+// substring at all ("Non-Farm Employment Change" vs "NFP"). These groups patch that gap for the
+// handful of events that recur every month; anything not listed here still falls back to plain
+// substring matching below.
+const IV_EVENT_ALIASES=[
+  ["cpi","consumer price index"],
+  ["core cpi","core consumer price index"],
+  ["nfp","non farm payrolls","non farm employment change","nonfarm payrolls"],
+  ["unemployment rate","jobless rate"],
+  ["ism manufacturing pmi","ism manufacturing","manufacturing pmi"],
+  ["ism services pmi","ism services","ism non manufacturing pmi","services pmi"],
+  ["retail sales","core retail sales"],
+  ["fomc rate decision","fomc","federal funds rate","interest rate decision","fed interest rate decision"]
+];
+function canonicalEventKeys(name){
+  const norm=normalizeEventName(name);
+  if(!norm)return[];
+  // Exact match first, checked across every group before any substring fallback — otherwise a
+  // name that's an exact key in one group but also a substring hit in an earlier group (e.g.
+  // "core cpi" contains no "cpi" text itself, but "cpi" IS a substring of "core cpi") would match
+  // whichever group happens to come first in the array instead of the one it's actually naming.
+  const exact=IV_EVENT_ALIASES.find(g=>g.includes(norm));
+  if(exact)return[norm,...exact];
+  // No exact hit — fall back to substring containment, but pick the LONGEST matching key across
+  // all groups rather than the first group in array order. Reordering the array alone can't fix
+  // this: "core cpi m m" fuzzy-matches both "cpi" (group 1) and "core cpi" (group 2), and simply
+  // moving group 2 first would just flip the bug onto plain "cpi m m", which also fuzzy-matches
+  // "core cpi" via the reverse containment direction. Longest-key-wins picks whichever group is
+  // actually more specific, independent of declaration order.
+  let best=null,bestLen=0;
+  for(const g of IV_EVENT_ALIASES){
+    for(const k of g){
+      if((norm.includes(k)||k.includes(norm))&&k.length>bestLen){best=g;bestLen=k.length}
+    }
+  }
+  return best?[norm,...best]:[norm];
+}
+// How far price ran beyond that session's own Initial Balance (IB High/IB Low, entered in New
+// Session) — the standard market-profile read on whether a print produced a trend day. Kept
+// separate from eventTypeStats above (which drives the unrelated Dashboard "Breaks Prior
+// High/Low" table off the prior-day reference range) so neither metric's meaning drifts by
+// sharing a denominator it wasn't built for.
+function ibExtensionStats(arr){
+  const withIb=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)&&s.ibHigh>s.ibLow);
+  const n=withIb.length;
+  // n is deliberately the IB-backed count, not arr.length (total sessions tagged with this
+  // event) — the IV_MIN_HISTORY_N gate downstream needs to mean "enough real IB observations",
+  // not "enough tagged sessions with IB data or not". taggedCount is kept separately so the UI
+  // can still say "logged, but no IB data yet" instead of collapsing that into "no history
+  // logged" when the event has been tagged but nobody has entered IB High/Low for it yet.
+  return{
+    n,
+    taggedCount:arr.length,
+    avgExtensionPct:n?avg(withIb.map(s=>(s.high-s.low)/(s.ibHigh-s.ibLow)-1)):null,
+    breaksHigh:n?withIb.filter(s=>s.high>s.ibHigh).length/n:null,
+    breaksLow:n?withIb.filter(s=>s.low<s.ibLow).length/n:null
+  };
+}
+function findNewsHistoryForTitle(byType,title){
+  const titleKeys=canonicalEventKeys(title);
+  if(!titleKeys.length)return null;
+  let best=null;
+  for(const t of byType.values()){
+    const evKeys=canonicalEventKeys(t.name);
+    if(!evKeys.length)continue;
+    const matches=titleKeys.some(a=>evKeys.some(b=>a===b||a.includes(b)||b.includes(a)));
+    if(matches&&(!best||t.sessions.length>best.sessions.length))best=t;
+  }
+  return best?ibExtensionStats(best.sessions):null;
+}
+// Below this many matched historical sessions, the breach rate is noise — shown as "too thin to
+// score" instead of a number that looks more confident than it is.
+const IV_MIN_HISTORY_N=5;
+const IV_MOVE_TIERS=[{label:"Low",bg:"#334155",fg:"#cbd5e1"},{label:"Moderate",bg:"#f6b26b",fg:"#111827"},{label:"Elevated",bg:"#dc2626",fg:"white"}];
+const IV_UNRATED={label:"Unrated",bg:"#334155",fg:"#cbd5e1"};
+// The Week outlook summary tile reads as plain colored text (not a pill, unlike every per-row
+// badge) — same var(--yellow)/var(--orange) the app already uses for other headline stats.
+const IV_OUTLOOK_TEXT_COLOR={Low:"#e5e7eb",Moderate:"#e69138",Elevated:"#fff200",Unrated:"#94a3b8"};
+function ivExpectedMove(stats,dxyRegime){
+  if(!stats||stats.n<IV_MIN_HISTORY_N)return IV_UNRATED;
+  const breach=Math.max(stats.breaksHigh||0,stats.breaksLow||0);
+  let tier=breach>=0.6?2:breach>=0.35?1:0;
+  // A Rising/Falling DXY regime nudges the tier up one notch (capped at Elevated) — a directional
+  // dollar trend into a print reads as added, not neutral, risk. Flat leaves the event's own
+  // historical breach rate untouched.
+  if(dxyRegime&&dxyRegime.label!=="Flat")tier=Math.min(2,tier+1);
+  return IV_MOVE_TIERS[tier];
+}
+// Rolls the per-event badges into one weekly headline — the worst-case tier among rated events,
+// same "Unrated" fallback as a single event when nothing this week has enough history to score.
+function ivWeekOutlook(rows){
+  const rated=rows.map(r=>r.move.label).filter(l=>l!=="Unrated");
+  if(!rated.length)return IV_UNRATED;
+  // .find() would return the first tier PRESENT in array order (Low before Elevated) rather than
+  // the worst one — take the max index among rated labels instead so an Elevated event anywhere
+  // this week can't get hidden behind an earlier Low one.
+  const maxIdx=Math.max(...rated.map(l=>IV_MOVE_TIERS.findIndex(t=>t.label===l)));
+  return IV_MOVE_TIERS[maxIdx];
+}
+function ivWeekdayLabel(dateStr){
+  const d=new Date(dateStr+"T00:00:00");
+  return isNaN(d)?"":d.toLocaleDateString(undefined,{weekday:"short"});
+}
+// Compact inline sparkline (no axes/gridlines/hover — this is a summary card, not the full Macro
+// tab DXY chart which already covers that in detail) over the same window as the Macro tab default.
+function ivDxySparklineSvg(series,windowSize){
+  const data=series.slice(-windowSize);
+  if(data.length<2)return"";
+  const W=260,H=46,pad=4;
+  const vals=data.map(d=>d.value);
+  const vMin=Math.min(...vals),vMax=Math.max(...vals);
+  const span=vMax-vMin||1;
+  const n=data.length;
+  const x=i=>pad+(W-2*pad)*(i/(n-1));
+  const y=v=>pad+(H-2*pad)*(1-(v-vMin)/span);
+  const path=data.map((d,i)=>(i===0?"M":"L")+x(i).toFixed(1)+","+y(d.value).toFixed(1)).join(" ");
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:220px;height:${H}px;display:block">
+    <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="${x(n-1).toFixed(1)}" cy="${y(data[n-1].value).toFixed(1)}" r="3.5" fill="#38bdf8"/>
+  </svg>`;
+}
+function renderIncomingVolatility(){
+  const noteEl=document.getElementById("ivNote"),summaryEl=document.getElementById("ivSummary"),tableEl=document.getElementById("ivTable"),sparkEl=document.getElementById("ivDxySpark");
+  if(!tableEl)return;
+  const cal=ivCalendarCache;
+  const events=(cal&&cal.events)||[];
+  const dxySer=dxySeries();
+  const dxyLatest=dxySer.length?dxySer[dxySer.length-1]:null;
+  // Only today's regime exists to reason about — these are upcoming releases, so there's no
+  // historical "regime at the moment it printed" to look up per row, unlike the breach stats
+  // above. Every row shares this same current reading.
+  const dxyRegime=dxyLatest?dxyRegimeForDate(dxyLatest.date,5):null;
+  const byType=newsEventTypeMap(enrich(sessions).filter(s=>s.sessionType==="Daily"));
+  const rows=events.map(e=>{
+    const stats=findNewsHistoryForTitle(byType,e.title);
+    return{...e,stats,move:ivExpectedMove(stats,dxyRegime)};
+  });
+  const highCount=rows.filter(r=>r.impact==="High").length;
+  const outlook=ivWeekOutlook(rows);
+
+  if(!cal){
+    noteEl.textContent="Loading this week's USD calendar…";
+  }else if(cal.error&&!events.length){
+    noteEl.textContent=`Couldn't load this week's calendar: ${cal.error}. This mirrors the Forex Factory feed below — try Fetch This Week's USD Releases instead, or retry shortly.`;
+  }else if(!events.length){
+    noteEl.textContent="No USD High/Medium impact releases scheduled this week.";
+  }else{
+    noteEl.textContent=`${events.length} USD release${events.length>1?"s":""} scheduled this week. Expected move blends each event's own historical breach rate — from Daily sessions tagged with that event in New Session — with the current DXY regime.`;
+  }
+
+  const dxyValText=dxyLatest?dxyLatest.value.toFixed(2):"—";
+  const dxyRegimeLabel=dxyRegime?dxyRegime.label:"n/a";
+  const[dxyBg,dxyFg]=dxyRegime?macroRegimeBadgeColor(dxyRegime.label):["#334155","#cbd5e1"];
+  summaryEl.innerHTML=`
+    <div class="metric span-3"><div class="label">Week outlook</div><div class="value" style="color:${IV_OUTLOOK_TEXT_COLOR[outlook.label]}">${outlook.label}</div></div>
+    <div class="metric span-3"><div class="label">High-impact releases</div><div class="value">${highCount}</div></div>
+    <div class="metric span-3"><div class="label">DXY (synthetic)</div><div class="value">${dxyValText}</div></div>
+    <div class="metric span-3"><div class="label">DXY 5-session regime</div><div class="value"><span class="pill" style="background:${dxyBg};color:${dxyFg}">${dxyRegimeLabel}</span></div></div>
+  `;
+
+  if(!events.length){tableEl.innerHTML="";if(sparkEl)sparkEl.innerHTML="";return}
+  tableEl.innerHTML=`<thead><tr><th>Day</th><th>Event</th><th>Impact</th><th>Historical avg extension</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
+    const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N
+      ?`${r.stats.avgExtensionPct>=0?"+":""}${pct(r.stats.avgExtensionPct)} of IB range`
+      :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n} with IB data, too thin to score</span>`
+      :r.stats&&r.stats.taggedCount?`<span class="hint">${r.stats.taggedCount} session${r.stats.taggedCount>1?"s":""} logged, no IB data yet</span>`
+      :`<span class="hint">no history logged</span>`;
+    const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
+    return`<tr>
+      <td><b>${ivWeekdayLabel(r.date)}</b></td>
+      <td><b>${escapeHtml(r.title)}</b></td>
+      <td>${impactBadge(r.impact)}</td>
+      <td>${statsCell}</td>
+      <td>${breachCell}</td>
+      <td><span class="pill" style="background:${dxyBg};color:${dxyFg}">${dxyRegimeLabel}</span></td>
+      <td><span class="pill" style="background:${r.move.bg};color:${r.move.fg}">${r.move.label}</span></td>
+    </tr>`
+  }).join("")}</tbody>`;
+  if(sparkEl){
+    sparkEl.innerHTML=dxySer.length>=2
+      ?`<span class="hint">DXY, last ${Math.min(21,dxySer.length)} sessions</span>${ivDxySparklineSvg(dxySer,21)}`
+      :"";
+  }
+}
+function renderMacroNews(){renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
 macroNewsForm.addEventListener("submit",async ev=>{
   ev.preventDefault();
   const month=mnMonth.value, name=mnName.value.trim();
@@ -3348,8 +3590,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,mfe_r:e.mfeR,mae_r:e.maeR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,h1_candle_hour:e.h1CandleHour||null,h1_delta:e.h1Delta,h1_poc:e.h1Poc,h1_vah:e.h1Vah,h1_val:e.h1Val,h1_candle_pattern:e.h1CandlePattern||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],emotional_state:e.emotionalState||null,plan_adherence:e.planAdherence||null,mistake_tags:e.mistakeTags||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
 function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,mfeR:r.mfe_r,maeR:r.mae_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,h1CandleHour:r.h1_candle_hour,h1Delta:r.h1_delta,h1Poc:r.h1_poc,h1Vah:r.h1_vah,h1Val:r.h1_val,h1CandlePattern:r.h1_candle_pattern,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],emotionalState:r.emotional_state,planAdherence:r.plan_adherence,mistakeTags:r.mistake_tags||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
@@ -4268,10 +4510,11 @@ function reportDxyFetchResult(){
   }
 }
 async function refreshMacroYields(){
-  await Promise.all([fetchMacroYields(),fetchDxy()]);
+  await Promise.all([fetchMacroYields(),fetchDxy(),fetchIncomingCalendar()]);
   reportMacroFetchResult();
   reportDxyFetchResult();
   try{renderMacro()}catch(err){console.error("renderMacro failed:",err)}
+  try{renderMacroNews()}catch(err){console.error("renderMacroNews failed:",err)}
 }
 // Awaited by the session-save handler so a newly saved session can attach today's reading.
 const macroFetchPromise=refreshMacroYields();
