@@ -3224,14 +3224,13 @@ function renderIncomingVolatility(){
   `;
 
   if(!events.length){tableEl.innerHTML="";if(sparkEl)sparkEl.innerHTML="";return}
-  tableEl.innerHTML=`<thead><tr><th>Day</th><th>Date</th><th>Event</th><th>Impact</th><th>Historical avg range</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
+  tableEl.innerHTML=`<thead><tr><th>Day</th><th>Event</th><th>Impact</th><th>Historical avg range</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
     const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?fmt(r.stats.avgRange)
       :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n}, too thin to score</span>`
       :`<span class="hint">no history logged</span>`;
     const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
     return`<tr>
       <td><b>${ivWeekdayLabel(r.date)}</b></td>
-      <td>${escapeHtml(formatDMY(r.date))}</td>
       <td><b>${escapeHtml(r.title)}</b></td>
       <td>${impactBadge(r.impact)}</td>
       <td>${statsCell}</td>
