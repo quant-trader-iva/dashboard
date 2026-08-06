@@ -2862,9 +2862,15 @@ function impactBadge(impact){
 function eventTypeStats(arr){
   const withData=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
   const n=withData.length;
+  // Extension vs each session's own reference (prior-day) range — the app has no numeric Initial
+  // Balance range field (ibCurrentHit/ibCurrentOutcome etc. are Hit/Outcome flags, not a
+  // magnitude), so this reference range is the closest real "how much did it run" baseline,
+  // computed per session then averaged rather than averaging the two ranges separately.
+  const withRefRange=withData.filter(s=>Number.isFinite(s.referenceRange)&&s.referenceRange>0);
   return{
     n:arr.length,
     avgRange:n?avg(withData.map(s=>s.currentRange)):null,
+    avgExtensionPct:withRefRange.length?avg(withRefRange.map(s=>s.currentRange/s.referenceRange-1)):null,
     breaksHigh:n?withData.filter(s=>s.high>s.referenceHigh).length/n:null,
     breaksLow:n?withData.filter(s=>s.low<s.referenceLow).length/n:null
   };
@@ -3145,6 +3151,9 @@ function findNewsHistoryForTitle(byType,title){
 const IV_MIN_HISTORY_N=5;
 const IV_MOVE_TIERS=[{label:"Low",bg:"#334155",fg:"#cbd5e1"},{label:"Moderate",bg:"#f6b26b",fg:"#111827"},{label:"Elevated",bg:"#dc2626",fg:"white"}];
 const IV_UNRATED={label:"Unrated",bg:"#334155",fg:"#cbd5e1"};
+// The Week outlook summary tile reads as plain colored text (not a pill, unlike every per-row
+// badge) — same var(--yellow)/var(--orange) the app already uses for other headline stats.
+const IV_OUTLOOK_TEXT_COLOR={Low:"#e5e7eb",Moderate:"#e69138",Elevated:"#fff200",Unrated:"#94a3b8"};
 function ivExpectedMove(stats,dxyRegime){
   if(!stats||stats.n<IV_MIN_HISTORY_N)return IV_UNRATED;
   const breach=Math.max(stats.breaksHigh||0,stats.breaksLow||0);
@@ -3217,15 +3226,16 @@ function renderIncomingVolatility(){
   const dxyRegimeLabel=dxyRegime?dxyRegime.label:"n/a";
   const[dxyBg,dxyFg]=dxyRegime?macroRegimeBadgeColor(dxyRegime.label):["#334155","#cbd5e1"];
   summaryEl.innerHTML=`
-    <div class="metric span-3"><div class="label">Week outlook</div><div class="value"><span class="pill" style="background:${outlook.bg};color:${outlook.fg}">${outlook.label}</span></div></div>
+    <div class="metric span-3"><div class="label">Week outlook</div><div class="value" style="color:${IV_OUTLOOK_TEXT_COLOR[outlook.label]}">${outlook.label}</div></div>
     <div class="metric span-3"><div class="label">High-impact releases</div><div class="value">${highCount}</div></div>
     <div class="metric span-3"><div class="label">DXY (synthetic)</div><div class="value">${dxyValText}</div></div>
     <div class="metric span-3"><div class="label">DXY 5-session regime</div><div class="value"><span class="pill" style="background:${dxyBg};color:${dxyFg}">${dxyRegimeLabel}</span></div></div>
   `;
 
   if(!events.length){tableEl.innerHTML="";if(sparkEl)sparkEl.innerHTML="";return}
-  tableEl.innerHTML=`<thead><tr><th>Day</th><th>Event</th><th>Impact</th><th>Historical avg range</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
-    const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?fmt(r.stats.avgRange)
+  tableEl.innerHTML=`<thead><tr><th>Day</th><th>Event</th><th>Impact</th><th>Historical avg extension</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
+    const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N
+      ?(r.stats.avgExtensionPct!=null?`${r.stats.avgExtensionPct>=0?"+":""}${pct(r.stats.avgExtensionPct)} of prior-day range`:fmt(r.stats.avgRange))
       :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n}, too thin to score</span>`
       :`<span class="hint">no history logged</span>`;
     const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
