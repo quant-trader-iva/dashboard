@@ -67,6 +67,16 @@
 --   alter table public.trading_sessions add column if not exists letter_b_dir_60 text check (letter_b_dir_60 in ('Up','Down','Balance') or letter_b_dir_60 is null);
 --   alter table public.trading_sessions add column if not exists letter_c_dir_90 text check (letter_c_dir_90 in ('Up','Down','Balance') or letter_c_dir_90 is null);
 --   alter table public.trading_sessions add column if not exists open_outcome text check (open_outcome in ('Up','Down','Balanced') or open_outcome is null);
+--
+-- Run this on an existing database to bring back numeric IB High/IB Low — the columns dropped at
+-- line ~49 above. They're reinstated for a different reason this time: the Incoming Volatility
+-- card on the Macro News tab needs an actual IB range number (not the Yes/No ib_current_hit flag)
+-- to compute how far a historical print extended beyond that session's Initial Balance. There is
+-- no backfill — the earlier drop was irreversible, so these start empty for every existing session
+-- and only fill in going forward as you log IB High/IB Low in New Session. Do this BEFORE
+-- deploying the matching app update — toDb() sends ib_high/ib_low on every session upsert:
+--   alter table public.trading_sessions add column if not exists ib_high numeric;
+--   alter table public.trading_sessions add column if not exists ib_low numeric;
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -103,6 +113,8 @@ create table if not exists public.trading_sessions (
   poc numeric,
   vpoc numeric,
 
+  ib_high numeric,
+  ib_low numeric,
   ib_current_hit text check (ib_current_hit in ('Yes','No') or ib_current_hit is null),
   ib_current_outcome text check (ib_current_outcome in ('Reversal','Continuation') or ib_current_outcome is null),
   ib_prev_hit text check (ib_prev_hit in ('Yes','No') or ib_prev_hit is null),

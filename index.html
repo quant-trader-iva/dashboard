@@ -256,6 +256,8 @@
         <div><label>POC</label><input id="poc" type="number" step="0.01"/></div>
         <div><label>VPOC</label><input id="vpoc" type="number" step="0.01"/></div>
 
+        <div><label>IB High <span class="hint" style="font-weight:400">(Initial Balance)</span></label><input id="ibHigh" type="number" step="0.01"/></div>
+        <div><label>IB Low <span class="hint" style="font-weight:400">(Initial Balance)</span></label><input id="ibLow" type="number" step="0.01"/></div>
         <div><label>Current Session IB Hit</label><select id="ibCurrentHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
         <div><label>Current Session Outcome After IB Hit</label><select id="ibCurrentOutcome"><option value="">—</option><option>Reversal</option><option>Continuation</option></select></div>
         <div><label>Previous Session IB Hit</label><select id="ibPrevHit"><option value="">—</option><option>Yes</option><option>No</option></select></div>
@@ -899,7 +901,7 @@ let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
 let macroEvents=loadMacroEvents(), pendingMacroEventDeletes=loadPendingMacroEventDeletes();
 let monthOutcomes=loadMonthOutcomes();
 let weekOutcomes=loadWeekOutcomes();
-const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
+const fields=["date","day","sessionType","market","dayType","openType","bias","outcome","prevWeekHigh","prevWeekLow","prevDayHigh","prevDayLow","prevNyHigh","prevNyLow","londonHigh","londonLow","openVsVa","openRangeOpen","openRangeClose","closeRangeOpen","closeRangeClose","high","highTime","low","lowTime","poc","vpoc","ibHigh","ibLow","ibCurrentHit","ibCurrentOutcome","ibPrevHit","ibPrevOutcome","ibPastHit","ibPastOutcome","letterBDir60","letterCDir90","openOutcome","nyHigh","nyLow","extremeHigh","extremeLow","volume","openInterest","deltaFinish","resultR","tpos","confidenceScore","frHit","hrHit","qrHit","erHit","upTotalHit","downTotalHit","notes"];
 // Trade Entries — a separate log from sessions above. teFieldNames drives both the DOM id
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
@@ -1113,6 +1115,7 @@ function enrich(arr){
     referenceLabel:referenceLabel(s), referenceHigh:referenceHigh(s), referenceLow:referenceLow(s), referenceRange:referenceRange(s),
     fullRange:referenceRange(s), halfRange:Number.isFinite(referenceRange(s))?referenceRange(s)/2:null, quarterRange:Number.isFinite(referenceRange(s))?referenceRange(s)/4:null, eighthRange:Number.isFinite(referenceRange(s))?referenceRange(s)/8:null,
     currentRange:currentRange(s), currentHalfRange:Number.isFinite(currentRange(s))?currentRange(s)/2:null, currentQuarterRange:Number.isFinite(currentRange(s))?currentRange(s)/4:null, currentEighthRange:Number.isFinite(currentRange(s))?currentRange(s)/8:null,
+    ibRange:Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)?s.ibHigh-s.ibLow:null,
     londonRange:londonRange(s), nyRange:nyRange(s), closingRange:closingRange(s),
     volumeZ:Number.isFinite(s.volume)&&vs?(s.volume-va)/vs:null, deltaZ:Number.isFinite(s.deltaFinish)&&ds?(s.deltaFinish-da)/ds:null, targets:targets(s), extremeProj:extremeProjections(s),
     totalRangeHit:totalRangeHit(s)
@@ -2862,15 +2865,9 @@ function impactBadge(impact){
 function eventTypeStats(arr){
   const withData=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.referenceHigh)&&Number.isFinite(s.referenceLow));
   const n=withData.length;
-  // Extension vs each session's own reference (prior-day) range — the app has no numeric Initial
-  // Balance range field (ibCurrentHit/ibCurrentOutcome etc. are Hit/Outcome flags, not a
-  // magnitude), so this reference range is the closest real "how much did it run" baseline,
-  // computed per session then averaged rather than averaging the two ranges separately.
-  const withRefRange=withData.filter(s=>Number.isFinite(s.referenceRange)&&s.referenceRange>0);
   return{
     n:arr.length,
     avgRange:n?avg(withData.map(s=>s.currentRange)):null,
-    avgExtensionPct:withRefRange.length?avg(withRefRange.map(s=>s.currentRange/s.referenceRange-1)):null,
     breaksHigh:n?withData.filter(s=>s.high>s.referenceHigh).length/n:null,
     breaksLow:n?withData.filter(s=>s.low<s.referenceLow).length/n:null
   };
@@ -3134,6 +3131,21 @@ function canonicalEventKeys(name){
   const group=IV_EVENT_ALIASES.find(g=>g.some(k=>norm===k||norm.includes(k)||k.includes(norm)));
   return group?[norm,...group]:[norm];
 }
+// How far price ran beyond that session's own Initial Balance (IB High/IB Low, entered in New
+// Session) — the standard market-profile read on whether a print produced a trend day. Kept
+// separate from eventTypeStats above (which drives the unrelated Dashboard "Breaks Prior
+// High/Low" table off the prior-day reference range) so neither metric's meaning drifts by
+// sharing a denominator it wasn't built for.
+function ibExtensionStats(arr){
+  const withIb=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)&&s.ibHigh>s.ibLow);
+  const n=withIb.length;
+  return{
+    n:arr.length,
+    avgExtensionPct:n?avg(withIb.map(s=>(s.high-s.low)/(s.ibHigh-s.ibLow)-1)):null,
+    breaksHigh:n?withIb.filter(s=>s.high>s.ibHigh).length/n:null,
+    breaksLow:n?withIb.filter(s=>s.low<s.ibLow).length/n:null
+  };
+}
 function findNewsHistoryForTitle(byType,title){
   const titleKeys=canonicalEventKeys(title);
   if(!titleKeys.length)return null;
@@ -3144,7 +3156,7 @@ function findNewsHistoryForTitle(byType,title){
     const matches=titleKeys.some(a=>evKeys.some(b=>a===b||a.includes(b)||b.includes(a)));
     if(matches&&(!best||t.sessions.length>best.sessions.length))best=t;
   }
-  return best?eventTypeStats(best.sessions):null;
+  return best?ibExtensionStats(best.sessions):null;
 }
 // Below this many matched historical sessions, the breach rate is noise — shown as "too thin to
 // score" instead of a number that looks more confident than it is.
@@ -3235,7 +3247,7 @@ function renderIncomingVolatility(){
   if(!events.length){tableEl.innerHTML="";if(sparkEl)sparkEl.innerHTML="";return}
   tableEl.innerHTML=`<thead><tr><th>Day</th><th>Event</th><th>Impact</th><th>Historical avg extension</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
     const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N
-      ?(r.stats.avgExtensionPct!=null?`${r.stats.avgExtensionPct>=0?"+":""}${pct(r.stats.avgExtensionPct)} of prior-day range`:fmt(r.stats.avgRange))
+      ?(r.stats.avgExtensionPct!=null?`${r.stats.avgExtensionPct>=0?"+":""}${pct(r.stats.avgExtensionPct)} of IB range`:`<span class="hint">no IB data logged</span>`)
       :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n}, too thin to score</span>`
       :`<span class="hint">no history logged</span>`;
     const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
@@ -3549,8 +3561,8 @@ function bootAuth(){
     showGate();
   }
 }
-function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
-function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
+function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
+function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
 function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,mfe_r:e.mfeR,mae_r:e.maeR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,h1_candle_hour:e.h1CandleHour||null,h1_delta:e.h1Delta,h1_poc:e.h1Poc,h1_vah:e.h1Vah,h1_val:e.h1Val,h1_candle_pattern:e.h1CandlePattern||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],emotional_state:e.emotionalState||null,plan_adherence:e.planAdherence||null,mistake_tags:e.mistakeTags||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
 function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,mfeR:r.mfe_r,maeR:r.mae_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,h1CandleHour:r.h1_candle_hour,h1Delta:r.h1_delta,h1Poc:r.h1_poc,h1Vah:r.h1_vah,h1Val:r.h1_val,h1CandlePattern:r.h1_candle_pattern,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],emotionalState:r.emotional_state,planAdherence:r.plan_adherence,mistakeTags:r.mistake_tags||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
