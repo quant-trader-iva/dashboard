@@ -3129,8 +3129,25 @@ const IV_EVENT_ALIASES=[
 function canonicalEventKeys(name){
   const norm=normalizeEventName(name);
   if(!norm)return[];
-  const group=IV_EVENT_ALIASES.find(g=>g.some(k=>norm===k||norm.includes(k)||k.includes(norm)));
-  return group?[norm,...group]:[norm];
+  // Exact match first, checked across every group before any substring fallback — otherwise a
+  // name that's an exact key in one group but also a substring hit in an earlier group (e.g.
+  // "core cpi" contains no "cpi" text itself, but "cpi" IS a substring of "core cpi") would match
+  // whichever group happens to come first in the array instead of the one it's actually naming.
+  const exact=IV_EVENT_ALIASES.find(g=>g.includes(norm));
+  if(exact)return[norm,...exact];
+  // No exact hit — fall back to substring containment, but pick the LONGEST matching key across
+  // all groups rather than the first group in array order. Reordering the array alone can't fix
+  // this: "core cpi m m" fuzzy-matches both "cpi" (group 1) and "core cpi" (group 2), and simply
+  // moving group 2 first would just flip the bug onto plain "cpi m m", which also fuzzy-matches
+  // "core cpi" via the reverse containment direction. Longest-key-wins picks whichever group is
+  // actually more specific, independent of declaration order.
+  let best=null,bestLen=0;
+  for(const g of IV_EVENT_ALIASES){
+    for(const k of g){
+      if((norm.includes(k)||k.includes(norm))&&k.length>bestLen){best=g;bestLen=k.length}
+    }
+  }
+  return best?[norm,...best]:[norm];
 }
 // How far price ran beyond that session's own Initial Balance (IB High/IB Low, entered in New
 // Session) — the standard market-profile read on whether a print produced a trend day. Kept
@@ -3140,8 +3157,14 @@ function canonicalEventKeys(name){
 function ibExtensionStats(arr){
   const withIb=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)&&s.ibHigh>s.ibLow);
   const n=withIb.length;
+  // n is deliberately the IB-backed count, not arr.length (total sessions tagged with this
+  // event) — the IV_MIN_HISTORY_N gate downstream needs to mean "enough real IB observations",
+  // not "enough tagged sessions with IB data or not". taggedCount is kept separately so the UI
+  // can still say "logged, but no IB data yet" instead of collapsing that into "no history
+  // logged" when the event has been tagged but nobody has entered IB High/Low for it yet.
   return{
-    n:arr.length,
+    n,
+    taggedCount:arr.length,
     avgExtensionPct:n?avg(withIb.map(s=>(s.high-s.low)/(s.ibHigh-s.ibLow)-1)):null,
     breaksHigh:n?withIb.filter(s=>s.high>s.ibHigh).length/n:null,
     breaksLow:n?withIb.filter(s=>s.low<s.ibLow).length/n:null
@@ -3182,7 +3205,11 @@ function ivExpectedMove(stats,dxyRegime){
 function ivWeekOutlook(rows){
   const rated=rows.map(r=>r.move.label).filter(l=>l!=="Unrated");
   if(!rated.length)return IV_UNRATED;
-  return IV_MOVE_TIERS.find(t=>rated.includes(t.label))||IV_MOVE_TIERS[rated.includes("Elevated")?2:rated.includes("Moderate")?1:0];
+  // .find() would return the first tier PRESENT in array order (Low before Elevated) rather than
+  // the worst one — take the max index among rated labels instead so an Elevated event anywhere
+  // this week can't get hidden behind an earlier Low one.
+  const maxIdx=Math.max(...rated.map(l=>IV_MOVE_TIERS.findIndex(t=>t.label===l)));
+  return IV_MOVE_TIERS[maxIdx];
 }
 function ivWeekdayLabel(dateStr){
   const d=new Date(dateStr+"T00:00:00");
@@ -3248,8 +3275,9 @@ function renderIncomingVolatility(){
   if(!events.length){tableEl.innerHTML="";if(sparkEl)sparkEl.innerHTML="";return}
   tableEl.innerHTML=`<thead><tr><th>Day</th><th>Event</th><th>Impact</th><th>Historical avg extension</th><th>Breach freq (n)</th><th>DXY regime into print</th><th>Expected move</th></tr></thead><tbody>${rows.map(r=>{
     const statsCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N
-      ?(r.stats.avgExtensionPct!=null?`${r.stats.avgExtensionPct>=0?"+":""}${pct(r.stats.avgExtensionPct)} of IB range`:`<span class="hint">no IB data logged</span>`)
-      :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n}, too thin to score</span>`
+      ?`${r.stats.avgExtensionPct>=0?"+":""}${pct(r.stats.avgExtensionPct)} of IB range`
+      :r.stats&&r.stats.n?`<span class="hint">n=${r.stats.n} with IB data, too thin to score</span>`
+      :r.stats&&r.stats.taggedCount?`<span class="hint">${r.stats.taggedCount} session${r.stats.taggedCount>1?"s":""} logged, no IB data yet</span>`
       :`<span class="hint">no history logged</span>`;
     const breachCell=r.stats&&r.stats.n>=IV_MIN_HISTORY_N?`${pct(Math.max(r.stats.breaksHigh||0,r.stats.breaksLow||0))} (n=${r.stats.n})`:"—";
     return`<tr>
