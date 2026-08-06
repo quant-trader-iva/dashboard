@@ -2428,6 +2428,7 @@ function renderProjectionGrid(){
     ["Close Range - Open Price",s=>fmt(s.closeRangeOpen),""],["Close Range - Close Price",s=>fmt(s.closeRangeClose),""],["Total Volume",s=>fmt(s.volume,0),"yellow"],
     ["Current Session High",s=>fmt(s.high),""],["Current Session Low",s=>fmt(s.low),""],["Current Session Range",s=>fmt(s.currentRange),""],
     ["Current H-L Half Range",s=>fmt(s.currentHalfRange),"curr"],["Current H-L Quarter Range",s=>fmt(s.currentQuarterRange),"curr"],["Current H-L Eighth Range",s=>fmt(s.currentEighthRange),"curr"],
+    ["IB High",s=>fmt(s.ibHigh),""],["IB Low",s=>fmt(s.ibLow),""],["IB Range",s=>fmt(s.ibRange),""],
     ["FR — Full Reference Range",s=>fmt(s.fullRange),"pink"],["HR — Half Reference Range",s=>fmt(s.halfRange),"pink"],["QR — Quarter Reference Range",s=>fmt(s.quarterRange),"pink"],["ER — Eighth Reference Range",s=>fmt(s.eighthRange),"pink"],
     ["Current Session IB Hit",null,"cream","ibCurrentHit","select"],["Current Session Outcome After IB Hit",null,"cream","ibCurrentOutcome","select",IB_OUTCOME_OPTS],
     ["Previous Session IB Hit",null,"cream","ibPrevHit","select"],["Previous Session Outcome After IB Hit",null,"cream","ibPrevOutcome","select",IB_OUTCOME_OPTS],
