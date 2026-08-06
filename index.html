@@ -3595,7 +3595,11 @@ function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_ty
 function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,mfe_r:e.mfeR,mae_r:e.maeR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,h1_candle_hour:e.h1CandleHour||null,h1_delta:e.h1Delta,h1_poc:e.h1Poc,h1_vah:e.h1Vah,h1_val:e.h1Val,h1_candle_pattern:e.h1CandlePattern||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],emotional_state:e.emotionalState||null,plan_adherence:e.planAdherence||null,mistake_tags:e.mistakeTags||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
 function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,mfeR:r.mfe_r,maeR:r.mae_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,h1CandleHour:r.h1_candle_hour,h1Delta:r.h1_delta,h1Poc:r.h1_poc,h1Vah:r.h1_vah,h1Val:r.h1_val,h1CandlePattern:r.h1_candle_pattern,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],emotionalState:r.emotional_state,planAdherence:r.plan_adherence,mistakeTags:r.mistake_tags||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
-  if(!supabaseClient||!authUser||!records.length)return false;
+  // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
+  // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
+  // behind it, since fullSync() uses this return value as its success/failure signal.
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
   const key=records.length===1?"entryupsert:"+records[0].id:"entryupsert:bulk";
   return runSyncOp(key,
     ()=>supabaseClient.from("trade_entries").upsert(records.map(toEntryDb),{onConflict:"id"}),
@@ -3617,7 +3621,11 @@ function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,dte:o.dt
 // real boolean column (not numeric), so it comes back as true/false/null already.
 function fromOiDb(r){return{date:r.date,dte:Number(r.dte)||0,strike:Number(r.strike),callOi:Number(r.call_oi)||0,putOi:Number(r.put_oi)||0,hit:r.hit==null?null:!!r.hit,outcome:r.outcome||null,tracked:!!r.tracked,updatedAt:r.updated_at}}
 async function syncOiUpsert(records){
-  if(!supabaseClient||!authUser||!records.length)return false;
+  // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
+  // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
+  // behind it, since fullSync() uses this return value as its success/failure signal.
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
   return runSyncOp("oiupsert:bulk",
     ()=>supabaseClient.from("oi_snapshots").upsert(records.map(toOiDb),{onConflict:"user_id,date,dte,strike"}),
     // toOiDb always sends hit/outcome/tracked now — on a Supabase table that hasn't had the
@@ -3677,7 +3685,11 @@ async function syncOiFromCloud(){
 function toMacroEventDb(e){return{id:e.id,user_id:authUser?authUser.id:null,month:e.month||null,name:e.name||null,release_date:e.date||null,forecast:e.forecast,prior:e.prior,actual:e.actual,surprise:e.surprise||null,notes:e.notes||null,updated_at:e.updatedAt||new Date().toISOString()}}
 function fromMacroEventDb(r){return{id:r.id,month:r.month,name:r.name,date:r.release_date,forecast:r.forecast==null?null:Number(r.forecast),prior:r.prior==null?null:Number(r.prior),actual:r.actual==null?null:Number(r.actual),surprise:r.surprise,notes:r.notes,updatedAt:r.updated_at}}
 async function syncMacroEventUpsert(records){
-  if(!supabaseClient||!authUser||!records.length)return false;
+  // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
+  // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
+  // behind it, since fullSync() uses this return value as its success/failure signal.
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
   const key=records.length===1?"macroeventupsert:"+records[0].id:"macroeventupsert:bulk";
   return runSyncOp(key,
     ()=>supabaseClient.from("macro_news_events").upsert(records.map(toMacroEventDb),{onConflict:"id"}),
@@ -3713,7 +3725,11 @@ async function syncMacroEventsFromCloud(){
 function toMonthOutcomeDb(o){return{user_id:authUser?authUser.id:null,month:o.month,outcome:o.outcome||null,updated_at:o.updatedAt||new Date().toISOString()}}
 function fromMonthOutcomeDb(r){return{month:r.month,outcome:r.outcome,updatedAt:r.updated_at}}
 async function syncMonthOutcomeUpsert(records){
-  if(!supabaseClient||!authUser||!records.length)return false;
+  // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
+  // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
+  // behind it, since fullSync() uses this return value as its success/failure signal.
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
   const key=records.length===1?"monthoutcomeupsert:"+records[0].month:"monthoutcomeupsert:bulk";
   return runSyncOp(key,
     ()=>supabaseClient.from("macro_month_outcomes").upsert(records.map(toMonthOutcomeDb),{onConflict:"user_id,month"}),
@@ -3740,7 +3756,11 @@ async function syncMonthOutcomesFromCloud(){
 function toWeekOutcomeDb(o){return{user_id:authUser?authUser.id:null,month:o.month,week:o.week,outcome:o.outcome||null,updated_at:o.updatedAt||new Date().toISOString()}}
 function fromWeekOutcomeDb(r){return{month:r.month,week:Number(r.week),outcome:r.outcome,updatedAt:r.updated_at}}
 async function syncWeekOutcomeUpsert(records){
-  if(!supabaseClient||!authUser||!records.length)return false;
+  // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
+  // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
+  // behind it, since fullSync() uses this return value as its success/failure signal.
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
   const key=records.length===1?"weekoutcomeupsert:"+records[0].month+":"+records[0].week:"weekoutcomeupsert:bulk";
   return runSyncOp(key,
     ()=>supabaseClient.from("macro_week_outcomes").upsert(records.map(toWeekOutcomeDb),{onConflict:"user_id,month,week"}),
@@ -3783,7 +3803,11 @@ async function runSyncOp(key,fn,buildMsg){
   }catch(err){showSyncError(key,buildMsg(errMsg(err)));return false}
 }
 async function syncUpsert(records){
-  if(!supabaseClient||!authUser||!records.length)return false;
+  // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
+  // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
+  // behind it, since fullSync() uses this return value as its success/failure signal.
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
   const key=records.length===1?"upsert:"+records[0].id:"upsert:bulk";
   return runSyncOp(key,
     ()=>supabaseClient.from("trading_sessions").upsert(records.map(toDb),{onConflict:"id"}),
