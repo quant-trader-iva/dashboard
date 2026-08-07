@@ -723,6 +723,17 @@
         <span class="hint"><i class="outcome-dot neutral"></i>Balanced</span>
       </div>
     </div>
+
+    <div class="card span-12">
+      <h2>Statistics &mdash; Day Outcome &amp; IB Extension by Event &amp; Surprise Direction</h2>
+      <p class="hint">Grouped by event and Positive/Negative surprise, scored against the release day itself — the matching Daily session's own Outcome field (logged in New Session), plus how far that day's range ran beyond its Initial Balance where IB High/Low was logged. Only releases with a matching Daily session for their release date are counted.</p>
+      <div id="macroNewsDayStats"></div>
+      <div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">
+        <span class="hint"><i class="outcome-dot bull"></i>Up</span>
+        <span class="hint"><i class="outcome-dot bear"></i>Down</span>
+        <span class="hint"><i class="outcome-dot neutral"></i>Balanced / Other</span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -2926,7 +2937,10 @@ function macroMonthLabel(m){
   const[y,mo]=m.split("-");
   return new Date(Number(y),Number(mo)-1,1).toLocaleDateString(undefined,{month:"short",year:"numeric"})
 }
-function macroOutcomeClass(o){return o==="Up"?"bull":o==="Down"?"bear":o==="Balanced"?"neutral":""}
+// "Reversal" only ever reaches this as real data via the Day Outcome column (it's a valid value of
+// the session Outcome select, but never a value macroMonthOutcome/macroWeekOutcome can produce) —
+// grouped under the same neutral styling as Balanced rather than left unstyled.
+function macroOutcomeClass(o){return o==="Up"?"bull":o==="Down"?"bear":(o==="Balanced"||o==="Reversal")?"neutral":""}
 function macroSurprisePillHtml(s){
   if(!s)return`<span class="pill pending">Pending</span>`;
   const cls=s==="Positive"?"bull":s==="Negative"?"bear":"neutral";
@@ -3024,11 +3038,34 @@ function renderMacroWeekTable(){
     sel.addEventListener("change",async()=>{await setMacroWeekOutcome(sel.dataset.month,Number(sel.dataset.week),sel.value);renderMacroNews()});
   });
 }
-function renderMacroEventTable(){
+// Indexes Daily sessions by date, once per render, so looking up "what happened on this release
+// day" is O(1) per macro event instead of a linear sessions.find() scan (and, previously, a fresh
+// enrich(sessions) call) per row — the same redundant-enrich() pattern flagged in the earlier
+// review of renderNewsImpact/renderIncomingVolatility, avoided here from the start.
+function dailySessionsByDate(){
+  const map=new Map();
+  // First occurrence wins on a duplicate date, matching the existing first-match convention other
+  // same-date lookups in this file use (e.g. the London reference-session find()) — normal saves
+  // can't create a Date+SessionType duplicate (checked at save), but a restored backup can, and
+  // silently taking whichever session happened to sort last would be an arbitrary, undiscoverable
+  // choice instead of a consistent one.
+  enrich(sessions).filter(s=>s.sessionType==="Daily").forEach(s=>{if(s.date&&!map.has(s.date))map.set(s.date,s)});
+  return map;
+}
+function renderMacroEventTable(dailyByDate){
   const rows=[...macroEvents].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.month||"").localeCompare(a.month||""));
   if(!rows.length){macroNewsTable.innerHTML=`<tbody><tr><td class="hint">No releases logged yet.</td></tr></tbody>`;return}
-  macroNewsTable.innerHTML=`<thead><tr><th>Month</th><th>Event</th><th>Date</th><th>Forecast</th><th>Prior</th><th>Actual</th><th>Surprise</th><th>Month Outcome</th><th>Actions</th></tr></thead><tbody>${rows.map(e=>{
+  macroNewsTable.innerHTML=`<thead><tr><th>Month</th><th>Event</th><th>Date</th><th>Forecast</th><th>Prior</th><th>Actual</th><th>Surprise</th><th>Day Outcome</th><th>Month Outcome</th><th>Actions</th></tr></thead><tbody>${rows.map(e=>{
     const outcome=macroMonthOutcome(e.month);
+    // Day Outcome is never entered here — it's read straight off the matching Daily session's own
+    // Outcome field (New Session), the same "don't ask for the same fact twice" reasoning as the
+    // Incoming Volatility card reusing News Events instead of a parallel log.
+    const daySession=e.date?dailyByDate.get(e.date):null;
+    const dayOutcome=daySession?daySession.outcome||"":"";
+    const dayCell=!e.date?`<span class="hint">No date</span>`
+      :!daySession?`<span class="hint">No session logged</span>`
+      :dayOutcome?`<span class="pill ${macroOutcomeClass(dayOutcome)}">${dayOutcome}</span>`
+      :`<span class="hint">Outcome not set</span>`;
     return`<tr>
       <td>${macroMonthLabel(e.month)}</td>
       <td><b>${escapeHtml(e.name)}</b>${e.notes?`<div class="hint">${escapeHtml(e.notes)}</div>`:""}</td>
@@ -3037,6 +3074,7 @@ function renderMacroEventTable(){
       <td>${e.prior??"—"}</td>
       <td>${e.actual??"—"}</td>
       <td>${macroSurprisePillHtml(e.surprise)}</td>
+      <td>${dayCell}</td>
       <td>${outcome?`<span class="pill ${macroOutcomeClass(outcome)}">${outcome}</span>`:`<span class="pill pending">Pending</span>`}</td>
       <td><button onclick="editMacroEvent('${e.id}')">Edit</button> <button class="danger" onclick="deleteMacroEvent('${e.id}')">Delete</button></td>
     </tr>`
@@ -3073,6 +3111,23 @@ window.deleteMacroEvent=async id=>{
   if(mnRecordId.value===id)resetMacroNewsForm();
   renderMacroNews();
 };
+// Shared Up/Down/Balanced-or-other stackbar markup — used by both renderMacroNewsStats (Month
+// level) and renderMacroNewsDayStats (Day level) so the >=10% label threshold and segment styling
+// can't drift between the two cards the way the "Balanced" bucket's label already had. Returns ""
+// when there's nothing to show (caller falls back to its own empty-state message).
+function outcomeStackbarHtml(outcomes,balancedLabel){
+  const total=outcomes.length;
+  if(!total)return"";
+  const up=outcomes.filter(o=>o==="Up").length;
+  const down=outcomes.filter(o=>o==="Down").length;
+  const bal=total-up-down;
+  const pctOf=v=>Math.round(v/total*100);
+  return`<div class="stackbar">
+    ${up?`<div class="seg-bull" style="flex-basis:${pctOf(up)}%">${pctOf(up)>=10?pctOf(up)+"% Up":""}</div>`:""}
+    ${down?`<div class="seg-bear" style="flex-basis:${pctOf(down)}%">${pctOf(down)>=10?pctOf(down)+"% Down":""}</div>`:""}
+    ${bal?`<div class="seg-neutral" style="flex-basis:${pctOf(bal)}%">${pctOf(bal)>=10?pctOf(bal)+"% "+balancedLabel:""}</div>`:""}
+  </div>`;
+}
 function renderMacroNewsStats(){
   const scored=macroEvents.filter(e=>e.surprise&&macroMonthOutcome(e.month));
   if(!scored.length){macroNewsStats.innerHTML=`<p class="hint">Once releases are tagged Positive/Negative and their month has a recorded outcome, stats will appear here.</p>`;return}
@@ -3084,22 +3139,51 @@ function renderMacroNewsStats(){
   });
   const rows=[...groups.values()].sort((a,b)=>b.outcomes.length-a.outcomes.length||a.name.localeCompare(b.name));
   macroNewsStats.innerHTML=rows.map(r=>{
-    const total=r.outcomes.length;
-    const up=r.outcomes.filter(o=>o==="Up").length;
-    const down=r.outcomes.filter(o=>o==="Down").length;
-    const bal=r.outcomes.filter(o=>o==="Balanced").length;
-    const pctOf=v=>Math.round(v/total*100);
     const cls=r.surprise==="Positive"?"bull":r.surprise==="Negative"?"bear":"neutral";
     return`<div class="macronews-statrow">
       <div class="macronews-stathead">
         <div class="ev">${escapeHtml(r.name)} <span class="pill ${cls}" style="margin-left:6px">${r.surprise}</span></div>
-        <div class="n">n=${total}</div>
+        <div class="n">n=${r.outcomes.length}</div>
       </div>
-      <div class="stackbar">
-        ${up?`<div class="seg-bull" style="flex-basis:${pctOf(up)}%">${pctOf(up)>=10?pctOf(up)+"% Up":""}</div>`:""}
-        ${down?`<div class="seg-bear" style="flex-basis:${pctOf(down)}%">${pctOf(down)>=10?pctOf(down)+"% Down":""}</div>`:""}
-        ${bal?`<div class="seg-neutral" style="flex-basis:${pctOf(bal)}%">${pctOf(bal)>=10?pctOf(bal)+"% Balanced":""}</div>`:""}
+      ${outcomeStackbarHtml(r.outcomes,"Balanced")}
+    </div>`
+  }).join("");
+}
+// Same event × surprise-direction grouping as renderMacroNewsStats above, but scored against the
+// release day itself rather than the month it belongs to: the matching Daily session's own
+// Outcome field, plus (where IB High/Low was logged that day) how far the day's range ran beyond
+// its Initial Balance. A release only counts once a Daily session exists for its release date —
+// there's no separate manual entry for either figure.
+function renderMacroNewsDayStats(dailyByDate){
+  const container=document.getElementById("macroNewsDayStats");
+  if(!container)return;
+  const scored=macroEvents.filter(e=>e.surprise&&e.date&&dailyByDate.has(e.date));
+  if(!scored.length){container.innerHTML=`<p class="hint">Once a release is tagged Positive/Negative and a Daily session has been logged for its release date, day-level stats will appear here.</p>`;return}
+  const groups=new Map();
+  scored.forEach(e=>{
+    const key=e.name+"||"+e.surprise;
+    if(!groups.has(key))groups.set(key,{name:e.name,surprise:e.surprise,matchedCount:0,dayOutcomes:[],sessions:[]});
+    const g=groups.get(key);
+    g.matchedCount++;
+    const s=dailyByDate.get(e.date);
+    if(s.outcome)g.dayOutcomes.push(s.outcome);
+    g.sessions.push(s);
+  });
+  // ibExtensionStats — the same function backing the Incoming Volatility card — does the IB-backed
+  // filtering and averaging here instead of re-deriving the formula inline, so a future change to
+  // that math (or its high/low validity guard) can't drift between the two cards.
+  const rows=[...groups.values()].map(r=>({...r,ib:ibExtensionStats(r.sessions)})).sort((a,b)=>b.matchedCount-a.matchedCount||a.name.localeCompare(b.name));
+  const ibStyles=heatCol(rows,r=>r.ib.avgExtensionPct!=null?{value:r.ib.avgExtensionPct,n:r.ib.n}:null,true);
+  container.innerHTML=rows.map((r,i)=>{
+    const cls=r.surprise==="Positive"?"bull":r.surprise==="Negative"?"bear":"neutral";
+    const stackbar=outcomeStackbarHtml(r.dayOutcomes,"Balanced/Other");
+    return`<div class="macronews-statrow">
+      <div class="macronews-stathead">
+        <div class="ev">${escapeHtml(r.name)} <span class="pill ${cls}" style="margin-left:6px">${r.surprise}</span></div>
+        <div class="n">n=${r.dayOutcomes.length}${r.ib.n?` &middot; IB n=${r.ib.n}`:""}</div>
       </div>
+      ${stackbar||`<p class="hint" style="margin:6px 0 0">${r.matchedCount} session${r.matchedCount===1?"":"s"} logged, but Outcome not set yet.</p>`}
+      <p class="hint" style="margin:6px 0 0"><span style="${ibStyles[i]}padding:2px 5px;border-radius:4px">${r.ib.avgExtensionPct!=null?`Avg IB extension: ${r.ib.avgExtensionPct>=0?"+":""}${pct(r.ib.avgExtensionPct)}`:"No IB data logged for these days yet."}</span></p>
     </div>`
   }).join("");
 }
@@ -3155,7 +3239,10 @@ function canonicalEventKeys(name){
 // High/Low" table off the prior-day reference range) so neither metric's meaning drifts by
 // sharing a denominator it wasn't built for.
 function ibExtensionStats(arr){
-  const withIb=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)&&s.ibHigh>s.ibLow);
+  // s.high>=s.low guards against swapped/bad manual entry the same way s.ibHigh>s.ibLow guards
+  // the IB side — without it, an inverted day range silently produces a large negative "extension"
+  // averaged into the group stat with no indication the input was invalid.
+  const withIb=arr.filter(s=>Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)&&s.high>=s.low&&s.ibHigh>s.ibLow);
   const n=withIb.length;
   // n is deliberately the IB-backed count, not arr.length (total sessions tagged with this
   // event) — the IV_MIN_HISTORY_N gate downstream needs to mean "enough real IB observations",
@@ -3296,7 +3383,16 @@ function renderIncomingVolatility(){
       :"";
   }
 }
-function renderMacroNews(){renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
+function renderMacroNews(){
+  renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroNewsStats();
+  // Computed once and shared — renderMacroEventTable and renderMacroNewsDayStats both need "which
+  // Daily session matches this release date", and each independently calling dailySessionsByDate()
+  // meant enrich(sessions) (a real per-session computation, not a cheap pass-through) ran twice
+  // every render.
+  const dailyByDate=dailySessionsByDate();
+  renderMacroEventTable(dailyByDate);
+  renderMacroNewsDayStats(dailyByDate);
+}
 macroNewsForm.addEventListener("submit",async ev=>{
   ev.preventDefault();
   const month=mnMonth.value, name=mnName.value.trim();
