@@ -723,6 +723,17 @@
         <span class="hint"><i class="outcome-dot neutral"></i>Balanced</span>
       </div>
     </div>
+
+    <div class="card span-12">
+      <h2>Statistics &mdash; Day Outcome &amp; IB Extension by Event &amp; Surprise Direction</h2>
+      <p class="hint">Grouped by event and Positive/Negative surprise, scored against the release day itself — the matching Daily session's own Outcome field (logged in New Session), plus how far that day's range ran beyond its Initial Balance where IB High/Low was logged. Only releases with a matching Daily session for their release date are counted.</p>
+      <div id="macroNewsDayStats"></div>
+      <div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">
+        <span class="hint"><i class="outcome-dot bull"></i>Up</span>
+        <span class="hint"><i class="outcome-dot bear"></i>Down</span>
+        <span class="hint"><i class="outcome-dot neutral"></i>Balanced / Other</span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -3024,11 +3035,30 @@ function renderMacroWeekTable(){
     sel.addEventListener("change",async()=>{await setMacroWeekOutcome(sel.dataset.month,Number(sel.dataset.week),sel.value);renderMacroNews()});
   });
 }
+// Indexes Daily sessions by date, once per render, so looking up "what happened on this release
+// day" is O(1) per macro event instead of a linear sessions.find() scan (and, previously, a fresh
+// enrich(sessions) call) per row — the same redundant-enrich() pattern flagged in the earlier
+// review of renderNewsImpact/renderIncomingVolatility, avoided here from the start.
+function dailySessionsByDate(){
+  const map=new Map();
+  enrich(sessions).filter(s=>s.sessionType==="Daily").forEach(s=>{if(s.date)map.set(s.date,s)});
+  return map;
+}
 function renderMacroEventTable(){
   const rows=[...macroEvents].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.month||"").localeCompare(a.month||""));
   if(!rows.length){macroNewsTable.innerHTML=`<tbody><tr><td class="hint">No releases logged yet.</td></tr></tbody>`;return}
-  macroNewsTable.innerHTML=`<thead><tr><th>Month</th><th>Event</th><th>Date</th><th>Forecast</th><th>Prior</th><th>Actual</th><th>Surprise</th><th>Month Outcome</th><th>Actions</th></tr></thead><tbody>${rows.map(e=>{
+  const dailyByDate=dailySessionsByDate();
+  macroNewsTable.innerHTML=`<thead><tr><th>Month</th><th>Event</th><th>Date</th><th>Forecast</th><th>Prior</th><th>Actual</th><th>Surprise</th><th>Day Outcome</th><th>Month Outcome</th><th>Actions</th></tr></thead><tbody>${rows.map(e=>{
     const outcome=macroMonthOutcome(e.month);
+    // Day Outcome is never entered here — it's read straight off the matching Daily session's own
+    // Outcome field (New Session), the same "don't ask for the same fact twice" reasoning as the
+    // Incoming Volatility card reusing News Events instead of a parallel log.
+    const daySession=e.date?dailyByDate.get(e.date):null;
+    const dayOutcome=daySession?daySession.outcome||"":"";
+    const dayCell=!e.date?`<span class="hint">No date</span>`
+      :!daySession?`<span class="hint">No session logged</span>`
+      :dayOutcome?`<span class="pill ${macroOutcomeClass(dayOutcome)}">${dayOutcome}</span>`
+      :`<span class="hint">Outcome not set</span>`;
     return`<tr>
       <td>${macroMonthLabel(e.month)}</td>
       <td><b>${escapeHtml(e.name)}</b>${e.notes?`<div class="hint">${escapeHtml(e.notes)}</div>`:""}</td>
@@ -3037,6 +3067,7 @@ function renderMacroEventTable(){
       <td>${e.prior??"—"}</td>
       <td>${e.actual??"—"}</td>
       <td>${macroSurprisePillHtml(e.surprise)}</td>
+      <td>${dayCell}</td>
       <td>${outcome?`<span class="pill ${macroOutcomeClass(outcome)}">${outcome}</span>`:`<span class="pill pending">Pending</span>`}</td>
       <td><button onclick="editMacroEvent('${e.id}')">Edit</button> <button class="danger" onclick="deleteMacroEvent('${e.id}')">Delete</button></td>
     </tr>`
@@ -3100,6 +3131,52 @@ function renderMacroNewsStats(){
         ${down?`<div class="seg-bear" style="flex-basis:${pctOf(down)}%">${pctOf(down)>=10?pctOf(down)+"% Down":""}</div>`:""}
         ${bal?`<div class="seg-neutral" style="flex-basis:${pctOf(bal)}%">${pctOf(bal)>=10?pctOf(bal)+"% Balanced":""}</div>`:""}
       </div>
+    </div>`
+  }).join("");
+}
+// Same event × surprise-direction grouping as renderMacroNewsStats above, but scored against the
+// release day itself rather than the month it belongs to: the matching Daily session's own
+// Outcome field, plus (where IB High/Low was logged that day) how far the day's range ran beyond
+// its Initial Balance. A release only counts once a Daily session exists for its release date —
+// there's no separate manual entry for either figure.
+function renderMacroNewsDayStats(){
+  const container=document.getElementById("macroNewsDayStats");
+  if(!container)return;
+  const dailyByDate=dailySessionsByDate();
+  const scored=macroEvents.filter(e=>e.surprise&&e.date&&dailyByDate.has(e.date));
+  if(!scored.length){container.innerHTML=`<p class="hint">Once a release is tagged Positive/Negative and a Daily session has been logged for its release date, day-level stats will appear here.</p>`;return}
+  const groups=new Map();
+  scored.forEach(e=>{
+    const key=e.name+"||"+e.surprise;
+    if(!groups.has(key))groups.set(key,{name:e.name,surprise:e.surprise,matchedCount:0,dayOutcomes:[],extensions:[]});
+    const g=groups.get(key);
+    g.matchedCount++;
+    const s=dailyByDate.get(e.date);
+    if(s.outcome)g.dayOutcomes.push(s.outcome);
+    if(Number.isFinite(s.high)&&Number.isFinite(s.low)&&Number.isFinite(s.ibHigh)&&Number.isFinite(s.ibLow)&&s.ibHigh>s.ibLow){
+      g.extensions.push((s.high-s.low)/(s.ibHigh-s.ibLow)-1);
+    }
+  });
+  const rows=[...groups.values()].sort((a,b)=>b.matchedCount-a.matchedCount||a.name.localeCompare(b.name));
+  container.innerHTML=rows.map(r=>{
+    const total=r.dayOutcomes.length;
+    const up=r.dayOutcomes.filter(o=>o==="Up").length;
+    const down=r.dayOutcomes.filter(o=>o==="Down").length;
+    const bal=r.dayOutcomes.filter(o=>o!=="Up"&&o!=="Down").length;
+    const pctOf=v=>Math.round(v/total*100);
+    const cls=r.surprise==="Positive"?"bull":r.surprise==="Negative"?"bear":"neutral";
+    const avgExt=r.extensions.length?avg(r.extensions):null;
+    return`<div class="macronews-statrow">
+      <div class="macronews-stathead">
+        <div class="ev">${escapeHtml(r.name)} <span class="pill ${cls}" style="margin-left:6px">${r.surprise}</span></div>
+        <div class="n">n=${total}${r.extensions.length?` &middot; IB n=${r.extensions.length}`:""}</div>
+      </div>
+      ${total?`<div class="stackbar">
+        ${up?`<div class="seg-bull" style="flex-basis:${pctOf(up)}%">${pctOf(up)>=10?pctOf(up)+"% Up":""}</div>`:""}
+        ${down?`<div class="seg-bear" style="flex-basis:${pctOf(down)}%">${pctOf(down)>=10?pctOf(down)+"% Down":""}</div>`:""}
+        ${bal?`<div class="seg-neutral" style="flex-basis:${pctOf(bal)}%">${pctOf(bal)>=10?pctOf(bal)+"% Balanced":""}</div>`:""}
+      </div>`:`<p class="hint" style="margin:6px 0 0">${r.matchedCount} session${r.matchedCount===1?"":"s"} logged, but Outcome not set yet.</p>`}
+      <p class="hint" style="margin:6px 0 0">${avgExt!=null?`Avg IB extension: ${avgExt>=0?"+":""}${pct(avgExt)}`:"No IB data logged for these days yet."}</p>
     </div>`
   }).join("");
 }
@@ -3296,7 +3373,7 @@ function renderIncomingVolatility(){
       :"";
   }
 }
-function renderMacroNews(){renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats()}
+function renderMacroNews(){renderIncomingVolatility();renderMacroMonths();renderMacroWeekTable();renderMacroEventTable();renderMacroNewsStats();renderMacroNewsDayStats()}
 macroNewsForm.addEventListener("submit",async ev=>{
   ev.preventDefault();
   const month=mnMonth.value, name=mnName.value.trim();
