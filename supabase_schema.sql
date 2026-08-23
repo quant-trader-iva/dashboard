@@ -77,6 +77,13 @@
 -- deploying the matching app update — toDb() sends ib_high/ib_low on every session upsert:
 --   alter table public.trading_sessions add column if not exists ib_high numeric;
 --   alter table public.trading_sessions add column if not exists ib_low numeric;
+--
+-- Run this on an existing database to add the Delta and Delta Min/Max columns backing the new
+-- Delta Finish % calculation (Delta Finish % = |Delta ÷ Delta Min/Max| × 100, computed client-side
+-- in deltaFinishCalc() and stored in the existing delta_finish column). Do this BEFORE deploying
+-- the matching app update — toDb() sends delta/delta_min_max on every session upsert:
+--   alter table public.trading_sessions add column if not exists delta numeric;
+--   alter table public.trading_sessions add column if not exists delta_min_max numeric;
 
 create table if not exists public.trading_sessions (
   id uuid primary key,
@@ -134,6 +141,8 @@ create table if not exists public.trading_sessions (
 
   volume numeric,
   open_interest numeric,
+  delta numeric,
+  delta_min_max numeric,
   delta_finish numeric,
   result_r numeric,
   tpos numeric,
