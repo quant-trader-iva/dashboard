@@ -568,8 +568,8 @@
       <div class="label">Latest 10Y Real Yield</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px">
         <div style="text-align:left">
-          <div class="hint" style="margin:0">2 sessions ago</div>
-          <div style="font-size:18px;font-weight:800" id="macroPrev2">&mdash;</div>
+          <div class="hint" style="margin:0;white-space:nowrap">Regime (1-session)</div>
+          <div style="margin-top:3px" id="macroRegimeBadge">&mdash;</div>
         </div>
         <div style="text-align:center">
           <div class="value" id="macroLatest">&mdash;</div>
@@ -585,8 +585,8 @@
       <div class="label">Dollar Index (DXY)</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px">
         <div style="text-align:left">
-          <div class="hint" style="margin:0">2 sessions ago</div>
-          <div style="font-size:18px;font-weight:800" id="dxyPrev2">&mdash;</div>
+          <div class="hint" style="margin:0;white-space:nowrap">Regime (1-session)</div>
+          <div style="margin-top:3px" id="dxyRegimeBadge">&mdash;</div>
         </div>
         <div style="text-align:center">
           <div class="value" id="dxyLatest">&mdash;</div>
@@ -1255,6 +1255,10 @@ function macroYieldNSessionsAgo(dateStr,lookback){
 // metric cards and the regime-stat breakdown never disagree. Defaults to 5 (the regime-stat
 // breakdown's definition of "regime"); the Change & Regime card calls this once per window.
 const MACRO_WINDOWS=[5,8,21,63,126,252];
+// Both "Change & Regime" tables (real yield and DXY) also surface the two shortest lookbacks
+// (last 3 and last 2 sessions) at the top, since the headline cards now show only the single
+// prior session plus a regime pill.
+const MACRO_CHANGE_WINDOWS=[2,3,...MACRO_WINDOWS];
 function macroRegimeForDate(dateStr,lookback=5){
   const s=macroSeries();
   const idx=macroIndexForDate(dateStr);
@@ -1462,7 +1466,7 @@ function renderDxyChart(series,windowSize){
 }
 function renderDxy(){
   const valueEl=document.getElementById("dxyLatest"),asOfEl=document.getElementById("dxyAsOf");
-  const prev1El=document.getElementById("dxyPrev1"),prev2El=document.getElementById("dxyPrev2");
+  const prev1El=document.getElementById("dxyPrev1"),regimeBadgeEl=document.getElementById("dxyRegimeBadge");
   const changeRowsEl=document.getElementById("dxyChangeRows");
   const chartTitleEl=document.getElementById("dxyChartTitle"),chartNoteEl=document.getElementById("dxyChartNote");
   if(!valueEl)return;
@@ -1470,7 +1474,7 @@ function renderDxy(){
   if(!series.length){
     valueEl.textContent="—";
     if(prev1El)prev1El.textContent="—";
-    if(prev2El)prev2El.textContent="—";
+    if(regimeBadgeEl)regimeBadgeEl.textContent="—";
     asOfEl.textContent=dxyCache&&dxyCache.error?`Couldn't load: ${dxyCache.error}`:"Loading…";
     if(changeRowsEl)changeRowsEl.innerHTML="";
     if(chartTitleEl)chartTitleEl.textContent="Dollar Index (DXY)";
@@ -1482,13 +1486,16 @@ function renderDxy(){
   const p1=dxyValueNSessionsAgo(latest.date,1),p2=dxyValueNSessionsAgo(latest.date,2);
   valueEl.innerHTML=latest.value.toFixed(2)+trendArrowHtml(p1==null?null:latest.value-p1,DXY_TREND_THRESHOLD);
   if(prev1El)prev1El.innerHTML=(p1==null?"—":p1.toFixed(2))+trendArrowHtml(p1==null||p2==null?null:p1-p2,DXY_TREND_THRESHOLD);
-  if(prev2El)prev2El.textContent=p2==null?"—":p2.toFixed(2);
+  if(regimeBadgeEl){
+    const dr=dxyRegimeForDate(latest.date,1);
+    regimeBadgeEl.innerHTML=dr?(()=>{const[bg,fg]=macroRegimeBadgeColor(dr.label);return `<span class="pill" style="background:${bg};color:${fg}">${dr.label}</span>`})():`<span class="hint" style="margin:0">n/a</span>`;
+  }
   asOfEl.textContent=`as of ${fmtMacroDate(latest.date)} — synthetic, from ECB reference rates`+(dxyCache.error?` (most recent refresh failed: ${dxyCache.error})`:"");
   if(chartTitleEl)chartTitleEl.textContent=`Dollar Index (DXY) — last ${Math.min(dxyChartWindow,series.length)} sessions`;
   renderDxyChart(series,dxyChartWindow);
   if(chartNoteEl)chartNoteEl.textContent="Synthetic index computed from live ECB reference rates (EUR, JPY, GBP, CAD, SEK, CHF basket) using the same weights the official ICE Dollar Index uses — not the licensed feed itself.";
   if(!changeRowsEl)return;
-  const rows=MACRO_WINDOWS.map(w=>{
+  const rows=MACRO_CHANGE_WINDOWS.map(w=>{
     const v=dxyValueNSessionsAgo(latest.date,w);
     const r=dxyRegimeForDate(latest.date,w);
     const valText=v==null?"—":v.toFixed(2);
@@ -1531,7 +1538,7 @@ async function fetchIncomingCalendar(force){
 function renderMacro(){
   const statusEl=document.getElementById("macroStatus");
   const latestEl=document.getElementById("macroLatest"),asOfEl=document.getElementById("macroAsOf");
-  const prev1El=document.getElementById("macroPrev1"),prev2El=document.getElementById("macroPrev2");
+  const prev1El=document.getElementById("macroPrev1"),regimeBadgeEl=document.getElementById("macroRegimeBadge");
   const changeRowsEl=document.getElementById("macroChangeRows"),beNoteEl=document.getElementById("macroBreakevenNote");
   const regimeStatsEl=document.getElementById("macroRegimeStats");
   if(!statusEl)return;
@@ -1540,7 +1547,7 @@ function renderMacro(){
   if(!series.length){
     statusEl.textContent=macroCache&&macroCache.error?`Couldn't load live macro data: ${macroCache.error}. Your sessions are unaffected — this only powers this tab. Try Refresh in your browser.`:"Loading live data from Treasury.gov…";
     latestEl.textContent="—";
-    prev1El.textContent="—";prev2El.textContent="—";
+    prev1El.textContent="—";if(regimeBadgeEl)regimeBadgeEl.textContent="—";
     asOfEl.textContent="";changeRowsEl.innerHTML="";beNoteEl.textContent="";
     document.getElementById("macroChartWrap").innerHTML="";
     regimeStatsEl.innerHTML="";
@@ -1552,8 +1559,11 @@ function renderMacro(){
   latestEl.innerHTML=latest.real.toFixed(2)+"%"+trendArrowHtml(prev1==null?null:latest.real-prev1,MACRO_TREND_THRESHOLD);
   asOfEl.textContent="as of "+fmtMacroDate(latest.date);
   prev1El.innerHTML=(prev1==null?"—":prev1.toFixed(2)+"%")+trendArrowHtml(prev1==null||prev2==null?null:prev1-prev2,MACRO_TREND_THRESHOLD);
-  prev2El.textContent=prev2==null?"—":prev2.toFixed(2)+"%";
-  const changeRows=MACRO_WINDOWS.map(w=>{
+  if(regimeBadgeEl){
+    const hr=macroRegimeForDate(latest.date,1);
+    regimeBadgeEl.innerHTML=hr?(()=>{const[bg,fg]=macroRegimeBadgeColor(hr.label);return `<span class="pill" style="background:${bg};color:${fg}">${hr.label}</span>`})():`<span class="hint" style="margin:0">n/a</span>`;
+  }
+  const changeRows=MACRO_CHANGE_WINDOWS.map(w=>{
     const pctText=(()=>{const v=macroYieldNSessionsAgo(latest.date,w);return v==null?"—":v.toFixed(2)+"%"})();
     const r=macroRegimeForDate(latest.date,w);
     const bpsText=r?(r.deltaBps>0?"+":"")+r.deltaBps+" bps":"—";
