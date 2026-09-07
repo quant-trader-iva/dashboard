@@ -244,145 +244,94 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "delete own position sizing" on public.position_sizing
 for delete using (auth.uid() = user_id);
 
--- Trade Entries — logs the mechanics of each individual entry you take (setup/trigger,
--- timing vs the signal, distance from the reference level you were trading against,
--- execution/slippage, and order-flow/footprint context), separate from the session-level
--- price-direction data above.
--- Existing databases: run this whole `create table` block once to add the table. If you
--- already created this table before the order-flow columns (volume, volume_node, footprint,
--- delta_divergence_30m, institutional_trades) existed, add them with:
---   alter table public.trade_entries add column if not exists volume numeric;
---   alter table public.trade_entries add column if not exists volume_node text check (volume_node in ('HVN','LVN') or volume_node is null);
---   alter table public.trade_entries add column if not exists footprint text check (footprint in ('Volume','Absorption','Support','Resistance') or footprint is null);
---   alter table public.trade_entries add column if not exists delta_divergence_30m text check (delta_divergence_30m in ('Yes','No','N/A') or delta_divergence_30m is null);
---   alter table public.trade_entries add column if not exists institutional_trades jsonb default '[]'::jsonb;
+-- Trade Entries — one row per trade you take: the levels, the market backdrop (condition, day
+-- type, GEX), the strategy and signals behind it, and whether you followed your plan. Separate
+-- from the session-level price-direction data above.
 --
--- If you already created the table before the Bookmap/order-book and footprint-context columns
--- (book_imbalance, liquidity_at_level, stacked_imbalances, imbalance_side, absorption_side,
--- exhaustion, delta_at_entry, cum_delta_trend, rotations_before_entry, poc_va_position) existed,
--- add them with:
---   alter table public.trade_entries add column if not exists book_imbalance numeric;
---   alter table public.trade_entries add column if not exists liquidity_at_level text check (liquidity_at_level in ('Thin','Normal','Stacked') or liquidity_at_level is null);
---   alter table public.trade_entries add column if not exists stacked_imbalances numeric;
---   alter table public.trade_entries add column if not exists imbalance_side text check (imbalance_side in ('Buy','Sell') or imbalance_side is null);
---   alter table public.trade_entries add column if not exists absorption_side text check (absorption_side in ('Buyers Absorbed (High)','Sellers Absorbed (Low)') or absorption_side is null);
---   alter table public.trade_entries add column if not exists exhaustion text check (exhaustion in ('Yes','No') or exhaustion is null);
---   alter table public.trade_entries add column if not exists delta_at_entry numeric;
---   alter table public.trade_entries add column if not exists cum_delta_trend text check (cum_delta_trend in ('Rising','Falling','Flat') or cum_delta_trend is null);
---   alter table public.trade_entries add column if not exists rotations_before_entry numeric;
---   alter table public.trade_entries add column if not exists poc_va_position text check (poc_va_position in ('Inside Value','Outside Value','At VAL','At VAH','At POC') or poc_va_position is null);
+-- Fresh database: run the whole `create table` block below once.
 --
--- If you already created the table before the indicator-context columns (vwap_level,
--- bollinger_band, ema_6m, ema_30m, ema_1h) existed, add them with:
---   alter table public.trade_entries add column if not exists vwap_level text check (vwap_level in ('Middle','Std1','Std2') or vwap_level is null);
---   alter table public.trade_entries add column if not exists bollinger_band text check (bollinger_band in ('Middle','Below Lower Band','Above Lower Band','Upper Band','Lower Band') or bollinger_band is null);
---   alter table public.trade_entries add column if not exists ema_6m text check (ema_6m in ('5','8') or ema_6m is null);
---   alter table public.trade_entries add column if not exists ema_30m text check (ema_30m in ('21','60') or ema_30m is null);
---   alter table public.trade_entries add column if not exists ema_1h text check (ema_1h in ('8','21','60') or ema_1h is null);
+-- Existing database from an earlier, wider version of this journal: migrate it in two steps.
 --
--- If you already created the table before the delta_absolute column existed, add it with:
---   alter table public.trade_entries add column if not exists delta_absolute numeric;
+-- 1. Add the columns this version introduces:
+--   alter table public.trade_entries add column if not exists market_condition text check (market_condition in ('Balanced','Imbalanced') or market_condition is null);
+--   alter table public.trade_entries add column if not exists day_type text check (day_type in ('Trend Day','Non-Trend Day') or day_type is null);
+--   alter table public.trade_entries add column if not exists gex text check (gex in ('Positive','Zero','Negative') or gex is null);
+--   alter table public.trade_entries add column if not exists gex_additional text check (gex_additional in ('Aggression','Put Wall','Call Wall') or gex_additional is null);
+--   alter table public.trade_entries add column if not exists strategy text check (strategy in ('LBF','LAF','LVN','HVN') or strategy is null);
+--   alter table public.trade_entries add column if not exists additional_signals jsonb default '[]'::jsonb;
+--   alter table public.trade_entries add column if not exists plan_deviation_notes text;
 --
--- If you already created the table before the stop_loss_price/exit_price columns existed
--- (used to auto-calculate result_r as P&L / entry-to-stop risk, and to flag exit slippage vs
--- the planned stop), add them with:
---   alter table public.trade_entries add column if not exists stop_loss_price numeric;
---   alter table public.trade_entries add column if not exists exit_price numeric;
+-- 2. Drop the columns this version removed. IRREVERSIBLE — any data still held in them is gone
+--    for good once these run. Export a backup (Data tab -> Download Backup) first if you want to
+--    keep the old readings. plan_adherence is kept but is Yes/No only in the app now; leaving its
+--    old 3-value ('Yes','No','Partial') check constraint in place on an existing table is harmless.
+--   alter table public.trade_entries drop column if exists direction;
+--   alter table public.trade_entries drop column if exists setup_type;
+--   alter table public.trade_entries drop column if exists order_type;
+--   alter table public.trade_entries drop column if exists signal_time;
+--   alter table public.trade_entries drop column if exists intended_price;
+--   alter table public.trade_entries drop column if exists reference_label;
+--   alter table public.trade_entries drop column if exists reference_price;
+--   alter table public.trade_entries drop column if exists result_r;
+--   alter table public.trade_entries drop column if exists mfe_r;
+--   alter table public.trade_entries drop column if exists mae_r;
+--   alter table public.trade_entries drop column if exists volume;
+--   alter table public.trade_entries drop column if exists volume_node;
+--   alter table public.trade_entries drop column if exists footprint;
+--   alter table public.trade_entries drop column if exists delta_divergence_30m;
+--   alter table public.trade_entries drop column if exists institutional_trades;
+--   alter table public.trade_entries drop column if exists book_imbalance;
+--   alter table public.trade_entries drop column if exists liquidity_at_level;
+--   alter table public.trade_entries drop column if exists stacked_imbalances;
+--   alter table public.trade_entries drop column if exists imbalance_side;
+--   alter table public.trade_entries drop column if exists absorption_side;
+--   alter table public.trade_entries drop column if exists exhaustion;
+--   alter table public.trade_entries drop column if exists delta_at_entry;
+--   alter table public.trade_entries drop column if exists delta_absolute;
+--   alter table public.trade_entries drop column if exists cum_delta_trend;
+--   alter table public.trade_entries drop column if exists rotations_before_entry;
+--   alter table public.trade_entries drop column if exists poc_va_position;
+--   alter table public.trade_entries drop column if exists h1_candle_hour;
+--   alter table public.trade_entries drop column if exists h1_delta;
+--   alter table public.trade_entries drop column if exists h1_poc;
+--   alter table public.trade_entries drop column if exists h1_vah;
+--   alter table public.trade_entries drop column if exists h1_val;
+--   alter table public.trade_entries drop column if exists h1_candle_pattern;
+--   alter table public.trade_entries drop column if exists vwap_level;
+--   alter table public.trade_entries drop column if exists bollinger_band;
+--   alter table public.trade_entries drop column if exists ema_6m;
+--   alter table public.trade_entries drop column if exists ema_30m;
+--   alter table public.trade_entries drop column if exists ema_1h;
+--   alter table public.trade_entries drop column if exists emotional_state;
+--   alter table public.trade_entries drop column if exists mistake_tags;
+--   drop index if exists trade_entries_setup_type_idx;
 --
--- If you already created the table before the screenshots column existed, add it with:
---   alter table public.trade_entries add column if not exists screenshots jsonb default '[]'::jsonb;
---
--- If you already created the table before the Psychology tab columns (emotional_state,
--- plan_adherence, mistake_tags) existed, add them with:
---   alter table public.trade_entries add column if not exists emotional_state text check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null);
---   alter table public.trade_entries add column if not exists plan_adherence text check (plan_adherence in ('Yes','No','Partial') or plan_adherence is null);
---   alter table public.trade_entries add column if not exists mistake_tags jsonb default '[]'::jsonb;
--- If you already ran the above without the emotional_state check constraint, add it separately with:
---   alter table public.trade_entries add constraint trade_entries_emotional_state_check check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null);
---
--- If you already created the table before the MFE/MAE columns (mfe_r, mae_r) or the 1H candle
--- columns (h1_candle_hour, h1_delta, h1_poc, h1_vah, h1_val) existed, add them with:
---   alter table public.trade_entries add column if not exists mfe_r numeric;
---   alter table public.trade_entries add column if not exists mae_r numeric;
---   alter table public.trade_entries add column if not exists h1_candle_hour text;
---   alter table public.trade_entries add column if not exists h1_delta numeric;
---   alter table public.trade_entries add column if not exists h1_poc numeric;
---   alter table public.trade_entries add column if not exists h1_vah numeric;
---   alter table public.trade_entries add column if not exists h1_val numeric;
---   alter table public.trade_entries add column if not exists h1_candle_pattern text check (h1_candle_pattern in ('Morning Star','Evening Star','Bullish Engulfing','Bearish Engulfing','Bullish Pin Bar','Bearish Pin Bar','Doji','Hammer','Shooting Star','Inside Bar','Outside Bar') or h1_candle_pattern is null);
--- Screenshots are stored as compressed base64 JPEG data URLs inside this jsonb column (same
--- approach as institutional_trades/news_events), not in Supabase Storage. That keeps setup to
--- just this one table, but every save re-upserts the full row including all attached images —
--- fine for a personal journal with a few compressed screenshots per entry, but if you start
--- attaching many large images per entry this will bloat both the database and the browser's
--- localStorage. Ask to switch to Supabase Storage (file bucket + a URL reference column here)
--- if that becomes a problem.
+-- additional_signals is multi-select (same jsonb-array convention as news_events on
+-- trading_sessions). screenshots are compressed base64 JPEG data URLs stored in jsonb, not
+-- Supabase Storage — every save re-upserts the whole row including its images, which is fine for
+-- a personal journal with a few compressed screenshots per entry.
 create table if not exists public.trade_entries (
   id uuid primary key,
   user_id uuid references auth.users(id),
   date date,
   session_type text check (session_type in ('Weekly','Daily','London','New York') or session_type is null),
   market text,
-  direction text check (direction in ('Long','Short') or direction is null),
-  setup_type text,
-  order_type text check (order_type in ('Limit','Market','Stop') or order_type is null),
-
-  signal_time text,
   entry_time text,
-  intended_price numeric,
   entry_price numeric,
   stop_loss_price numeric,
   exit_price numeric,
 
-  reference_label text,
-  reference_price numeric,
-  result_r numeric,
-  mfe_r numeric,
-  mae_r numeric,
+  market_condition text check (market_condition in ('Balanced','Imbalanced') or market_condition is null),
+  day_type text check (day_type in ('Trend Day','Non-Trend Day') or day_type is null),
+  gex text check (gex in ('Positive','Zero','Negative') or gex is null),
+  gex_additional text check (gex_additional in ('Aggression','Put Wall','Call Wall') or gex_additional is null),
+  strategy text check (strategy in ('LBF','LAF','LVN','HVN') or strategy is null),
+  additional_signals jsonb default '[]'::jsonb,
 
-  volume numeric,
-  volume_node text check (volume_node in ('HVN','LVN') or volume_node is null),
-  footprint text check (footprint in ('Volume','Absorption','Support','Resistance') or footprint is null),
-  delta_divergence_30m text check (delta_divergence_30m in ('Yes','No','N/A') or delta_divergence_30m is null),
-  institutional_trades jsonb default '[]'::jsonb,
-
-  book_imbalance numeric,
-  liquidity_at_level text check (liquidity_at_level in ('Thin','Normal','Stacked') or liquidity_at_level is null),
-  stacked_imbalances numeric,
-  imbalance_side text check (imbalance_side in ('Buy','Sell') or imbalance_side is null),
-  absorption_side text check (absorption_side in ('Buyers Absorbed (High)','Sellers Absorbed (Low)') or absorption_side is null),
-  exhaustion text check (exhaustion in ('Yes','No') or exhaustion is null),
-  delta_at_entry numeric,
-  delta_absolute numeric,
-  cum_delta_trend text check (cum_delta_trend in ('Rising','Falling','Flat') or cum_delta_trend is null),
-  rotations_before_entry numeric,
-  poc_va_position text check (poc_va_position in ('Inside Value','Outside Value','At VAL','At VAH','At POC') or poc_va_position is null),
-
-  -- The specific 1H candle the trade entered after (hour label, e.g. "09:00–10:00"), and that
-  -- candle's own delta/POC/value-area — logged separately from poc_va_position above, which
-  -- describes the entry price relative to the wider session's profile, not the hourly candle's.
-  h1_candle_hour text,
-  h1_delta numeric,
-  h1_poc numeric,
-  h1_vah numeric,
-  h1_val numeric,
-  h1_candle_pattern text check (h1_candle_pattern in ('Morning Star','Evening Star','Bullish Engulfing','Bearish Engulfing','Bullish Pin Bar','Bearish Pin Bar','Doji','Hammer','Shooting Star','Inside Bar','Outside Bar') or h1_candle_pattern is null),
-
-  vwap_level text check (vwap_level in ('Middle','Std1','Std2') or vwap_level is null),
-  bollinger_band text check (bollinger_band in ('Middle','Below Lower Band','Above Lower Band','Upper Band','Lower Band') or bollinger_band is null),
-  ema_6m text check (ema_6m in ('5','8') or ema_6m is null),
-  ema_30m text check (ema_30m in ('21','60') or ema_30m is null),
-  ema_1h text check (ema_1h in ('8','21','60') or ema_1h is null),
+  plan_adherence text check (plan_adherence in ('Yes','No') or plan_adherence is null),
+  plan_deviation_notes text,
 
   screenshots jsonb default '[]'::jsonb,
-
-  -- Psychology tab: what state you were in and whether you stuck to your plan, so patterns like
-  -- tilt/revenge-trading can be measured rather than just felt. mistake_tags is multi-select
-  -- (same convention as institutional_trades above) since one entry can have several.
-  emotional_state text check (emotional_state in ('Calm / Confident','Excited / Euphoric','Anxious / Nervous','FOMO','Impatient','Frustrated / Angry','Revenge','Bored','Tired / Low Energy','Hesitant') or emotional_state is null),
-  plan_adherence text check (plan_adherence in ('Yes','No','Partial') or plan_adherence is null),
-  mistake_tags jsonb default '[]'::jsonb,
-
   notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -408,7 +357,6 @@ create policy "delete own trade entries" on public.trade_entries
 for delete using (auth.uid() = user_id);
 
 create index if not exists trade_entries_date_idx on public.trade_entries(date);
-create index if not exists trade_entries_setup_type_idx on public.trade_entries(setup_type);
 create index if not exists trade_entries_user_id_idx on public.trade_entries(user_id);
 
 -- Open Interest snapshots — one row per strike per day per tracked DTE (0/2/3, one tab each in
