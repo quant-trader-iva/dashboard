@@ -369,117 +369,45 @@
 <section id="teNew" class="page hidden">
   <div class="card" style="margin-bottom:14px">
     <h2>Log Trade Entry</h2>
-    <p class="hint">Tracks the mechanics of each entry you take — separate from the session-level price-direction data above — so you can see whether the leak is in your entries themselves: chasing price, hesitating after the signal, a bad fill, or a specific setup that quietly underperforms.</p>
+    <p class="hint">One row per trade you take — the levels, the market backdrop (condition, day type, GEX), the strategy and signals behind it, and whether you actually stuck to your plan.</p>
     <form id="teEntryForm">
       <input type="hidden" id="teRecordId"/>
       <div class="form-grid">
         <div><label>Date</label><input id="teDate" type="date" required/></div>
         <div><label>Session Type <span class="hint" style="font-weight:400">(optional)</span></label><select id="teSessionType"><option value="">—</option><option>Weekly</option><option>Daily</option><option>London</option><option>New York</option></select></div>
-        <div><label>Market</label><input id="teMarket" placeholder="GC / MGC / XAUUSD" value="GC"/></div>
-        <div><label>Direction</label><select id="teDirection"><option value="">—</option><option>Long</option><option>Short</option></select></div>
+        <div><label>Market</label><select id="teMarket"><option>GC</option><option>MGC</option></select></div>
+        <div><label>Entry Time</label><input id="teEntryTime" type="time"/></div>
 
-        <div><label>Setup / Trigger</label><input id="teSetupType" list="setupTypeSuggestions" placeholder="Breakout, Retest, Fade..."/>
-          <datalist id="setupTypeSuggestions">
-            <option value="Breakout"></option>
-            <option value="Retest / Pullback"></option>
-            <option value="Fade / Reversal"></option>
-            <option value="Range Rotation"></option>
-            <option value="Trend Continuation"></option>
-            <option value="News Spike"></option>
-            <option value="Liquidity Sweep"></option>
-            <option value="VWAP Reclaim"></option>
-            <option value="Open Drive"></option>
-          </datalist>
-        </div>
-        <div><label>Order Type</label><select id="teOrderType"><option value="">—</option><option>Limit</option><option>Market</option><option>Stop</option></select></div>
+        <div><label>Entry Price</label><input id="teEntryPrice" type="number" step="0.01"/></div>
+        <div><label>Stop Loss Price</label><input id="teStopLossPrice" type="number" step="0.01"/></div>
+        <div><label>Exit Price</label><input id="teExitPrice" type="number" step="0.01"/></div>
+        <div><label>Market Condition</label><select id="teMarketCondition"><option value="">—</option><option>Balanced</option><option>Imbalanced</option></select></div>
 
-        <div><label>Signal Time <span class="hint" style="font-weight:400">(setup formed)</span></label><input id="teSignalTime" type="time"/></div>
-        <div><label>Entry Time <span class="hint" style="font-weight:400">(order filled)</span></label><input id="teEntryTime" type="time"/></div>
-        <div><label>Intended Entry Price</label><input id="teIntendedPrice" type="number" step="0.01"/></div>
-        <div><label>Actual Entry Price</label><input id="teEntryPrice" type="number" step="0.01"/></div>
-        <div><label>Stop Loss Price <span class="hint" style="font-weight:400">(sets your risk unit)</span></label><input id="teStopLossPrice" type="number" step="0.01"/></div>
-        <div><label>Exit Price <span class="hint" style="font-weight:400">(where you actually got out)</span></label><input id="teExitPrice" type="number" step="0.01"/></div>
-
-        <div><label>Reference Level <span class="hint" style="font-weight:400">(what you were entering against)</span></label><input id="teReferenceLabel" placeholder="Prior Day High, VAH, Open..."/></div>
-        <div><label>Reference Price</label><input id="teReferencePrice" type="number" step="0.01"/></div>
-        <div>
-          <label>Result R <span class="hint" style="font-weight:400">(always yours to type — never auto-overwritten)</span></label>
-          <input id="teResultR" type="number" step="0.01" placeholder="2.5 or -1"/>
-          <div class="hint" id="teComputedRHint" style="margin-top:5px;min-height:16px"></div>
-        </div>
-        <div><label>MFE (R) <span class="hint" style="font-weight:400">(max favorable excursion reached)</span></label><input id="teMfeR" type="number" step="0.01"/></div>
-        <div><label>MAE (R) <span class="hint" style="font-weight:400">(max adverse excursion reached)</span></label><input id="teMaeR" type="number" step="0.01"/></div>
-        <div><label>Volume</label><input id="teVolume" type="number" step="1"/></div>
-
-        <div><label>Volume Node</label><select id="teVolumeNode"><option value="">—</option><option>HVN</option><option>LVN</option></select></div>
-        <div><label>Footprint</label><select id="teFootprint"><option value="">—</option><option>Volume</option><option>Absorption</option><option>Support</option><option>Resistance</option></select></div>
-        <div><label>Delta Divergence (30m)</label><select id="teDeltaDivergence30m"><option value="">—</option><option>Yes</option><option>No</option><option>N/A</option></select></div>
-        <div><label>Book Imbalance at Entry <span class="hint" style="font-weight:400">(ratio, + bid heavy / − ask heavy)</span></label><input id="teBookImbalance" type="number" step="0.1"/></div>
-
-        <div><label>Liquidity Resting at Level</label><select id="teLiquidityAtLevel"><option value="">—</option><option>Thin</option><option>Normal</option><option>Stacked</option></select></div>
-        <div><label>Stacked Imbalances <span class="hint" style="font-weight:400">(count)</span></label><input id="teStackedImbalances" type="number" step="1"/></div>
-        <div><label>Imbalance Side</label><select id="teImbalanceSide"><option value="">—</option><option>Buy</option><option>Sell</option></select></div>
-        <div><label>Absorption Side</label><select id="teAbsorptionSide"><option value="">—</option><option>Buyers Absorbed (High)</option><option>Sellers Absorbed (Low)</option></select></div>
-
-        <div><label>Exhaustion <span class="hint" style="font-weight:400">(high volume, no follow-through)</span></label><select id="teExhaustion"><option value="">—</option><option>Yes</option><option>No</option></select></div>
-        <div><label>Delta at Entry <span class="hint" style="font-weight:400">(reading on entry candle)</span></label><input id="teDeltaAtEntry" type="number" step="1"/></div>
-        <div><label>Delta Absolute</label><input id="teDeltaAbsolute" type="number" step="1"/></div>
-        <div><label>Cumulative Delta Trend</label><select id="teCumDeltaTrend"><option value="">—</option><option>Rising</option><option>Falling</option><option>Flat</option></select></div>
-        <div><label>Rotations Before Entry <span class="hint" style="font-weight:400">(times level tested first)</span></label><input id="teRotationsBeforeEntry" type="number" step="1"/></div>
-
-        <div><label>POC/Value Area Position at Entry</label><select id="tePocVaPosition"><option value="">—</option><option>Inside Value</option><option>Outside Value</option><option>At VAL</option><option>At VAH</option><option>At POC</option></select></div>
-
-        <div><label>1H Candle Entered After <span class="hint" style="font-weight:400">(the hourly candle immediately before entry)</span></label><select id="teH1CandleHour"><option value="">—</option></select></div>
-        <div><label>1H Candle Delta</label><input id="teH1Delta" type="number" step="1"/></div>
-        <div><label>1H Candle POC</label><input id="teH1Poc" type="number" step="0.01"/></div>
-        <div><label>1H Candle VAH</label><input id="teH1Vah" type="number" step="0.01"/></div>
-        <div><label>1H Candle VAL</label><input id="teH1Val" type="number" step="0.01"/></div>
-        <div><label>1H Candle Pattern</label><select id="teH1CandlePattern"><option value="">—</option><option>Morning Star</option><option>Evening Star</option><option>Bullish Engulfing</option><option>Bearish Engulfing</option><option>Bullish Pin Bar</option><option>Bearish Pin Bar</option><option>Doji</option><option>Hammer</option><option>Shooting Star</option><option>Inside Bar</option><option>Outside Bar</option></select></div>
-
-        <div><label>VWAP</label><select id="teVwapLevel"><option value="">—</option><option>Middle</option><option>Std1</option><option>Std2</option></select></div>
-        <div><label>Bollinger Bands</label><select id="teBollingerBand"><option value="">—</option><option>Middle</option><option>Below Lower Band</option><option>Above Lower Band</option><option>Upper Band</option><option>Lower Band</option></select></div>
-        <div><label>EMA (6m Timeframe)</label><select id="teEma6m"><option value="">—</option><option>5</option><option>8</option></select></div>
-        <div><label>EMA (30m Timeframe)</label><select id="teEma30m"><option value="">—</option><option>21</option><option>60</option></select></div>
-
-        <div><label>EMA (1h Timeframe)</label><select id="teEma1h"><option value="">—</option><option>8</option><option>21</option><option>60</option></select></div>
+        <div><label>Day Type</label><select id="teDayType"><option value="">—</option><option>Trend Day</option><option>Non-Trend Day</option></select></div>
+        <div><label>GEX</label><select id="teGex"><option value="">—</option><option>Positive</option><option>Zero</option><option>Negative</option></select></div>
+        <div><label>GEX Additional</label><select id="teGexAdditional"><option value="">—</option><option>Aggression</option><option>Put Wall</option><option>Call Wall</option></select></div>
+        <div><label>Strategy</label><select id="teStrategy"><option value="">—</option><option>LBF</option><option>LAF</option><option>LVN</option><option>HVN</option></select></div>
 
         <div style="grid-column:1/-1">
-          <label>Institutional Trades <span class="hint" style="font-weight:400">(select all that apply)</span></label>
-          <div id="teInstitutionalTrades" class="checkrow">
-            <label class="chk-item"><input type="checkbox" value="Iceberg"/> Iceberg</label>
-            <label class="chk-item"><input type="checkbox" value="Big Trades - Buy"/> Big Trades - Buy</label>
-            <label class="chk-item"><input type="checkbox" value="Big Trades - Sell"/> Big Trades - Sell</label>
-            <label class="chk-item"><input type="checkbox" value="Aggression to the Downside"/> Aggression to the Downside</label>
-            <label class="chk-item"><input type="checkbox" value="Aggression to the Upside"/> Aggression to the Upside</label>
-            <label class="chk-item"><input type="checkbox" value="Pull Liquidity"/> Pull Liquidity</label>
-            <label class="chk-item"><input type="checkbox" value="Spoofing / Layering"/> Spoofing / Layering</label>
+          <label>Additional Signals <span class="hint" style="font-weight:400">(select all that apply)</span></label>
+          <div id="teAdditionalSignals" class="checkrow">
+            <label class="chk-item"><input type="checkbox" value="Trapped Buyers"/> Trapped Buyers</label>
+            <label class="chk-item"><input type="checkbox" value="Trapped Sellers"/> Trapped Sellers</label>
+            <label class="chk-item"><input type="checkbox" value="Positive Delta"/> Positive Delta</label>
+            <label class="chk-item"><input type="checkbox" value="Negative Delta"/> Negative Delta</label>
+            <label class="chk-item"><input type="checkbox" value="Footprint Trapped 30m"/> Footprint Trapped Buyers/Sellers 30m</label>
+            <label class="chk-item"><input type="checkbox" value="Footprint Trapped 15m"/> Footprint Trapped Buyers/Sellers 15m</label>
+            <label class="chk-item"><input type="checkbox" value="Footprint Trapped 5m"/> Footprint Trapped Buyers/Sellers 5m</label>
           </div>
         </div>
-        <div><label>Emotional State <span class="hint" style="font-weight:400">(at the moment of entry)</span></label><select id="teEmotionalState"><option value="">—</option><option>Calm / Confident</option><option>Excited / Euphoric</option><option>Anxious / Nervous</option><option>FOMO</option><option>Impatient</option><option>Frustrated / Angry</option><option>Revenge</option><option>Bored</option><option>Tired / Low Energy</option><option>Hesitant</option></select></div>
-        <div><label>Followed Plan? <span class="hint" style="font-weight:400">(was this trade in your plan/rules)</span></label><select id="tePlanAdherence"><option value="">—</option><option>Yes</option><option>Partial</option><option>No</option></select></div>
-        <div style="grid-column:1/-1">
-          <label>Mistake Tags <span class="hint" style="font-weight:400">(select all that apply — leave blank for a clean trade)</span></label>
-          <div id="teMistakeTags" class="checkrow">
-            <label class="chk-item"><input type="checkbox" value="FOMO Entry"/> FOMO Entry</label>
-            <label class="chk-item"><input type="checkbox" value="Revenge Trade"/> Revenge Trade</label>
-            <label class="chk-item"><input type="checkbox" value="Moved Stop Loss"/> Moved Stop Loss</label>
-            <label class="chk-item"><input type="checkbox" value="Oversized Position"/> Oversized Position</label>
-            <label class="chk-item"><input type="checkbox" value="Hesitated / Late Entry"/> Hesitated / Late Entry</label>
-            <label class="chk-item"><input type="checkbox" value="Chased Price"/> Chased Price</label>
-            <label class="chk-item"><input type="checkbox" value="Ignored Plan / Rules"/> Ignored Plan / Rules</label>
-            <label class="chk-item"><input type="checkbox" value="Overtraded"/> Overtraded</label>
-            <label class="chk-item"><input type="checkbox" value="Cut Winner Early"/> Cut Winner Early</label>
-            <label class="chk-item"><input type="checkbox" value="Held Loser Too Long"/> Held Loser Too Long</label>
-            <label class="chk-item"><input type="checkbox" value="Averaged Down a Loser"/> Averaged Down a Loser</label>
-            <label class="chk-item"><input type="checkbox" value="No Valid Setup (Impulse)"/> No Valid Setup (Impulse)</label>
-          </div>
-        </div>
+        <div><label>Did I Follow My Plan?</label><select id="tePlanAdherence"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+        <div style="grid-column:1/-1" id="tePlanDeviationRow" class="hidden"><label>What Happened <span class="hint" style="font-weight:400">(why the trade went off-plan)</span></label><textarea id="tePlanDeviationNotes" placeholder="What pulled you off the plan — a level you hadn't marked, moved the stop, sizing, FOMO..."></textarea></div>
         <div style="grid-column:1/-1">
           <label>Screenshots <span class="hint" style="font-weight:400">(chart, footprint, bookmap — compressed and saved with the entry)</span></label>
           <input id="teScreenshotsInput" type="file" accept="image/*" multiple/>
           <div id="teScreenshotsList" style="margin-top:8px"></div>
         </div>
-        <div style="grid-column:1/-1"><label>Notes</label><textarea id="teNotes" placeholder="What made this entry good or bad — hesitation, chased, perfect level, jumped the gun..."></textarea></div>
+        <div style="grid-column:1/-1"><label>Notes</label><textarea id="teNotes" placeholder="Anything else worth remembering about this trade..."></textarea></div>
       </div>
       <p id="teEntryFormError" class="hint" style="color:#f87171;font-weight:700;display:none"></p>
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
@@ -492,65 +420,23 @@
 
 <section id="teStats" class="page hidden">
   <div class="grid" style="margin-bottom:14px">
-    <div class="metric span-3"><div class="label">Entries Logged</div><div class="value" id="teMCount">0</div></div>
-    <div class="metric span-3"><div class="label">Win Rate</div><div class="value" id="teMWinRate">—</div></div>
-    <div class="metric span-3"><div class="label">Avg Result R</div><div class="value" id="teMAvgR">—</div></div>
-    <div class="metric span-3"><div class="label">Avg Slippage</div><div class="value" id="teMAvgSlip">—</div></div>
-  </div>
-
-  <div class="grid" style="margin-bottom:14px">
-    <div class="metric span-4"><div class="label">Avg MFE</div><div class="value" id="teMAvgMfe">—</div></div>
-    <div class="metric span-4"><div class="label">Avg MAE</div><div class="value" id="teMAvgMae">—</div></div>
-    <div class="metric span-4"><div class="label">Avg R Captured</div><div class="value" id="teMAvgCapture">—</div></div>
+    <div class="metric span-12"><div class="label">Entries Logged</div><div class="value" id="teMCount">0</div></div>
   </div>
 
   <div class="grid">
-    <div class="card span-6"><h2>Execution Win/Loss by Day of Week</h2><div id="entryDayBars"></div></div>
-    <div class="card span-6"><h2>Execution Win/Loss by Session</h2><div id="entrySessionBars"></div></div>
-    <div class="card span-12"><h2>Execution Win/Loss by Time of Day</h2><div id="entryHourBars"></div></div>
-    <div class="card span-12"><h2>By Setup Type</h2><p class="hint">Win rate and average result by what triggered the entry — the fastest way to see which setups you actually execute well. Avg Distance From Ref is direction-aware: positive means you chased further from the level in your trade's own direction.</p><div class="tablewrap"><table id="teSetupTable"></table></div></div>
-    <div class="card span-6"><h2>By Entry Delay</h2><p class="hint">Time between the setup forming (Signal Time) and your actual fill (Entry Time). Hesitation tends to show up as worse results in the slower buckets.</p><div class="tablewrap"><table id="teDelayTable"></table></div></div>
-    <div class="card span-6"><h2>By Order Type</h2><p class="hint">Compares execution method against average slippage from your intended price.</p><div class="tablewrap"><table id="teOrderTypeTable"></table></div></div>
     <div class="card span-12"><h2>By Time of Day</h2><p class="hint">Entry Time grouped into 4-hour blocks, using your browser's local time.</p><div class="tablewrap"><table id="teHourTable"></table></div></div>
     <div class="card span-12"><h2>By Week of Month</h2><p class="hint">Entry Date's day-of-month grouped into calendar weeks (1-7, 8-14, 15-21, 22-28, 29-31).</p><div class="tablewrap"><table id="teWeekOfMonthTable"></table></div></div>
-
-    <div class="card span-6"><h2>By Direction</h2><div class="tablewrap"><table id="teDirectionTable"></table></div></div>
-    <div class="card span-6"><h2>By Session Type</h2><div class="tablewrap"><table id="teSessionTypeTable"></table></div></div>
-    <div class="card span-6"><h2>By Volume Node</h2><div class="tablewrap"><table id="teVolumeNodeTable"></table></div></div>
-    <div class="card span-6"><h2>By Footprint</h2><div class="tablewrap"><table id="teFootprintTable"></table></div></div>
-    <div class="card span-6"><h2>By Delta Divergence (30m)</h2><div class="tablewrap"><table id="teDeltaDivTable"></table></div></div>
-    <div class="card span-6"><h2>By Cumulative Delta Trend</h2><div class="tablewrap"><table id="teCumDeltaTable"></table></div></div>
-    <div class="card span-6"><h2>By Delta at Entry</h2><p class="hint">Positive = buy-side delta on the entry candle, Negative = sell-side.</p><div class="tablewrap"><table id="teDeltaDirTable"></table></div></div>
-    <div class="card span-6"><h2>By Liquidity at Level</h2><div class="tablewrap"><table id="teLiquidityTable"></table></div></div>
-    <div class="card span-6"><h2>By Book Imbalance</h2><p class="hint">Positive = bid-heavy book at entry, Negative = ask-heavy.</p><div class="tablewrap"><table id="teBookImbDirTable"></table></div></div>
-    <div class="card span-6"><h2>By Imbalance Side</h2><div class="tablewrap"><table id="teImbalanceSideTable"></table></div></div>
-    <div class="card span-6"><h2>By Absorption Side</h2><div class="tablewrap"><table id="teAbsorptionSideTable"></table></div></div>
-    <div class="card span-6"><h2>By Exhaustion</h2><div class="tablewrap"><table id="teExhaustionTable"></table></div></div>
-    <div class="card span-12"><h2>By POC/Value Area Position at Entry</h2><div class="tablewrap"><table id="tePocVaTable"></table></div></div>
-
-    <div class="card span-12"><h2>By 1H Candle Entered After</h2><p class="hint">Which clock-hour 1H candle your entry followed — win rate and average result grouped by that hour, regardless of your exact entry time.</p><div class="tablewrap"><table id="teH1HourTable"></table></div></div>
-    <div class="card span-6"><h2>By 1H Candle Delta</h2><p class="hint">Positive = buy-side delta on the 1H candle you entered after, Negative = sell-side.</p><div class="tablewrap"><table id="teH1DeltaTable"></table></div></div>
-    <div class="card span-6"><h2>By 1H Candle POC/VA Position</h2><p class="hint">Derived from your Entry Price vs. that candle's POC/VAH/VAL — where you got filled relative to its value area.</p><div class="tablewrap"><table id="teH1PocVaTable"></table></div></div>
-    <div class="card span-12"><h2>By 1H Candle Pattern</h2><div class="tablewrap"><table id="teH1PatternTable"></table></div></div>
-
-    <div class="card span-12"><h2>By Institutional Trade Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows.</p><div class="tablewrap"><table id="teInstTagTable"></table></div></div>
   </div>
 </section>
 
 <section id="psychology" class="page hidden">
   <div class="grid" style="margin-bottom:14px">
-    <div class="metric span-3"><div class="label">Entries With Psych Data</div><div class="value" id="psyMCount">0</div></div>
-    <div class="metric span-3"><div class="label">Followed Plan Rate</div><div class="value" id="psyMAdherenceRate">—</div></div>
-    <div class="metric span-3"><div class="label">Most Common Mistake</div><div class="value" id="psyMTopMistake" style="font-size:16px">—</div></div>
-    <div class="metric span-3"><div class="label">Avg R — Mistake-Tagged vs Clean</div><div class="value" id="psyMMistakeVsClean" style="font-size:16px">—</div></div>
+    <div class="metric span-6"><div class="label">Entries Logged</div><div class="value" id="psyMCount">0</div></div>
+    <div class="metric span-6"><div class="label">Followed Plan Rate</div><div class="value" id="psyMAdherenceRate">—</div></div>
   </div>
 
   <div class="grid">
-    <div class="card span-6"><h2>By Emotional State</h2><p class="hint">Win rate and average result by how you described feeling at the moment of entry — fill this in on every entry to see which states actually cost you money.</p><div class="tablewrap"><table id="psyEmotionTable"></table></div></div>
-    <div class="card span-6"><h2>By Plan Adherence</h2><p class="hint">Compares trades you flagged as in-plan ("Yes"), a partial deviation, or entirely off-plan ("No"). The gap between Yes and No is the price of breaking your own rules.</p><div class="tablewrap"><table id="psyAdherenceTable"></table></div></div>
-    <div class="card span-12"><h2>By Mistake Tag</h2><p class="hint">Each tag counted once per entry it was checked on — an entry with two tags checked counts toward both rows. Rows are ordered by n (most frequent first) — scan the Avg R column to see which of your frequent mistakes are also the costliest.</p><div class="tablewrap"><table id="psyMistakeTagTable"></table></div></div>
-    <div class="card span-6"><h2>Performance After Losing Streak</h2><p class="hint">Buckets each entry (across all markets, ordered by date/entry time) by how many losing trades in a row immediately preceded it — a falling Avg R as the streak grows is the signature of tilt/revenge-trading. Requires Result R filled in.</p><div class="tablewrap"><table id="psyLossStreakTable"></table></div></div>
-    <div class="card span-6"><h2>Performance After Winning Streak</h2><p class="hint">Same idea in the other direction — a falling Avg R after a run of wins can flag overconfidence (oversizing, skipping the plan) creeping in. Requires Result R filled in.</p><div class="tablewrap"><table id="psyWinStreakTable"></table></div></div>
+    <div class="card span-12"><h2>By Plan Adherence</h2><p class="hint">How many logged entries you flagged as in-plan ("Yes") vs off-plan ("No"). The deviation notes on each off-plan entry are in the Entry Log.</p><div class="tablewrap"><table id="psyAdherenceTable"></table></div></div>
   </div>
 </section>
 
@@ -973,7 +859,7 @@ const fields=["date","day","sessionType","market","dayType","openType","bias","o
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
 // never collide with the session form's ids (both live in the same document at once).
-const teFieldNames=["Date","SessionType","Market","Direction","SetupType","OrderType","SignalTime","EntryTime","IntendedPrice","EntryPrice","StopLossPrice","ExitPrice","ReferenceLabel","ReferencePrice","ResultR","MfeR","MaeR","Volume","VolumeNode","Footprint","DeltaDivergence30m","BookImbalance","LiquidityAtLevel","StackedImbalances","ImbalanceSide","AbsorptionSide","Exhaustion","DeltaAtEntry","DeltaAbsolute","CumDeltaTrend","RotationsBeforeEntry","PocVaPosition","H1CandleHour","H1Delta","H1Poc","H1Vah","H1Val","H1CandlePattern","VwapLevel","BollingerBand","Ema6m","Ema30m","Ema1h","EmotionalState","PlanAdherence","Notes"];
+const teFieldNames=["Date","SessionType","Market","EntryTime","EntryPrice","StopLossPrice","ExitPrice","MarketCondition","DayType","Gex","GexAdditional","Strategy","PlanAdherence","PlanDeviationNotes","Notes"];
 function teId(name){return "te"+name}
 function teKey(name){return name[0].toLowerCase()+name.slice(1)}
 // Institutional Trades and Mistake Tags are fixed checkbox groups (multiple selections), not
@@ -1668,70 +1554,8 @@ document.getElementById("dxyWindowButtons").addEventListener("click",e=>{
 });
 // --- Trade Entries: computed fields & grouping ---
 function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t);if(!m)return null;return Number(m[1])*60+Number(m[2])}
-// Wraps past midnight rather than discarding: a market like gold trades nearly 24h, so a
-// Signal Time of 23:52 and Entry Time of 00:04 is a real 12-minute delay, not invalid data.
-function entryDelayMin(e){const s=timeToMinutes(e.signalTime),t=timeToMinutes(e.entryTime);if(s==null||t==null)return null;let d=t-s;if(d<0)d+=1440;return d}
-// Shared "flip the sign for a Short vs a Long" primitive — every direction-aware price-distance
-// metric below (distanceFromRef, slippagePts, computeResultR, stopSlippagePts) is one call to
-// this with a different (worse-side, better-side) price pair, instead of five hand-written copies
-// of the same ternary. Returns null for anything other than exactly "Long"/"Short" — notably the
-// default blank Direction — rather than silently treating an unset Direction as "Long".
-function directional(direction,a,b){
-  if(direction==="Short")return a-b;
-  if(direction==="Long")return b-a;
-  return null;
-}
-// Direction-aware like slippagePts below (positive = chased further from the reference in the
-// trade's own direction) rather than a raw signed price diff — otherwise averaging this across a
-// setup used both Long and Short cancels toward zero even when every trade individually chased.
-function distanceFromRef(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.referencePrice))return null;return directional(e.direction,e.referencePrice,e.entryPrice)}
-// Positive = worse fill (paid more on a Long, sold for less on a Short) than intended.
-function slippagePts(e){if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.intendedPrice))return null;return directional(e.direction,e.intendedPrice,e.entryPrice)}
-// R = P&L / initial risk, where risk is the entry-to-stop distance. A stop that isn't genuinely
-// on the other side of entry (risk<=0) can't define a risk unit, so that's "can't compute" rather
-// than a divide-by-zero or a nonsense sign — same for a Direction that isn't Long/Short yet.
-// Takes an entry-shaped object like its siblings above (not positional args) so it composes the
-// same way they do.
-function computeResultR(e){
-  if(!Number.isFinite(e.entryPrice)||!Number.isFinite(e.stopLossPrice)||!Number.isFinite(e.exitPrice))return null;
-  const risk=directional(e.direction,e.stopLossPrice,e.entryPrice);
-  if(risk==null||risk<=0)return null;
-  const pnl=directional(e.direction,e.entryPrice,e.exitPrice);
-  return pnl/risk;
-}
-// How far your actual exit landed from your planned stop, same "positive = worse" convention as
-// slippagePts above. Doesn't assume the exit WAS a stop-out — a winner exiting nowhere near the
-// stop just shows a large negative number, which is expected (it means you got out much better
-// than your worst case, not that anything is wrong).
-function stopSlippagePts(e){
-  if(!Number.isFinite(e.stopLossPrice)||!Number.isFinite(e.exitPrice))return null;
-  return directional(e.direction,e.exitPrice,e.stopLossPrice);
-}
-function enrichEntries(arr){return arr.map(e=>({...e,entryDelayMin:entryDelayMin(e),distanceFromRef:distanceFromRef(e),slippagePts:slippagePts(e),stopSlippagePts:stopSlippagePts(e),h1PocVaPosition:h1PocVaPosition(e),captureR:captureR(e)}))}
-// Where the entry price landed relative to the value area of the 1H candle it followed — derived
-// from the numeric levels instead of a manual pick, since the trader logs the candle's own
-// POC/VAH/VAL rather than classifying the relationship themselves.
-function h1PocVaPosition(e){
-  const p=e.entryPrice,poc=e.h1Poc,vah=e.h1Vah,val=e.h1Val;
-  if(!Number.isFinite(p)||!Number.isFinite(vah)||!Number.isFinite(val)||vah<=val)return null;
-  // 5% of the VA width as the "at POC" tolerance band, so an entry a tick or two off the exact
-  // POC print still buckets as "At POC" rather than "Inside VA".
-  if(Number.isFinite(poc)&&Math.abs(p-poc)<=(vah-val)*0.05)return"At POC";
-  if(p>vah)return"Above VAH";
-  if(p<val)return"Below VAL";
-  return"Inside VA";
-}
-// Fraction of the max favorable excursion that the trade's actual result captured — only
-// meaningful once MFE is a positive distance, otherwise there's nothing to divide into.
-function captureR(e){return(Number.isFinite(e.resultR)&&Number.isFinite(e.mfeR)&&e.mfeR>0)?e.resultR/e.mfeR:null}
-const DELAY_BUCKETS=[{label:"<1 min",test:d=>d<1},{label:"1-5 min",test:d=>d>=1&&d<5},{label:"5-15 min",test:d=>d>=5&&d<15},{label:"15-60 min",test:d=>d>=15&&d<60},{label:"60+ min",test:d=>d>=60}];
-function delayBucketOf(d){if(!Number.isFinite(d))return null;const b=DELAY_BUCKETS.find(b=>b.test(d));return b?b.label:null}
 const HOUR_BUCKETS=[{label:"00:00–04:00",lo:0,hi:4},{label:"04:00–08:00",lo:4,hi:8},{label:"08:00–12:00",lo:8,hi:12},{label:"12:00–16:00",lo:12,hi:16},{label:"16:00–20:00",lo:16,hi:20},{label:"20:00–24:00",lo:20,hi:24}];
 function hourBucketOf(entryTime){const m=timeToMinutes(entryTime);if(m==null)return null;const h=Math.floor(m/60);const b=HOUR_BUCKETS.find(b=>h>=b.lo&&h<b.hi);return b?b.label:null}
-// One label per clock hour (not the 4-hour HOUR_BUCKETS above) — this is the specific 1H candle
-// a trade entry followed, picked directly on the entry form rather than derived from entry time.
-const H1_HOUR_BUCKETS=Array.from({length:24},(_,h)=>({label:`${String(h).padStart(2,"0")}:00–${String((h+1)%24).padStart(2,"0")}:00`}));
-teH1CandleHour.insertAdjacentHTML("beforeend",H1_HOUR_BUCKETS.map(b=>`<option>${b.label}</option>`).join(""));
 // Shared by entryWeekday/weekOfMonthOf. Parsed with an explicit local midnight time so this
 // doesn't shift a day backward in timezones behind UTC (a bare `new Date("2026-07-18")` parses
 // as UTC midnight), and cross-checked against the y/m/d it was built from because JS silently
@@ -1759,8 +1583,6 @@ function weekOfMonthOf(e){
   const b=WEEK_OF_MONTH_BUCKETS.find(b=>day>=b.lo&&day<b.hi);
   return b?b.label:null;
 }
-function avgOrNull(nums){const x=nums.filter(Number.isFinite);return x.length?avg(x):null}
-function entryWinRate(arr){const x=arr.filter(e=>Number.isFinite(e.resultR));return x.length?x.filter(e=>e.resultR>0).length/x.length:null}
 const JS_WEEKDAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 // Trade entries have no manually-picked Day field like sessions do — weekday is derived from the
 // entry's Date via parseEntryDate.
@@ -1768,21 +1590,15 @@ function entryWeekday(e){
   const d=parseEntryDate(e);
   return d?JS_WEEKDAY_NAMES[d.getDay()]:null;
 }
-function entryAvgR(arr){return avgOrNull(arr.map(e=>e.resultR))}
-function entryAvgSlip(arr){return avgOrNull(arr.map(e=>e.slippagePts))}
-function entryGroupStats(arr){
-  return{
-    n:arr.length,
-    winRate:entryWinRate(arr),
-    avgR:entryAvgR(arr),
-    avgDelay:avgOrNull(arr.map(e=>e.entryDelayMin)),
-    avgDist:avgOrNull(arr.map(e=>e.distanceFromRef)),
-    avgSlip:entryAvgSlip(arr)
-  };
+// Count-only grouping for the surviving Execution Stats tables — win rate / avg R went away with
+// Result R, so each bucket is just a tally. `order` fixes the row order (and filters to known
+// buckets); omit it to list buckets in first-seen order.
+function entryCountRows(arr,bucketOf,order){
+  const map=new Map();
+  arr.forEach(x=>{const b=bucketOf(x);if(b==null)return;map.set(b,(map.get(b)||0)+1)});
+  return (order||[...map.keys()]).filter(l=>map.has(l)).map(l=>({label:l,n:map.get(l)}));
 }
-// Same "collect column values, tint each cell against that column's own range" idea as heatCol,
-// but also renders the <table> markup so each of the four entry-stat tables (Setup/Delay/Order
-// Type/Hour) can be built from just its rows + a column spec instead of hand-writing the HTML.
+// Renders one count table: rows are {label,n}, the n column tinted against its own range like heatCol.
 function renderEntryStatTable(id,rows,headers,rowToCells,colSpecs){
   const table=document.getElementById(id);
   if(!rows.length){table.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody><tr><td colspan="${headers.length}">No entries logged yet.</td></tr></tbody>`;return}
@@ -1791,308 +1607,37 @@ function renderEntryStatTable(id,rows,headers,rowToCells,colSpecs){
     rows.map((r,i)=>`<tr>${rowToCells(r).map((c,ci)=>`<td style="${colStyles[ci]?colStyles[ci][i]:""}">${c}</td>`).join("")}</tr>`).join("")
   }</tbody>`;
 }
+function renderCountTable(id,header,rows){
+  renderEntryStatTable(id,rows,[header,"n"],r=>[escapeHtml(String(r.label)),r.n],[null,{key:"n"}]);
+}
 function renderEntryStats(){
-  const e=enrichEntries(tradeEntries);
-  teMCount.textContent=e.length;
-  const wr=entryWinRate(e), ar=entryAvgR(e), as=entryAvgSlip(e);
-  teMWinRate.textContent=wr!=null?pct(wr):"—";
-  teMAvgR.textContent=ar!=null?fmt(ar)+"R":"—";
-  teMAvgSlip.textContent=as!=null?fmt(as):"—";
-  const mfeAvg=avgOrNull(e.map(x=>x.mfeR)), maeAvg=avgOrNull(e.map(x=>x.maeR)), capAvg=avgOrNull(e.map(x=>x.captureR));
-  teMAvgMfe.textContent=mfeAvg!=null?fmt(mfeAvg)+"R":"—";
-  teMAvgMae.textContent=maeAvg!=null?fmt(maeAvg)+"R":"—";
-  teMAvgCapture.textContent=capAvg!=null?pct(capAvg):"—";
-
-  const setupMap=new Map();
-  e.forEach(x=>{const key=(x.setupType||"").trim()||"Unspecified";if(!setupMap.has(key))setupMap.set(key,[]);setupMap.get(key).push(x)});
-  const setupRows=[...setupMap.entries()].map(([label,arr])=>({label,...entryGroupStats(arr)})).sort((a,b)=>b.n-a.n);
-  renderEntryStatTable("teSetupTable",setupRows,["Setup","n","Win Rate","Avg R","Avg Delay (min)","Avg Distance From Ref"],
-    r=>[escapeHtml(r.label),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—",r.avgDelay!=null?fmt(r.avgDelay,1):"—",r.avgDist!=null?fmt(r.avgDist):"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true},{key:"avgDelay"},{key:"avgDist",diverge:true}]);
-
-  const delayMap=new Map();
-  e.forEach(x=>{const b=delayBucketOf(x.entryDelayMin);if(!b)return;if(!delayMap.has(b))delayMap.set(b,[]);delayMap.get(b).push(x)});
-  const delayRows=DELAY_BUCKETS.map(b=>({label:b.label,...entryGroupStats(delayMap.get(b.label)||[])})).filter(r=>r.n>0);
-  renderEntryStatTable("teDelayTable",delayRows,["Delay","n","Win Rate","Avg R"],
-    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-
-  const otMap=new Map();
-  e.forEach(x=>{const key=x.orderType||"Unspecified";if(!otMap.has(key))otMap.set(key,[]);otMap.get(key).push(x)});
-  const otRows=[...otMap.entries()].map(([label,arr])=>({label,...entryGroupStats(arr)})).sort((a,b)=>b.n-a.n);
-  renderEntryStatTable("teOrderTypeTable",otRows,["Order Type","n","Win Rate","Avg R","Avg Slippage"],
-    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—",r.avgSlip!=null?fmt(r.avgSlip):"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true},{key:"avgSlip",diverge:true}]);
-
-  const hourMap=new Map();
-  e.forEach(x=>{const b=hourBucketOf(x.entryTime);if(!b)return;if(!hourMap.has(b))hourMap.set(b,[]);hourMap.get(b).push(x)});
-  const hourRows=HOUR_BUCKETS.map(b=>({label:b.label,...entryGroupStats(hourMap.get(b.label)||[])})).filter(r=>r.n>0);
-  renderEntryStatTable("teHourTable",hourRows,["Hour","n","Win Rate","Avg R"],
-    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-
-  const womMap=new Map();
-  e.forEach(x=>{const b=weekOfMonthOf(x);if(!b)return;if(!womMap.has(b))womMap.set(b,[]);womMap.get(b).push(x)});
-  const womRows=WEEK_OF_MONTH_BUCKETS.map(b=>({label:b.label,...entryGroupStats(womMap.get(b.label)||[])})).filter(r=>r.n>0);
-  renderEntryStatTable("teWeekOfMonthTable",womRows,["Week","n","Win Rate","Avg R"],
-    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-
-  renderCategoricalEntryTable("teDirectionTable","Direction",e,x=>x.direction||null);
-  renderCategoricalEntryTable("teSessionTypeTable","Session",e,x=>x.sessionType||null);
-  renderCategoricalEntryTable("teVolumeNodeTable","Volume Node",e,x=>x.volumeNode||null);
-  renderCategoricalEntryTable("teFootprintTable","Footprint",e,x=>x.footprint||null);
-  renderCategoricalEntryTable("teDeltaDivTable","Delta Divergence (30m)",e,x=>x.deltaDivergence30m||null);
-  renderCategoricalEntryTable("teCumDeltaTable","Cumulative Delta Trend",e,x=>x.cumDeltaTrend||null);
-  renderCategoricalEntryTable("teDeltaDirTable","Delta at Entry",e,x=>signBucket(x.deltaAtEntry));
-  renderCategoricalEntryTable("teLiquidityTable","Liquidity at Level",e,x=>x.liquidityAtLevel||null);
-  renderCategoricalEntryTable("teBookImbDirTable","Book Imbalance",e,x=>signBucket(x.bookImbalance));
-  renderCategoricalEntryTable("teImbalanceSideTable","Imbalance Side",e,x=>x.imbalanceSide||null);
-  renderCategoricalEntryTable("teAbsorptionSideTable","Absorption Side",e,x=>x.absorptionSide||null);
-  renderCategoricalEntryTable("teExhaustionTable","Exhaustion",e,x=>x.exhaustion||null);
-  renderCategoricalEntryTable("tePocVaTable","POC/VA Position",e,x=>x.pocVaPosition||null);
-
-  const h1HourMap=new Map();
-  e.forEach(x=>{if(!x.h1CandleHour)return;if(!h1HourMap.has(x.h1CandleHour))h1HourMap.set(x.h1CandleHour,[]);h1HourMap.get(x.h1CandleHour).push(x)});
-  const h1HourRows=H1_HOUR_BUCKETS.map(b=>({label:b.label,...entryGroupStats(h1HourMap.get(b.label)||[])})).filter(r=>r.n>0);
-  renderEntryStatTable("teH1HourTable",h1HourRows,["1H Candle","n","Win Rate","Avg R"],
-    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-  renderCategoricalEntryTable("teH1DeltaTable","1H Candle Delta",e,x=>signBucket(x.h1Delta));
-  renderCategoricalEntryTable("teH1PocVaTable","1H Candle POC/VA Position",e,x=>x.h1PocVaPosition);
-  renderCategoricalEntryTable("teH1PatternTable","1H Candle Pattern",e,x=>x.h1CandlePattern||null);
-
-  renderInstitutionalTagTable("teInstTagTable",e);
+  teMCount.textContent=tradeEntries.length;
+  renderCountTable("teHourTable","Hour",entryCountRows(tradeEntries,x=>hourBucketOf(x.entryTime),HOUR_BUCKETS.map(b=>b.label)));
+  renderCountTable("teWeekOfMonthTable","Week",entryCountRows(tradeEntries,weekOfMonthOf,WEEK_OF_MONTH_BUCKETS.map(b=>b.label)));
 }
 function renderPsychologyStats(){
-  const e=enrichEntries(tradeEntries);
-  const withPsych=e.filter(x=>x.emotionalState||x.planAdherence||(x.mistakeTags||[]).length);
-  psyMCount.textContent=withPsych.length;
-
-  // "Partial" counts toward the denominator (it's a real, rated trade) but not the numerator (it
-  // wasn't fully followed) — keeps this rate consistent with the Yes/Partial/No split shown in the
-  // By Plan Adherence table below, instead of silently excluding Partial from both sides.
-  const adherenceRated=e.filter(x=>x.planAdherence==="Yes"||x.planAdherence==="No"||x.planAdherence==="Partial");
-  const followedCount=adherenceRated.filter(x=>x.planAdherence==="Yes").length;
-  psyMAdherenceRate.textContent=adherenceRated.length?pct(followedCount/adherenceRated.length):"—";
-
-  // "Clean" is scoped to entries that actually got psychology data logged (withPsych), not every
-  // entry with an empty mistakeTags array — otherwise legacy entries and ones where the trader just
-  // skipped the checkboxes would pad out the "no mistakes" side of the comparison below.
-  const tagged=[],clean=[];
-  withPsych.forEach(x=>((x.mistakeTags||[]).length>0?tagged:clean).push(x));
-  const taggedAvgR=entryAvgR(tagged), cleanAvgR=entryAvgR(clean);
-  psyMMistakeVsClean.textContent=(taggedAvgR!=null&&cleanAvgR!=null)?`${fmt(taggedAvgR)}R vs ${fmt(cleanAvgR)}R`:"—";
-
-  renderCategoricalEntryTable("psyEmotionTable","Emotional State",e,x=>x.emotionalState||null);
-  renderCategoricalEntryTable("psyAdherenceTable","Plan Adherence",e,x=>x.planAdherence||null);
-  const mistakeRows=renderMistakeTagTable("psyMistakeTagTable",e);
-  psyMTopMistake.textContent=mistakeRows.length?`${mistakeRows[0].label} (${mistakeRows[0].n})`:"—";
-
-  const{lossBuckets,winBuckets}=precedingStreakBuckets(e);
-  renderStreakTable("psyLossStreakTable",lossBuckets,"loss");
-  renderStreakTable("psyWinStreakTable",winBuckets,"win");
+  psyMCount.textContent=tradeEntries.length;
+  const rated=tradeEntries.filter(x=>x.planAdherence==="Yes"||x.planAdherence==="No");
+  const followed=rated.filter(x=>x.planAdherence==="Yes").length;
+  psyMAdherenceRate.textContent=rated.length?pct(followed/rated.length):"—";
+  renderCountTable("psyAdherenceTable","Followed Plan?",entryCountRows(tradeEntries,x=>x.planAdherence||null,["Yes","No"]));
 }
-// Shared renderer for a "diverging mark per bucket" chart: mark sits at zero-to-avgR (bar) or right
-// at avgR (dot), green=net-winning bucket, red=net-losing. Pass {markShape:"dot",slotW} for a dense
-// per-hour dot plot; bars are the default. A group with n===0 still reserves its axis slot (so the
-// axis stays continuous/complete) but draws no mark, just a dimmed label — currently only exercised
-// by the time-of-day chart, since the day-of-week/session callers filter empty groups out first.
-// Sizes itself to the card's actual rendered width (`clientWidth`, falling back to a fixed guess only
-// if the card is hidden/unlaid-out, e.g. behind the sign-in gate) so the SVG fills the card
-// edge-to-edge at its true pixel size instead of being CSS-stretched/scaled, which would distort
-// dots and text. Re-measured on window resize (see the resize listener near renderAll below) since
-// a size baked in once at render time would otherwise go stale on the next layout change.
-function renderDivergingChart(elId,groups,opts={}){
-  const el=document.getElementById(elId);
-  if(!el)return;
-  if(!groups.some(g=>g.n>0)){el.innerHTML=`<p class="hint">No trade entries with a Result R logged yet.</p>`;return}
-
-  const dot=opts.markShape==="dot";
-  const barW=36,dotR=7;
-  const plotTop=14,plotBottom=176,marginLeft=34,marginRight=14;
-  const zeroY=(plotTop+plotBottom)/2,halfH=(plotBottom-plotTop)/2;
-  const fallbackWidth=marginLeft+groups.length*(opts.slotW||60)+marginRight;
-  const width=el.clientWidth>0?el.clientWidth:fallbackWidth;
-  const slotW=(width-marginLeft-marginRight)/groups.length;
-  const maxAbs=Math.max(1e-9,...groups.filter(g=>g.n>0).map(g=>Math.abs(g.avgR)));
-  const y=v=>zeroY-(v/maxAbs)*halfH;
-
-  const marks=groups.map((g,i)=>{
-    const cx=marginLeft+i*slotW+slotW/2;
-    const labelY=plotBottom+16;
-    if(!(g.n>0)){
-      return `<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="10" fill="#475569">${g.label}</text>`;
-    }
-    const color=g.avgR>0?"#16a34a":g.avgR<0?"#dc2626":"#64748b";
-    const opacity=(0.55+0.45*confFrac(g.n)).toFixed(2);
-    let mark;
-    if(dot){
-      mark=`<circle cx="${cx}" cy="${y(g.avgR)}" r="${dotR}" fill="${color}"/>`;
-    }else{
-      const yTop=Math.min(y(0),y(g.avgR)),yBot=Math.max(y(0),y(g.avgR));
-      mark=`<rect x="${cx-barW/2}" y="${yTop}" width="${barW}" height="${Math.max(2,yBot-yTop)}" rx="4" fill="${color}"/>`;
-    }
-    const labelText=dot
-      ?`<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="10" fill="#94a3b8">${g.label}</text>`
-      :`<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="12" font-weight="700" fill="#e5e7eb">${g.label}</text>`;
-    const detail=dot?"":`
-        <text x="${cx}" y="${plotBottom+34}" text-anchor="middle" font-size="11" fill="${color}">${g.avgR>0?"+":""}${fmt(g.avgR)}R</text>
-        <text x="${cx}" y="${plotBottom+48}" text-anchor="middle" font-size="10" fill="#94a3b8">${pct(g.winRate)} (n=${g.n})</text>`;
-    return `<g opacity="${opacity}"><title>${g.title}</title>${mark}${labelText}${detail}</g>`;
-  }).join("");
-
-  const chartHeight=dot?204:236;
-  el.innerHTML=`<p class="hint">Green = net-winning bucket (positive average Result R), red = net-losing.</p>
-    <svg viewBox="0 0 ${width} ${chartHeight}" style="width:100%;height:${chartHeight}px;display:block">
-      <line x1="${marginLeft-8}" y1="${zeroY}" x2="${width-marginRight+8}" y2="${zeroY}" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
-      <text x="${marginLeft-14}" y="${zeroY+4}" text-anchor="end" font-size="16" fill="#94a3b8">0R</text>
-      ${marks}
-    </svg>`;
-}
-function entryBarGroup(label,arr){return{label,n:arr.length,avgR:entryAvgR(arr),winRate:entryWinRate(arr)}}
-function renderEntryDayBars(){
-  const e=enrichEntries(tradeEntries).filter(x=>Number.isFinite(x.resultR));
-  const DAY_ORDER_FULL=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-  const groups=DAY_ORDER_FULL.map(day=>{
-    const arr=e.filter(x=>entryWeekday(x)===day);
-    if(!arr.length)return null;
-    const g=entryBarGroup(DAY_ABBR[day]||day.slice(0,3),arr);
-    g.title=`${day}: ${g.n} trade${g.n===1?"":"s"}, ${pct(g.winRate)} win rate, avg ${g.avgR>0?"+":""}${fmt(g.avgR)}R`;
-    return g;
-  }).filter(Boolean);
-  renderDivergingChart("entryDayBars",groups);
-}
-// Weekly and Daily entries are intentionally excluded — this compares the two intraday sessions
-// specifically, not a stand-in for the full By Session breakdown already on Execution Stats
-// (teSessionTypeTable). Session names come from INTRADAY_SESSIONS (derived from SESSION_ORDER)
-// rather than a separate literal so this can't silently drift from the canonical session list.
-function renderEntrySessionBars(){
-  const e=enrichEntries(tradeEntries).filter(x=>Number.isFinite(x.resultR));
-  const groups=INTRADAY_SESSIONS.map(session=>{
-    const arr=e.filter(x=>x.sessionType===session);
-    if(!arr.length)return null;
-    const g=entryBarGroup(session,arr);
-    g.title=`${session}: ${g.n} trade${g.n===1?"":"s"}, ${pct(g.winRate)} win rate, avg ${g.avgR>0?"+":""}${fmt(g.avgR)}R`;
-    return g;
-  }).filter(Boolean);
-  renderDivergingChart("entrySessionBars",groups);
-}
-// Time-of-day is a dot per half-hour slot (00:00, 00:30, 01:00, ...), not the coarser 4-hour
-// HOUR_BUCKETS used by the "By Time of Day" table on Execution Stats — the point of this chart is
-// seeing every half hour, so it deliberately uses finer granularity than that table rather than
-// reusing its buckets. Slots with no logged entries still get an axis slot (dimmed label, no dot)
-// so the 24-hour timeline reads as continuous instead of only showing the slots that have data.
-// Bucketed in one pass (not 48 separate array scans) and bounds-checked against a malformed
-// 24:00-or-later time (timeToMinutes doesn't reject it) so such an entry is treated as unparseable
-// rather than silently matching no slot at all.
-function renderEntryHourDots(){
-  const e=enrichEntries(tradeEntries).filter(x=>Number.isFinite(x.resultR));
-  const buckets=Array.from({length:48},()=>[]);
-  e.forEach(x=>{
-    const m=timeToMinutes(x.entryTime);
-    if(m!=null&&m<1440)buckets[Math.floor(m/30)].push(x);
-  });
-  const groups=buckets.map((arr,slot)=>{
-    const hour=String(Math.floor(slot/2)).padStart(2,"0"),half=slot%2===1;
-    const label=half?`${hour}:30`:`${hour}:00`;
-    if(!arr.length)return{label,n:0};
-    const g=entryBarGroup(label,arr);
-    const rangeEnd=half?`${hour}:59`:`${hour}:29`;
-    g.title=`${label}–${rangeEnd}: ${g.n} trade${g.n===1?"":"s"}, ${pct(g.winRate)} win rate, avg ${g.avgR>0?"+":""}${fmt(g.avgR)}R`;
-    return g;
-  });
-  renderDivergingChart("entryHourBars",groups,{markShape:"dot",slotW:22});
-}
-// Generic groupBy + win-rate/avg-R table for any single-value categorical entry field.
-// getLabel returning null/undefined skips that entry entirely (rather than lumping it into
-// an "Unspecified" bucket), so a table only shows the values you actually logged — appropriate
-// for a discretionary trader who fills in a different subset of fields on every trade.
-function renderCategoricalEntryTable(tableId,headerLabel,arr,getLabel){
-  const map=new Map();
-  arr.forEach(x=>{
-    const label=getLabel(x);
-    if(label==null)return;
-    if(!map.has(label))map.set(label,[]);
-    map.get(label).push(x);
-  });
-  const rows=[...map.entries()].map(([label,a])=>({label,...entryGroupStats(a)})).sort((a,b)=>b.n-a.n);
-  renderEntryStatTable(tableId,rows,[headerLabel,"n","Win Rate","Avg R"],
-    r=>[escapeHtml(String(r.label)),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-}
-// Institutional Trades is multi-value (an entry can have several tags checked), so unlike
-// renderCategoricalEntryTable an entry can contribute to more than one row here — same
-// counted-once-per-tag convention as the News Impact "By Event Type" table on the dashboard.
-// Shared renderer for any multi-select tag field (an entry can have several tags, so unlike
-// renderCategoricalEntryTable an entry can contribute to more than one row) — used by both
-// Institutional Trade Tag and the Psychology tab's Mistake Tag table. Returns the sorted rows
-// (label/n/winRate/avgR, highest n first) so a caller that needs the same grouping for something
-// else (e.g. a "most common tag" summary tile) can reuse it instead of re-deriving it.
-function renderMultiTagEntryTable(tableId,headerLabel,arr,getTags){
-  const map=new Map();
-  arr.forEach(x=>(getTags(x)||[]).forEach(tag=>{
-    if(!map.has(tag))map.set(tag,[]);
-    map.get(tag).push(x);
-  }));
-  const rows=[...map.entries()].map(([label,a])=>({label,...entryGroupStats(a)})).sort((a,b)=>b.n-a.n);
-  renderEntryStatTable(tableId,rows,[headerLabel,"n","Win Rate","Avg R"],
-    r=>[escapeHtml(r.label),r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-  return rows;
-}
-function renderInstitutionalTagTable(tableId,arr){return renderMultiTagEntryTable(tableId,"Institutional Trade Tag",arr,x=>x.institutionalTrades)}
-function renderMistakeTagTable(tableId,arr){return renderMultiTagEntryTable(tableId,"Mistake Tag",arr,x=>x.mistakeTags)}
-// Single ordered set of streak-length buckets, shared by the classifier and the render row order —
-// same "one array drives both" convention as DELAY_BUCKETS/HOUR_BUCKETS/WEEK_OF_MONTH_BUCKETS above.
-const STREAK_BUCKET_LABELS=["0 (fresh)","1","2","3+"];
-function streakBucketLabel(streak){return streak>=3?"3+":STREAK_BUCKET_LABELS[streak]}
-// Buckets each graded entry by how many losing/winning trades in a row immediately preceded it,
-// chronologically across all markets/session types — computing both the loss-streak and win-streak
-// buckets in one pass (they only differ in which side of the streak check they track, so sorting
-// twice would be wasted work). An entry with no Result R yet can't be classified as a win or loss,
-// so it resets both streaks to 0 rather than being silently dropped from the sequence — otherwise a
-// still-ungraded trade sitting between two graded losers would let the streak run straight through
-// it as if it never happened. Bucket assignment uses the streak as it stood BEFORE this trade, then
-// the streak updates from this trade's own result for whichever entry comes next — so "Preceding
-// Losses: 2" means this trade followed exactly two straight losers, not that it's part of one itself.
-function precedingStreakBuckets(arr){
-  const sorted=arr.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.entryTime||"").localeCompare(b.entryTime||""));
-  const lossBuckets=new Map(), winBuckets=new Map();
-  let lossStreak=0, winStreak=0;
-  sorted.forEach(x=>{
-    if(!Number.isFinite(x.resultR)){lossStreak=0;winStreak=0;return}
-    const lossLabel=streakBucketLabel(lossStreak), winLabel=streakBucketLabel(winStreak);
-    if(!lossBuckets.has(lossLabel))lossBuckets.set(lossLabel,[]);
-    lossBuckets.get(lossLabel).push(x);
-    if(!winBuckets.has(winLabel))winBuckets.set(winLabel,[]);
-    winBuckets.get(winLabel).push(x);
-    lossStreak=x.resultR<0?lossStreak+1:0;
-    winStreak=x.resultR>0?winStreak+1:0;
-  });
-  return{lossBuckets,winBuckets};
-}
-function renderStreakTable(tableId,buckets,kind){
-  const rows=STREAK_BUCKET_LABELS.map(label=>({label,...entryGroupStats(buckets.get(label)||[])})).filter(r=>r.n>0);
-  renderEntryStatTable(tableId,rows,[`Preceding ${kind==="loss"?"Losses":"Wins"}`,"n","Win Rate","Avg R"],
-    r=>[r.label,r.n,r.winRate!=null?pct(r.winRate):"—",r.avgR!=null?fmt(r.avgR)+"R":"—"],
-    [null,{key:"n"},{key:"winRate"},{key:"avgR",diverge:true}]);
-}
-// v===0 is a real, meaningful reading (flat delta / perfectly balanced book), not "unset" —
-// only a genuinely missing value (non-finite) should be excluded from the bucketed tables.
-function signBucket(v){if(!Number.isFinite(v))return null;if(v>0)return"Positive (+)";if(v<0)return"Negative (−)";return"Neutral (0)"}
 function renderEntryLogTable(){
-  const e=enrichEntries(tradeEntries).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Direction</th><th>Setup</th><th>Order Type</th><th>Delay (min)</th><th>Distance</th><th>Slippage</th><th>Stop</th><th>Exit</th><th>Stop Slippage</th><th>Vol</th><th>Vol Node</th><th>Footprint</th><th>Δ Div 30m</th><th>Book Imb</th><th>Liquidity</th><th>Stacked Imb</th><th>Imb Side</th><th>Absorption</th><th>Exhaustion</th><th>Δ@Entry</th><th>Δ Abs</th><th>CumΔ Trend</th><th>Rotations</th><th>POC/VA Pos</th><th>1H Hour</th><th>1H Δ</th><th>1H POC/VA</th><th>1H Pattern</th><th>VWAP</th><th>BB</th><th>EMA 6m</th><th>EMA 30m</th><th>EMA 1h</th><th>Institutional</th><th>Emotion</th><th>Plan</th><th>Mistakes</th><th>Photos</th><th>Result R</th><th>MFE (R)</th><th>MAE (R)</th><th>Actions</th></tr></thead><tbody>${
-    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${x.direction||""}</td><td>${escapeHtml(x.setupType||"")}</td><td>${x.orderType||""}</td><td>${x.entryDelayMin!=null?fmt(x.entryDelayMin,1):""}</td><td>${x.distanceFromRef!=null?fmt(x.distanceFromRef):""}</td><td>${x.slippagePts!=null?fmt(x.slippagePts):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${x.stopSlippagePts!=null?fmt(x.stopSlippagePts):""}</td><td>${Number.isFinite(x.volume)?fmt(x.volume,0):""}</td><td>${x.volumeNode||""}</td><td>${x.footprint||""}</td><td>${x.deltaDivergence30m||""}</td><td>${Number.isFinite(x.bookImbalance)?fmt(x.bookImbalance,1):""}</td><td>${x.liquidityAtLevel||""}</td><td>${Number.isFinite(x.stackedImbalances)?fmt(x.stackedImbalances,0):""}</td><td>${x.imbalanceSide||""}</td><td>${x.absorptionSide||""}</td><td>${x.exhaustion||""}</td><td>${Number.isFinite(x.deltaAtEntry)?fmt(x.deltaAtEntry,0):""}</td><td>${Number.isFinite(x.deltaAbsolute)?fmt(x.deltaAbsolute,0):""}</td><td>${x.cumDeltaTrend||""}</td><td>${Number.isFinite(x.rotationsBeforeEntry)?fmt(x.rotationsBeforeEntry,0):""}</td><td>${x.pocVaPosition||""}</td><td>${x.h1CandleHour||""}</td><td>${Number.isFinite(x.h1Delta)?fmt(x.h1Delta,0):""}</td><td>${x.h1PocVaPosition||""}</td><td>${x.h1CandlePattern||""}</td><td>${x.vwapLevel||""}</td><td>${x.bollingerBand||""}</td><td>${x.ema6m||""}</td><td>${x.ema30m||""}</td><td>${x.ema1h||""}</td><td>${escapeHtml((x.institutionalTrades||[]).join(", "))}</td><td>${escapeHtml(x.emotionalState||"")}</td><td>${escapeHtml(x.planAdherence||"")}</td><td>${escapeHtml((x.mistakeTags||[]).join(", "))}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td>${Number.isFinite(x.resultR)?fmt(x.resultR):""}</td><td>${Number.isFinite(x.mfeR)?fmt(x.mfeR):""}</td><td>${Number.isFinite(x.maeR)?fmt(x.maeR):""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
+  const e=tradeEntries.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Market</th><th>Entry Time</th><th>Entry</th><th>Stop</th><th>Exit</th><th>Market Cond.</th><th>Day Type</th><th>GEX</th><th>GEX Add'l</th><th>Strategy</th><th>Signals</th><th>Plan</th><th>What Happened</th><th>Notes</th><th>Photos</th><th>Actions</th></tr></thead><tbody>${
+    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${escapeHtml(x.market||"")}</td><td>${x.entryTime||""}</td><td>${Number.isFinite(x.entryPrice)?fmt(x.entryPrice):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${escapeHtml(x.marketCondition||"")}</td><td>${escapeHtml(x.dayType||"")}</td><td>${escapeHtml(x.gex||"")}</td><td>${escapeHtml(x.gexAdditional||"")}</td><td>${escapeHtml(x.strategy||"")}</td><td>${escapeHtml((x.additionalSignals||[]).join(", "))}</td><td>${escapeHtml(x.planAdherence||"")}</td><td>${escapeHtml(x.planDeviationNotes||"")}</td><td>${escapeHtml(x.notes||"")}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
   }</tbody>`;
+}
+// Shows the "what happened" textarea only when the plan was not followed — matches the same
+// Yes/No-gated deviation-notes field on the Trading Plan form.
+function syncPlanDeviationVisibility(){
+  document.getElementById("tePlanDeviationRow").classList.toggle("hidden",tePlanAdherence.value!=="No");
 }
 function formToEntry(){
   let o={};
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
-  ["entryPrice","stopLossPrice","exitPrice","referencePrice","intendedPrice","resultR","mfeR","maeR","volume","bookImbalance","stackedImbalances","deltaAtEntry","deltaAbsolute","rotationsBeforeEntry","h1Delta","h1Poc","h1Vah","h1Val"].forEach(k=>o[k]=n(o[k]));
-  o.institutionalTrades=getCheckboxGroupFromForm("teInstitutionalTrades");
-  o.mistakeTags=getCheckboxGroupFromForm("teMistakeTags");
+  ["entryPrice","stopLossPrice","exitPrice"].forEach(k=>o[k]=n(o[k]));
+  o.additionalSignals=getCheckboxGroupFromForm("teAdditionalSignals");
   o.screenshots=teScreenshotsState.slice();
   o.id=teRecordId.value||crypto.randomUUID();
   o.updatedAt=new Date().toISOString();
@@ -2101,12 +1646,11 @@ function formToEntry(){
 function entryToForm(e){
   teRecordId.value=e.id||"";
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)el.value=e[teKey(name)]??""});
-  setCheckboxGroupInForm("teInstitutionalTrades",e.institutionalTrades);
-  setCheckboxGroupInForm("teMistakeTags",e.mistakeTags);
+  setCheckboxGroupInForm("teAdditionalSignals",e.additionalSignals);
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
-  renderComputedR();
+  syncPlanDeviationVisibility();
   showTab("teNew");
 }
 function resetTradeEntryForm(){
@@ -2116,7 +1660,7 @@ function resetTradeEntryForm(){
   teScreenshotsState=[];
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
-  renderComputedR();
+  syncPlanDeviationVisibility();
 }
 window.editEntry=id=>{const e=tradeEntries.find(x=>x.id===id);if(e)entryToForm(e)}
 window.deleteEntry=async id=>{if(!confirm("Delete this trade entry?"))return;tradeEntries=tradeEntries.filter(x=>x.id!==id);saveEntries();await syncEntryDelete(id);if(teRecordId.value===id)resetTradeEntryForm();renderAll()}
@@ -2410,12 +1954,12 @@ if(!teDate.value)teDate.value=new Date().toISOString().slice(0,10);
 // instrument, same direction, filled at the same price at the same clock time. Requires both
 // Entry Time and Entry Price to be set, otherwise there isn't enough signal to flag it without
 // false-positiving on a legitimate multi-entry day (e.g. two trades with times/prices left blank).
-// Market is trimmed/lowercased before comparing since it's a free-text field ("GC" vs "gc" vs
-// " GC" is still the same instrument) — shared by findDuplicateEntry and the backup-import
-// duplicate scan so both use the exact same notion of "same trade".
+// Market is trimmed/lowercased before comparing so a stray case/space difference can't make the
+// same trade look distinct — shared by findDuplicateEntry and the backup-import duplicate scan so
+// both use the exact same notion of "same trade".
 function entryDupKey(rec){
   if(!rec.date||!rec.entryTime||!Number.isFinite(rec.entryPrice))return null;
-  return [rec.date,(rec.market||"").trim().toLowerCase(),rec.direction||"",rec.entryTime,rec.entryPrice].join("|");
+  return [rec.date,(rec.market||"").trim().toLowerCase(),rec.entryTime,rec.entryPrice].join("|");
 }
 function findDuplicateEntry(rec){
   const key=entryDupKey(rec);
@@ -2428,7 +1972,7 @@ teEntryForm.addEventListener("submit",async ev=>{
   const rec=formToEntry();
   const dup=findDuplicateEntry(rec);
   if(dup){
-    teEntryFormError.textContent=`This looks like a duplicate of an entry already logged on ${rec.date} (${rec.direction||"?"} @ ${rec.entryPrice}, ${rec.entryTime}). Edit that entry instead, or adjust the Entry Time/Price if this is genuinely a separate trade.`;
+    teEntryFormError.textContent=`This looks like a duplicate of an entry already logged on ${rec.date} (${rec.market||"?"} @ ${rec.entryPrice}, ${rec.entryTime}). Edit that entry instead, or adjust the Entry Time/Price if this is genuinely a separate trade.`;
     teEntryFormError.style.color="";
     teEntryFormError.style.display="block";
     return;
@@ -2451,23 +1995,8 @@ teEntryForm.addEventListener("submit",async ev=>{
   clearTimeout(teSavedMsgTimer);
   teSavedMsgTimer=setTimeout(()=>{teEntryFormError.style.display="none";teEntryFormError.style.color="";},2500);
 });
-[teDate,teMarket,teDirection,teEntryTime,teEntryPrice].forEach(el=>el.addEventListener("input",()=>{teEntryFormError.style.display="none"}));
-// Shows what Result R WOULD be from Entry/Stop/Exit/Direction as a separate, purely informational
-// display next to the field — it never writes into Result R itself. Result R stays 100% yours:
-// type it directly, or click "Use this" to copy the computed value in as a one-off explicit
-// action. This is deliberate: an earlier version auto-wrote into Result R on every keystroke,
-// which silently overwrote a manually-entered value (e.g. a hand-adjusted R for a partial-exit
-// trade) the moment you touched Stop/Exit afterward for record-keeping — a real bug, not a
-// hypothetical one. `+Number.EPSILON` before rounding avoids the classic float trap where an
-// exact value like 1.005 would otherwise round down to 1.00 instead of 1.01.
-function renderComputedR(){
-  const r=computeResultR({entryPrice:n(teEntryPrice.value),stopLossPrice:n(teStopLossPrice.value),exitPrice:n(teExitPrice.value),direction:teDirection.value});
-  if(r==null){teComputedRHint.innerHTML="";return}
-  const rounded=Math.round((r+Number.EPSILON)*100)/100;
-  teComputedRHint.innerHTML=`Computed from Stop/Exit: <b>${rounded}R</b> — <button type="button" id="teUseComputedR" style="padding:2px 8px;font-size:12px">Use this</button>`;
-  document.getElementById("teUseComputedR").addEventListener("click",()=>{teResultR.value=rounded});
-}
-[teEntryPrice,teStopLossPrice,teExitPrice,teDirection].forEach(el=>el.addEventListener("input",renderComputedR));
+[teDate,teMarket,teEntryTime,teEntryPrice].forEach(el=>el.addEventListener("input",()=>{teEntryFormError.style.display="none"}));
+tePlanAdherence.addEventListener("change",syncPlanDeviationVisibility);
 teClearForm.addEventListener("click",resetTradeEntryForm);
 
 function cell(v,cls=""){const d=document.createElement("div");d.className=`cell ${cls}`;d.innerHTML=v??"";return d}
@@ -3710,26 +3239,14 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderLetterOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderPlanLog,renderMacro,renderMacroNews,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
-// The execution charts size themselves from clientWidth at render time, so without this they'd
-// only fill the card at the moment they were drawn — a later window resize/zoom would leave them
-// stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
-// Skipped while their Execution Stats tab is hidden — showTab() already re-renders them at the
-// correct width the moment that tab is opened, so resizing while on another tab would otherwise
-// just rebuild them into a zero-width offscreen container for nothing.
-let entryChartsResizeTimer=null;
-window.addEventListener("resize",()=>{
-  if(teStats.classList.contains("hidden"))return;
-  clearTimeout(entryChartsResizeTimer);
-  entryChartsResizeTimer=setTimeout(()=>{[renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots].forEach(fn=>{try{fn()}catch(err){console.error("resize re-render failed:",err)}})},150);
-});
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderLetterOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryLogTable,renderPlanLog,renderMacro,renderMacroNews,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 exportCsv.addEventListener("click",()=>download("trading_projection_sessions_v4.csv",[[...fields,"newsEvents"].join(",")].concat(sessions.map(s=>[...fields.map(f=>csvEscape(s[f])),csvEscape(JSON.stringify(s.newsEvents||[]))].join(","))).join("\n"),"text/csv"));
 // Screenshots are exported as a count only (not the image data itself) — base64 image data
 // doesn't belong in a CSV row; use Download Backup (JSON) to get the actual images out.
-exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entries_v1.csv",[[...teFieldNames.map(teKey),"institutionalTrades","mistakeTags","screenshotCount"].join(",")].concat(tradeEntries.map(e=>[...teFieldNames.map(name=>csvEscape(e[teKey(name)])),csvEscape(JSON.stringify(e.institutionalTrades||[])),csvEscape(JSON.stringify(e.mistakeTags||[])),csvEscape((e.screenshots||[]).length)].join(","))).join("\n"),"text/csv"));
+exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entries_v1.csv",[[...teFieldNames.map(teKey),"additionalSignals","screenshotCount"].join(",")].concat(tradeEntries.map(e=>[...teFieldNames.map(name=>csvEscape(e[teKey(name)])),csvEscape(JSON.stringify(e.additionalSignals||[])),csvEscape((e.screenshots||[]).length)].join(","))).join("\n"),"text/csv"));
 // oiSnapshots is included here (unlike before Volume Level Tracking existed) because it now
 // holds hand-graded Hit/Outcome/tracked judgments that, unlike the raw Call/Put OI numbers,
 // can't be reconstructed by just re-uploading the original QuikStrike file.
@@ -3862,8 +3379,8 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta:s.delta,delta_min_max:s.deltaMinMax,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,delta:r.delta,deltaMinMax:r.delta_min_max,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
-function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,direction:e.direction||null,setup_type:e.setupType||null,order_type:e.orderType||null,signal_time:e.signalTime||null,entry_time:e.entryTime||null,intended_price:e.intendedPrice,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,reference_label:e.referenceLabel||null,reference_price:e.referencePrice,result_r:e.resultR,mfe_r:e.mfeR,mae_r:e.maeR,volume:e.volume,volume_node:e.volumeNode||null,footprint:e.footprint||null,delta_divergence_30m:e.deltaDivergence30m||null,book_imbalance:e.bookImbalance,liquidity_at_level:e.liquidityAtLevel||null,stacked_imbalances:e.stackedImbalances,imbalance_side:e.imbalanceSide||null,absorption_side:e.absorptionSide||null,exhaustion:e.exhaustion||null,delta_at_entry:e.deltaAtEntry,delta_absolute:e.deltaAbsolute,cum_delta_trend:e.cumDeltaTrend||null,rotations_before_entry:e.rotationsBeforeEntry,poc_va_position:e.pocVaPosition||null,h1_candle_hour:e.h1CandleHour||null,h1_delta:e.h1Delta,h1_poc:e.h1Poc,h1_vah:e.h1Vah,h1_val:e.h1Val,h1_candle_pattern:e.h1CandlePattern||null,vwap_level:e.vwapLevel||null,bollinger_band:e.bollingerBand||null,ema_6m:e.ema6m||null,ema_30m:e.ema30m||null,ema_1h:e.ema1h||null,institutional_trades:e.institutionalTrades||[],screenshots:e.screenshots||[],emotional_state:e.emotionalState||null,plan_adherence:e.planAdherence||null,mistake_tags:e.mistakeTags||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
-function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,direction:r.direction,setupType:r.setup_type,orderType:r.order_type,signalTime:r.signal_time,entryTime:r.entry_time,intendedPrice:r.intended_price,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,referenceLabel:r.reference_label,referencePrice:r.reference_price,resultR:r.result_r,mfeR:r.mfe_r,maeR:r.mae_r,volume:r.volume,volumeNode:r.volume_node,footprint:r.footprint,deltaDivergence30m:r.delta_divergence_30m,bookImbalance:r.book_imbalance,liquidityAtLevel:r.liquidity_at_level,stackedImbalances:r.stacked_imbalances,imbalanceSide:r.imbalance_side,absorptionSide:r.absorption_side,exhaustion:r.exhaustion,deltaAtEntry:r.delta_at_entry,deltaAbsolute:r.delta_absolute,cumDeltaTrend:r.cum_delta_trend,rotationsBeforeEntry:r.rotations_before_entry,pocVaPosition:r.poc_va_position,h1CandleHour:r.h1_candle_hour,h1Delta:r.h1_delta,h1Poc:r.h1_poc,h1Vah:r.h1_vah,h1Val:r.h1_val,h1CandlePattern:r.h1_candle_pattern,vwapLevel:r.vwap_level,bollingerBand:r.bollinger_band,ema6m:r.ema_6m,ema30m:r.ema_30m,ema1h:r.ema_1h,institutionalTrades:r.institutional_trades||[],screenshots:r.screenshots||[],emotionalState:r.emotional_state,planAdherence:r.plan_adherence,mistakeTags:r.mistake_tags||[],notes:r.notes,updatedAt:r.updated_at}}
+function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,entry_time:e.entryTime||null,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,market_condition:e.marketCondition||null,day_type:e.dayType||null,gex:e.gex||null,gex_additional:e.gexAdditional||null,strategy:e.strategy||null,additional_signals:e.additionalSignals||[],plan_adherence:e.planAdherence||null,plan_deviation_notes:e.planDeviationNotes||null,screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
+function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,entryTime:r.entry_time,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,marketCondition:r.market_condition,dayType:r.day_type,gex:r.gex,gexAdditional:r.gex_additional,strategy:r.strategy,additionalSignals:r.additional_signals||[],planAdherence:r.plan_adherence,planDeviationNotes:r.plan_deviation_notes,screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
   // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
   // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
