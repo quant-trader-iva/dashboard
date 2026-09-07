@@ -136,6 +136,7 @@
     <button class="tab active" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="entry">New Session</button>
     <button class="tab" data-tab="data">Data</button>
+    <button class="tab" data-tab="plan">Trading Plan</button>
     <button class="tab" data-tab="teStats">Execution Stats</button>
     <button class="tab" data-tab="teNew">New Entry</button>
     <button class="tab" data-tab="teLog">Entry Log</button>
@@ -326,6 +327,42 @@
         <button type="button" id="clearForm">Clear Form</button>
       </div>
     </form>
+  </div>
+</section>
+
+<section id="plan" class="page hidden">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Trading Plan</h2>
+    <p class="hint">The plan you write <em>before</em> the session — levels, and the day type and market condition you expect. After the session, grade whether you actually followed it: the gap between a good plan and a broken one is usually where the money goes.</p>
+    <form id="planForm">
+      <input type="hidden" id="planRecordId"/>
+      <div class="form-grid">
+        <div><label>Date</label><input id="planDate" type="date" required/></div>
+        <div><label>Day Type Forming</label><select id="planDayType"><option value="">—</option><option>Non-Trend Day</option><option>Trend Day</option></select></div>
+        <div><label>Market Condition</label><select id="planMarketCondition"><option value="">—</option><option>Balanced</option><option>Imbalanced</option></select></div>
+
+        <div style="grid-column:1/-1"><label>Levels I'm Watching for Longs</label><textarea id="planLongLevels" placeholder="e.g. 2648 prior day low, 2641 weekly VAL — reclaim + trapped sellers"></textarea></div>
+        <div style="grid-column:1/-1"><label>Levels I'm Watching for Shorts</label><textarea id="planShortLevels" placeholder="e.g. 2672 prior day high, 2680 weekly VAH — rejection + trapped buyers"></textarea></div>
+
+        <div style="grid-column:1/-1"><label>Additional Notes</label><textarea id="planNotes" placeholder="Context: macro, higher-timeframe bias, where you'd stand aside, what would invalidate the read..."></textarea></div>
+        <div style="grid-column:1/-1">
+          <label>Images <span class="hint" style="font-weight:400">(chart / profile / levels — compressed and saved with the plan)</span></label>
+          <input id="planScreenshotsInput" type="file" accept="image/*" multiple/>
+          <div id="planScreenshotsList" style="margin-top:8px"></div>
+        </div>
+        <div><label>Did I Follow My Plan? <span class="hint" style="font-weight:400">(fill in after the session)</span></label><select id="planFollowed"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+        <div style="grid-column:1/-1"><label>Why I Didn't Follow the Plan <span class="hint" style="font-weight:400">(only if "No" above)</span></label><textarea id="planDeviationNotes" placeholder="What pulled you off the plan — FOMO, a level you hadn't marked, moved the stop, sizing..."></textarea></div>
+      </div>
+      <p id="planFormError" class="hint" style="color:#f87171;font-weight:700;display:none"></p>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="primary" type="submit">Save Plan</button>
+        <button type="button" id="planClearForm">Clear Form</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Plan Log</h2>
+    <div class="tablewrap"><table id="planLogTable"></table></div>
   </div>
 </section>
 
@@ -811,6 +848,8 @@ const PENDING_DELETES_KEY="trading_projection_pending_deletes_v4";
 const POS_SIZING_KEY="trading_projection_position_sizing_v4";
 const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
+const PLANS_STORAGE_KEY="trading_projection_plans_v1";
+const PENDING_PLAN_DELETES_KEY="trading_projection_pending_plan_deletes_v1";
 const OI_STORAGE_KEY="trading_projection_oi_snapshots_v2";
 const PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v2";
 const LEGACY_OI_STORAGE_KEY="trading_projection_oi_snapshots_v1";
@@ -868,6 +907,19 @@ function saveEntries(){
 }
 function loadPendingEntryDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_ENTRY_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingEntryDeletes(){localStorage.setItem(PENDING_ENTRY_DELETES_KEY,JSON.stringify(pendingEntryDeletes))}
+// Trading Plans — the pre-session plan (levels, expected day type/market condition) plus
+// a post-session "did I follow it" grade. Same id-keyed, upsert + pendingDeletes sync convention
+// as tradeEntries; images are stored the same way too (compressed base64 JPEGs in a jsonb column).
+function loadPlans(){try{return JSON.parse(localStorage.getItem(PLANS_STORAGE_KEY)||"[]")}catch{return[]}}
+function savePlans(){
+  try{
+    localStorage.setItem(PLANS_STORAGE_KEY,JSON.stringify(tradingPlans));
+  }catch(err){
+    alert("Could not save locally — your browser's storage is full (likely from plan images). Delete some images or plans, or use Download Backup to export first, then try again.");
+  }
+}
+function loadPendingPlanDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_PLAN_DELETES_KEY)||"[]")}catch{return[]}}
+function savePendingPlanDeletes(){localStorage.setItem(PENDING_PLAN_DELETES_KEY,JSON.stringify(pendingPlanDeletes))}
 // oiSnapshots rows are keyed by date+dte+strike (not a uuid id) — see the matching note on the
 // oi_snapshots table in supabase_schema.sql for why: re-uploading a date should overwrite it,
 // not accumulate duplicate rows. Storage key bumped to v2 when the dte column was added — every
@@ -911,6 +963,7 @@ function loadWeekOutcomes(){try{return JSON.parse(localStorage.getItem(WEEK_OUTC
 function saveWeekOutcomes(){localStorage.setItem(WEEK_OUTCOMES_KEY,JSON.stringify(weekOutcomes))}
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
+let tradingPlans=loadPlans(), pendingPlanDeletes=loadPendingPlanDeletes();
 let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
 let macroEvents=loadMacroEvents(), pendingMacroEventDeletes=loadPendingMacroEventDeletes();
 let monthOutcomes=loadMonthOutcomes();
@@ -2068,6 +2121,109 @@ function resetTradeEntryForm(){
 window.editEntry=id=>{const e=tradeEntries.find(x=>x.id===id);if(e)entryToForm(e)}
 window.deleteEntry=async id=>{if(!confirm("Delete this trade entry?"))return;tradeEntries=tradeEntries.filter(x=>x.id!==id);saveEntries();await syncEntryDelete(id);if(teRecordId.value===id)resetTradeEntryForm();renderAll()}
 
+// ----- Trading Plan -----
+// Single-value fields only; screenshots (image array) are handled separately, same split as the
+// trade-entry form's screenshots handling.
+const PLAN_FIELDS=["date","dayType","marketCondition","longLevels","shortLevels","notes","followed","deviationNotes"];
+const planFieldId={date:"planDate",dayType:"planDayType",marketCondition:"planMarketCondition",longLevels:"planLongLevels",shortLevels:"planShortLevels",notes:"planNotes",followed:"planFollowed",deviationNotes:"planDeviationNotes"};
+let planScreenshotsState=[];
+function renderPlanScreenshotThumbs(){
+  planScreenshotsList.innerHTML="";
+  planScreenshotsState.forEach((s,i)=>{
+    const wrap=document.createElement("div");wrap.className="shot-thumb";
+    const img=document.createElement("img");img.src=s.dataUrl;img.alt=s.name||"image";
+    img.addEventListener("click",()=>openScreenshotModal(planScreenshotsState));
+    const rm=document.createElement("button");rm.type="button";rm.className="shot-remove";rm.textContent="✕";
+    rm.title="Remove";
+    rm.addEventListener("click",()=>{planScreenshotsState.splice(i,1);renderPlanScreenshotThumbs()});
+    wrap.appendChild(img);wrap.appendChild(rm);
+    planScreenshotsList.appendChild(wrap);
+  });
+}
+planScreenshotsInput.addEventListener("change",async()=>{
+  const files=[...planScreenshotsInput.files];
+  planScreenshotsInput.value="";
+  // Snapshot the array reference (same reasoning as the trade-entry screenshot handler): if the
+  // form switches to a different plan while a compression is still running, planScreenshotsState
+  // !== targetState here and we drop the now-stale image instead of pushing it into whatever
+  // plan happens to be on screen when it resolves.
+  const targetState=planScreenshotsState;
+  for(const f of files){
+    if(planScreenshotsState!==targetState){console.warn("Discarding a plan image — the form moved to a different plan while it was still processing.");break}
+    try{
+      const dataUrl=await compressImageFile(f);
+      if(planScreenshotsState!==targetState){console.warn("Discarding a plan image — the form moved to a different plan while it was still processing.");break}
+      planScreenshotsState.push({name:f.name,dataUrl});
+    }catch(err){console.error("Failed to process plan image:",err)}
+  }
+  if(planScreenshotsState===targetState)renderPlanScreenshotThumbs();
+});
+window.viewPlanScreenshots=id=>{const p=tradingPlans.find(x=>x.id===id);if(p)openScreenshotModal(p.screenshots)}
+function formToPlan(){
+  let o={};
+  PLAN_FIELDS.forEach(k=>{const el=document.getElementById(planFieldId[k]); if(el)o[k]=el.value});
+  o.screenshots=planScreenshotsState.slice();
+  o.id=planRecordId.value||crypto.randomUUID();
+  o.updatedAt=new Date().toISOString();
+  return o;
+}
+function planToForm(p){
+  planRecordId.value=p.id||"";
+  PLAN_FIELDS.forEach(k=>{const el=document.getElementById(planFieldId[k]); if(el)el.value=p[k]??""});
+  planScreenshotsState=(p.screenshots||[]).slice();
+  renderPlanScreenshotThumbs();
+  planFormError.style.display="none";
+  showTab("plan");
+}
+function resetPlanForm(){
+  planForm.reset();
+  planRecordId.value="";
+  if(!planDate.value)planDate.value=new Date().toISOString().slice(0,10);
+  planScreenshotsState=[];
+  renderPlanScreenshotThumbs();
+  planFormError.style.display="none";
+}
+function renderPlanLog(){
+  const rows=tradingPlans.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  planLogTable.innerHTML=`<thead><tr><th>Date</th><th>Day Type</th><th>Market</th><th>Long Levels</th><th>Short Levels</th><th>Followed?</th><th>Why Not</th><th>Notes</th><th>Images</th><th>Actions</th></tr></thead><tbody>${
+    rows.map(p=>`<tr><td>${formatDMY(p.date)}</td><td>${escapeHtml(p.dayType||"")}</td><td>${escapeHtml(p.marketCondition||"")}</td><td>${escapeHtml(p.longLevels||"")}</td><td>${escapeHtml(p.shortLevels||"")}</td><td>${escapeHtml(p.followed||"")}</td><td>${escapeHtml(p.deviationNotes||"")}</td><td>${escapeHtml(p.notes||"")}</td><td>${(p.screenshots||[]).length?`<button onclick="viewPlanScreenshots('${p.id}')">${p.screenshots.length} 📷</button>`:""}</td><td><button onclick="editPlan('${p.id}')">Edit</button> <button class="danger" onclick="deletePlan('${p.id}')">Delete</button></td></tr>`).join("")
+  }</tbody>`;
+}
+window.editPlan=id=>{const p=tradingPlans.find(x=>x.id===id);if(p)planToForm(p)}
+window.deletePlan=async id=>{if(!confirm("Delete this trading plan?"))return;tradingPlans=tradingPlans.filter(x=>x.id!==id);savePlans();await syncPlanDelete(id);if(planRecordId.value===id)resetPlanForm();renderAll()}
+let planSavedMsgTimer=null;
+planForm.addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const rec=formToPlan();
+  // One plan per date — the natural key here, the same way a session is one-per-date/type. An
+  // existing plan for that date (that isn't the one being edited) is flagged rather than silently
+  // creating a second row.
+  const dup=tradingPlans.find(x=>x.id!==rec.id&&x.date&&x.date===rec.date);
+  if(dup){
+    planFormError.textContent=`A plan for ${formatDMY(rec.date)} already exists. Edit that plan instead, or change the Date.`;
+    planFormError.style.color="";
+    planFormError.style.display="block";
+    return;
+  }
+  planFormError.style.display="none";
+  const isNew=!planRecordId.value;
+  const i=tradingPlans.findIndex(x=>x.id===rec.id);
+  if(i>=0)tradingPlans[i]={...tradingPlans[i],...rec};else tradingPlans.push(rec);
+  tradingPlans.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  savePlans();
+  await syncPlanUpsert([rec]);
+  resetPlanForm();
+  renderAll();
+  planFormError.textContent=isNew?"✓ Plan saved.":"✓ Plan updated.";
+  planFormError.style.color="var(--green)";
+  planFormError.style.display="block";
+  clearTimeout(planSavedMsgTimer);
+  planSavedMsgTimer=setTimeout(()=>{planFormError.style.display="none";planFormError.style.color="";},2500);
+});
+planClearForm.addEventListener("click",resetPlanForm);
+planDate.addEventListener("input",()=>{planFormError.style.display="none"});
+if(!planDate.value)planDate.value=new Date().toISOString().slice(0,10);
+
 function loadSessions(){
   try{
     const cur=localStorage.getItem(STORAGE_KEY);
@@ -2087,6 +2243,7 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
   const alreadyActive=b.classList.contains("active");
   if(!alreadyActive&&b.dataset.tab==="entry"&&entryFormError.style.display!=="block")resetEntryForm();
   if(!alreadyActive&&b.dataset.tab==="teNew"&&teEntryFormError.style.display!=="block")resetTradeEntryForm();
+  if(!alreadyActive&&b.dataset.tab==="plan"&&planFormError.style.display!=="block")resetPlanForm();
   showTab(b.dataset.tab);
 }));
 function formatDMY(iso){if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}/${m}/${y.slice(2)}`}
@@ -3553,7 +3710,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderLetterOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderMacro,renderMacroNews,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderLetterOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryDayBars,renderEntrySessionBars,renderEntryHourDots,renderEntryLogTable,renderPlanLog,renderMacro,renderMacroNews,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 // The execution charts size themselves from clientWidth at render time, so without this they'd
 // only fill the card at the moment they were drawn — a later window resize/zoom would leave them
 // stale (letterboxed) until the next full renderAll(). Debounced since resize fires continuously.
@@ -3576,7 +3733,7 @@ exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entri
 // oiSnapshots is included here (unlike before Volume Level Tracking existed) because it now
 // holds hand-graded Hit/Outcome/tracked judgments that, unlike the raw Call/Put OI numbers,
 // can't be reconstructed by just re-uploading the original QuikStrike file.
-downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,posSizing:getPosSizing(),oiSnapshots,macroEvents,monthOutcomes,weekOutcomes},null,2),"application/json"));
+downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,tradingPlans,posSizing:getPosSizing(),oiSnapshots,macroEvents,monthOutcomes,weekOutcomes},null,2),"application/json"));
 importJson.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
   const data=JSON.parse(await f.text());
@@ -3584,6 +3741,7 @@ importJson.addEventListener("change",async e=>{
   else if(data&&Array.isArray(data.sessions)){
     sessions=data.sessions;
     if(Array.isArray(data.tradeEntries))tradeEntries=data.tradeEntries;
+    if(Array.isArray(data.tradingPlans))tradingPlans=data.tradingPlans;
     if(data.posSizing){localStorage.setItem(POS_SIZING_KEY,JSON.stringify(data.posSizing));applyPosSizingToForm(data.posSizing);renderPosSizingSummary(data.posSizing)}
     if(Array.isArray(data.oiSnapshots))oiSnapshots=data.oiSnapshots;
     if(Array.isArray(data.macroEvents))macroEvents=data.macroEvents;
@@ -3598,7 +3756,7 @@ importJson.addEventListener("change",async e=>{
         .filter(o=>o.month&&Number.isInteger(o.week)&&o.week>=1&&o.week<=5);
     }
   }else{return alert("Invalid file")}
-  saveSessions();saveEntries();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();saveWeekOutcomes();renderAll();
+  saveSessions();saveEntries();savePlans();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();saveWeekOutcomes();renderAll();
   const seen=new Set(),dupKeys=new Set();
   sessions.forEach(s=>{const k=s.date+"|"+s.sessionType;if(seen.has(k))dupKeys.add(k);else seen.add(k)});
   if(dupKeys.size)alert(`Warning: this backup has ${dupKeys.size} Date+Session Type combination(s) with more than one entry (e.g. ${[...dupKeys][0]}). Delete the extra entries in the Data tab to avoid duplicate rows.`);
@@ -3609,7 +3767,7 @@ importJson.addEventListener("change",async e=>{
   tradeEntries.forEach(x=>{const k=entryDupKey(x);if(k==null)return;if(seenEntries.has(k))dupEntryKeys.add(k);else seenEntries.add(k)});
   if(dupEntryKeys.size)alert(`Warning: this backup has ${dupEntryKeys.size} trade entry combination(s) (same Date+Market+Direction+Entry Time+Entry Price) with more than one entry. Delete the extra entries in the Entry Log tab to avoid duplicate rows.`);
 });
-clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data (sessions and trade entries)?"))return;sessions=[];tradeEntries=[];saveSessions();saveEntries();renderAll()});
+clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data (sessions, trade entries and trading plans)?"))return;sessions=[];tradeEntries=[];tradingPlans=[];saveSessions();saveEntries();savePlans();renderAll()});
 
 function readSettings(){
   try{
@@ -3725,6 +3883,52 @@ async function syncEntryDelete(id){
   if(ok){pendingEntryDeletes=pendingEntryDeletes.filter(x=>x!==id)}else if(!pendingEntryDeletes.includes(id)){pendingEntryDeletes.push(id)}
   savePendingEntryDeletes();
   return ok;
+}
+function toPlanDb(p){return{id:p.id,user_id:authUser?authUser.id:null,date:p.date||null,day_type:p.dayType||null,market_condition:p.marketCondition||null,long_levels:p.longLevels||null,short_levels:p.shortLevels||null,notes:p.notes||null,followed:p.followed||null,deviation_notes:p.deviationNotes||null,screenshots:p.screenshots||[],updated_at:new Date().toISOString()}}
+function fromPlanDb(r){return{id:r.id,date:r.date,dayType:r.day_type,marketCondition:r.market_condition,longLevels:r.long_levels,shortLevels:r.short_levels,notes:r.notes,followed:r.followed,deviationNotes:r.deviation_notes,screenshots:r.screenshots||[],updatedAt:r.updated_at}}
+// toPlanDb sends every column on every upsert (same as toEntryDb/toDb), so on a Supabase project
+// that hasn't had the trading_plans block from supabase_schema.sql run yet, PostgREST rejects the
+// whole request. Detected and called out explicitly here so that failure is self-diagnosing
+// rather than reading like a generic network hiccup.
+function planSchemaMsg(msg){
+  return /trading_plans|schema cache|does not exist|find the table/i.test(msg)
+    ?`Failed to sync trading plans: your Supabase database is missing the "trading_plans" table this version needs. Run the "trading_plans" block from supabase_schema.sql, then click Sync Now in Settings. Your local copy is safe.`
+    :`Failed to sync trading plans to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`;
+}
+async function syncPlanUpsert(records){
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
+  const key=records.length===1?"planupsert:"+records[0].id:"planupsert:bulk";
+  return runSyncOp(key,
+    ()=>supabaseClient.from("trading_plans").upsert(records.map(toPlanDb),{onConflict:"id"}),
+    planSchemaMsg);
+}
+async function syncPlanDelete(id){
+  if(!supabaseClient||!authUser)return false;
+  const ok=await runSyncOp("plandelete:"+id,
+    ()=>supabaseClient.from("trading_plans").delete().eq("id",id),
+    msg=>`Failed to sync a trading plan deletion to the cloud: ${msg}. The plan was removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+  if(ok){pendingPlanDeletes=pendingPlanDeletes.filter(x=>x!==id)}else if(!pendingPlanDeletes.includes(id)){pendingPlanDeletes.push(id)}
+  savePendingPlanDeletes();
+  return ok;
+}
+async function syncPlansFromCloud(){
+  try{
+    const {data,error}=await supabaseClient.from("trading_plans").select("*").order("date",{ascending:true});
+    if(error){showSyncError("fullsync:plans:select",planSchemaMsg(error.message));return false}
+    clearSyncError("fullsync:plans:select");
+    const map=new Map();
+    [...tradingPlans,...data.map(fromPlanDb)].filter(p=>!pendingPlanDeletes.includes(p.id)).forEach(p=>{
+      const existing=map.get(p.id);
+      if(!existing||(p.updatedAt||"")>=(existing.updatedAt||""))map.set(p.id,p);
+    });
+    tradingPlans=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    savePlans();
+    return await syncPlanUpsert(tradingPlans);
+  }catch(err){
+    showSyncError("fullsync:plans:select",planSchemaMsg(errMsg(err)));
+    return false;
+  }
 }
 function toOiDb(o){return{user_id:authUser?authUser.id:null,date:o.date,dte:o.dte,strike:o.strike,call_oi:o.callOi,put_oi:o.putOi,hit:o.hit==null?null:o.hit,outcome:o.outcome||null,tracked:!!o.tracked,updated_at:o.updatedAt||new Date().toISOString()}}
 // call_oi/put_oi are `numeric` columns — PostgREST serializes those as JSON strings (to avoid
@@ -3980,18 +4184,20 @@ async function fullSync(){
   await fetchPosSizing();
   for(const id of [...pendingDeletes]){await syncDelete(id)}
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
+  for(const id of [...pendingPlanDeletes]){await syncPlanDelete(id)}
   for(const p of [...pendingOiDeletes]){await syncOiDeleteDate(p.date,p.dte)}
   for(const id of [...pendingMacroEventDeletes]){await syncMacroEventDelete(id)}
   const ok=await syncSessionsFromCloud();
   const entryOk=await syncEntriesFromCloud();
+  const planOk=await syncPlansFromCloud();
   const oiOk=await syncOiFromCloud();
   const macroEventOk=await syncMacroEventsFromCloud();
   const monthOutcomeOk=await syncMonthOutcomesFromCloud();
   const weekOutcomeOk=await syncWeekOutcomesFromCloud();
-  if(ok&&entryOk&&oiOk&&macroEventOk&&monthOutcomeOk&&weekOutcomeOk){
-    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
+  if(ok&&entryOk&&planOk&&oiOk&&macroEventOk&&monthOutcomeOk&&weekOutcomeOk){
+    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${tradingPlans.length} trading plans, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
   }else{
-    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!oiOk&&"Open Interest data",!macroEventOk&&"macro news releases",!monthOutcomeOk&&"monthly outcomes",!weekOutcomeOk&&"weekly outcomes"].filter(Boolean).join(" and ");
+    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!planOk&&"trading plans",!oiOk&&"Open Interest data",!macroEventOk&&"macro news releases",!monthOutcomeOk&&"monthly outcomes",!weekOutcomeOk&&"weekly outcomes"].filter(Boolean).join(" and ");
     syncStatus.textContent=`Sync failed for ${failed} — see the banner above for details.`;
   }
   renderAll();
