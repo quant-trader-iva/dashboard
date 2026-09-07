@@ -590,3 +590,52 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "delete own macro week outcomes" on public.macro_week_outcomes
 for delete using (auth.uid() = user_id);
+
+-- Trading Plans — the pre-session plan (levels watched for longs/shorts, the day type and market
+-- condition expected) plus a post-session grade of whether it was followed
+-- and, if not, why. Keyed by uuid id like trade_entries, since it's a hand-created record. The
+-- app treats date as a natural one-plan-per-day key (client-side check only), but there's no DB
+-- unique index on it — a plan on two devices before a sync would just be two id-keyed rows,
+-- last-write-wins on updated_at, same as trade_entries.
+-- Existing databases: run this whole block once (table + RLS + policies + indexes) to add it.
+-- Until it exists, toPlanDb() sends every column on every plan upsert, so saving ANY plan field
+-- and clicking "Sync Now" both fail with a self-diagnosing "missing trading_plans table" message.
+-- screenshots are compressed base64 JPEG data URLs in jsonb, same approach (and same scaling
+-- caveat) as trade_entries.
+create table if not exists public.trading_plans (
+  id uuid primary key,
+  user_id uuid references auth.users(id),
+  date date,
+  day_type text check (day_type in ('Non-Trend Day','Trend Day') or day_type is null),
+  market_condition text check (market_condition in ('Balanced','Imbalanced') or market_condition is null),
+  long_levels text,
+  short_levels text,
+  notes text,
+  followed text check (followed in ('Yes','No') or followed is null),
+  deviation_notes text,
+  screenshots jsonb default '[]'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.trading_plans enable row level security;
+
+drop policy if exists "select own trading plans" on public.trading_plans;
+drop policy if exists "insert own trading plans" on public.trading_plans;
+drop policy if exists "update own trading plans" on public.trading_plans;
+drop policy if exists "delete own trading plans" on public.trading_plans;
+
+create policy "select own trading plans" on public.trading_plans
+for select using (auth.uid() = user_id);
+
+create policy "insert own trading plans" on public.trading_plans
+for insert with check (auth.uid() = user_id);
+
+create policy "update own trading plans" on public.trading_plans
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own trading plans" on public.trading_plans
+for delete using (auth.uid() = user_id);
+
+create index if not exists trading_plans_date_idx on public.trading_plans(date);
+create index if not exists trading_plans_user_id_idx on public.trading_plans(user_id);
