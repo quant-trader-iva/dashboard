@@ -261,6 +261,22 @@ for delete using (auth.uid() = user_id);
 --   alter table public.trade_entries add column if not exists additional_signals jsonb default '[]'::jsonb;
 --   alter table public.trade_entries add column if not exists plan_deviation_notes text;
 --
+-- If you already created the strategy column before '80/20' was a valid value, widen its check
+-- constraint with:
+--   alter table public.trade_entries drop constraint if exists trade_entries_strategy_check;
+--   alter table public.trade_entries add constraint trade_entries_strategy_check check (strategy in ('LBF','LAF','LVN','HVN','80/20') or strategy is null);
+--
+-- If you already created the table before the pre-entry grading columns (pattern_type,
+-- structure_alignment, level_status, pattern_quality, structural_confluence, entry_time_window,
+-- setup_grade) existed, add them with:
+--   alter table public.trade_entries add column if not exists pattern_type text check (pattern_type in ('Fork','Cross Section','h Pattern','Repair','Other') or pattern_type is null);
+--   alter table public.trade_entries add column if not exists structure_alignment text check (structure_alignment in ('10-Min Trend Aligned','Aligned','Conflicting or Flat') or structure_alignment is null);
+--   alter table public.trade_entries add column if not exists level_status text check (level_status in ('80/20 Untested','80/20 Tested 1x','80/20 Tested 2x+','No Clear Level') or level_status is null);
+--   alter table public.trade_entries add column if not exists pattern_quality text check (pattern_quality in ('Clean Pattern','Slightly Messy','Forced Pattern') or pattern_quality is null);
+--   alter table public.trade_entries add column if not exists structural_confluence text check (structural_confluence in ('Repair + Swing Point Cluster','At Least 1 Factor','None') or structural_confluence is null);
+--   alter table public.trade_entries add column if not exists entry_time_window text check (entry_time_window in ('NY A+ Window — AM (14:30–16:00 UK)','NY A+ Window — PM (20:00–21:00 UK)','London Session','Asia Session','NY Midday') or entry_time_window is null);
+--   alter table public.trade_entries add column if not exists setup_grade text check (setup_grade in ('A+','A','B','C') or setup_grade is null);
+--
 -- 2. Drop the columns this version removed. IRREVERSIBLE — any data still held in them is gone
 --    for good once these run. Export a backup (Data tab -> Download Backup) first if you want to
 --    keep the old readings. plan_adherence is kept but is Yes/No only in the app now; leaving its
@@ -325,7 +341,22 @@ create table if not exists public.trade_entries (
   day_type text check (day_type in ('Trend Day','Non-Trend Day') or day_type is null),
   gex text check (gex in ('Positive','Zero','Negative') or gex is null),
   gex_additional text check (gex_additional in ('Aggression','Put Wall','Call Wall') or gex_additional is null),
-  strategy text check (strategy in ('LBF','LAF','LVN','HVN') or strategy is null),
+  strategy text check (strategy in ('LBF','LAF','LVN','HVN','80/20') or strategy is null),
+
+  -- Pre-entry grading checklist (Fork/Cross Section/h Pattern course material): which structural
+  -- pattern the entry was built around, trend alignment, 80/20 level test count, how clean the
+  -- pattern looked, structural confluence (repair/swing point cluster), the time window, and the
+  -- overall letter grade assigned before clicking the button.
+  pattern_type text check (pattern_type in ('Fork','Cross Section','h Pattern','Repair','Other') or pattern_type is null),
+  structure_alignment text check (structure_alignment in ('10-Min Trend Aligned','Aligned','Conflicting or Flat') or structure_alignment is null),
+  level_status text check (level_status in ('80/20 Untested','80/20 Tested 1x','80/20 Tested 2x+','No Clear Level') or level_status is null),
+  pattern_quality text check (pattern_quality in ('Clean Pattern','Slightly Messy','Forced Pattern') or pattern_quality is null),
+  structural_confluence text check (structural_confluence in ('Repair + Swing Point Cluster','At Least 1 Factor','None') or structural_confluence is null),
+  -- NY A+ Window is split AM/PM with the UK-time equivalent of the course's NY session windows
+  -- (09:30-11:00 NY / 15:00-16:00 NY) baked into the label, since UK is the trader's local time.
+  entry_time_window text check (entry_time_window in ('NY A+ Window — AM (14:30–16:00 UK)','NY A+ Window — PM (20:00–21:00 UK)','London Session','Asia Session','NY Midday') or entry_time_window is null),
+  setup_grade text check (setup_grade in ('A+','A','B','C') or setup_grade is null),
+
   additional_signals jsonb default '[]'::jsonb,
 
   plan_adherence text check (plan_adherence in ('Yes','No') or plan_adherence is null),
@@ -358,6 +389,62 @@ for delete using (auth.uid() = user_id);
 
 create index if not exists trade_entries_date_idx on public.trade_entries(date);
 create index if not exists trade_entries_user_id_idx on public.trade_entries(user_id);
+
+-- Skipped Setups — a setup you graded but didn't take: the same pre-entry grading checklist as
+-- trade_entries (pattern/structure/level/quality/confluence/time window/grade), why you skipped
+-- it, and what it did afterward, so Taken vs Skipped can be compared by grade. Same id-keyed,
+-- last-write-wins-on-updated_at convention as trade_entries; no price/stop/exit columns since a
+-- setup you didn't take has no fill to record.
+create table if not exists public.skipped_setups (
+  id uuid primary key,
+  user_id uuid references auth.users(id),
+  date date,
+  session_type text check (session_type in ('Weekly','Daily','London','New York') or session_type is null),
+  market text,
+  time text,
+
+  pattern_type text check (pattern_type in ('Fork','Cross Section','h Pattern','Repair','Other') or pattern_type is null),
+  structure_alignment text check (structure_alignment in ('10-Min Trend Aligned','Aligned','Conflicting or Flat') or structure_alignment is null),
+  level_status text check (level_status in ('80/20 Untested','80/20 Tested 1x','80/20 Tested 2x+','No Clear Level') or level_status is null),
+  pattern_quality text check (pattern_quality in ('Clean Pattern','Slightly Messy','Forced Pattern') or pattern_quality is null),
+  structural_confluence text check (structural_confluence in ('Repair + Swing Point Cluster','At Least 1 Factor','None') or structural_confluence is null),
+  entry_time_window text check (entry_time_window in ('NY A+ Window — AM (14:30–16:00 UK)','NY A+ Window — PM (20:00–21:00 UK)','London Session','Asia Session','NY Midday') or entry_time_window is null),
+  setup_grade text check (setup_grade in ('A+','A','B','C') or setup_grade is null),
+
+  -- Multi-select (same jsonb-array convention as trade_entries.additional_signals) — more than
+  -- one reason often applies to the same skipped setup.
+  reason_skipped jsonb default '[]'::jsonb,
+  outcome text check (outcome in ('Hit Target','Hit Stop','Went Nowhere','Unclear') or outcome is null),
+
+  -- Compressed base64 JPEG data URLs, same storage approach as trade_entries.screenshots /
+  -- trading_plans.screenshots (not Supabase Storage) — every save re-upserts the full row.
+  screenshots jsonb default '[]'::jsonb,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.skipped_setups enable row level security;
+
+drop policy if exists "select own skipped setups" on public.skipped_setups;
+drop policy if exists "insert own skipped setups" on public.skipped_setups;
+drop policy if exists "update own skipped setups" on public.skipped_setups;
+drop policy if exists "delete own skipped setups" on public.skipped_setups;
+
+create policy "select own skipped setups" on public.skipped_setups
+for select using (auth.uid() = user_id);
+
+create policy "insert own skipped setups" on public.skipped_setups
+for insert with check (auth.uid() = user_id);
+
+create policy "update own skipped setups" on public.skipped_setups
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "delete own skipped setups" on public.skipped_setups
+for delete using (auth.uid() = user_id);
+
+create index if not exists skipped_setups_date_idx on public.skipped_setups(date);
+create index if not exists skipped_setups_user_id_idx on public.skipped_setups(user_id);
 
 -- Open Interest snapshots — one row per strike per day per tracked DTE (0/2/3, one tab each in
 -- the app), parsed client-side from a QuikStrike Open Interest Matrix XLSX/PDF export (see
