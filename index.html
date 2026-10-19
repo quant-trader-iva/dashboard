@@ -1618,13 +1618,16 @@ function usdJpyValueNSessionsAgo(dateStr,lookback){
   if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
   return s[idx-lookback].jpy;
 }
-// Same small-bar-for-genuine-quiet approach as DXY_REGIME_THRESHOLD/DXY_TREND_THRESHOLD, scaled
-// to USD/JPY's own ~100-150 range. Labeled by carry-trade direction (not raw Rising/Falling)
-// since that's the whole point of this card; colored by what it means for NQ — yen weakening
-// (carry ON, historically risk-on) green, yen strengthening (carry-unwind risk) red — the
-// opposite color mapping from DXY/yield, which color by what's bullish for gold instead.
-const USDJPY_REGIME_THRESHOLD=0.15;
-const USDJPY_TREND_THRESHOLD=0.03;
+// Same small-bar-for-genuine-quiet approach as DXY_REGIME_THRESHOLD/DXY_TREND_THRESHOLD, actually
+// rescaled this time (not just copied) to USD/JPY's own ~150 level: DXY's 0.15/0.03 thresholds
+// are ~0.15%/0.03% of its own ~100 index level, so the same relative bar on a ~150 rate is
+// 0.15%*150≈0.225 and 0.03%*150≈0.045, rounded to these two clean numbers. Labeled by carry-trade
+// direction (not raw Rising/Falling) since that's the whole point of this card; colored by what
+// it means for NQ — yen weakening (carry ON, historically risk-on) green, yen strengthening
+// (carry-unwind risk) red — the opposite color mapping from DXY/yield, which color by what's
+// bullish for gold instead.
+const USDJPY_REGIME_THRESHOLD=0.25;
+const USDJPY_TREND_THRESHOLD=0.05;
 function usdJpyRegimeForDate(dateStr,lookback){
   const s=usdJpySeries();
   const idx=usdJpyIndexForDate(dateStr);
