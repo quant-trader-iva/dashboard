@@ -565,7 +565,48 @@
 
 <section id="macro" class="page hidden">
   <div class="card">
-    <h2>Macro — 10Y Real Yield (TIPS)</h2>
+    <h2>Macro — NQ (USD/JPY &harr; BOJ Carry Trade)</h2>
+    <p class="hint">Cheap yen funding gets borrowed and parked in US growth/tech names (the carry trade). A BOJ hike or hawkish surprise strengthens the yen and forces carry unwinds, which historically hit NQ hard (e.g. Aug 2024) &mdash; episodic, not a steady correlation, so read this as a risk flag, not a signal. USD/JPY from the same free ECB reference-rate feed as DXY below, no API key required.</p>
+    <p class="hint" id="usdJpyStatus"></p>
+  </div>
+  <div class="grid" style="margin-top:14px">
+    <div class="metric span-6">
+      <div class="label">USD/JPY</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px">
+        <div style="text-align:left">
+          <div class="hint" style="margin:0;white-space:nowrap">Regime (1-session)</div>
+          <div style="margin-top:3px" id="usdJpyRegimeBadge">&mdash;</div>
+        </div>
+        <div style="text-align:center">
+          <div class="value" id="usdJpyLatest">&mdash;</div>
+          <div class="hint" id="usdJpyAsOf"></div>
+        </div>
+        <div style="text-align:right">
+          <div class="hint" style="margin:0">1 session ago</div>
+          <div style="font-size:18px;font-weight:800" id="usdJpyPrev1">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="metric span-6">
+      <div class="label">USD/JPY Change &amp; Regime <span style="font-weight:400">(falling USD/JPY = yen strengthening = historically carry-unwind pressure on NQ)</span></div>
+      <div id="usdJpyChangeRows"></div>
+    </div>
+
+    <div class="card span-12">
+      <h2 id="usdJpyChartTitle">USD/JPY &mdash; last 21 sessions</h2>
+      <div class="session-buttons" id="usdJpyWindowButtons">
+        <button type="button" class="quick active" data-window="21">21 sessions</button>
+        <button type="button" class="quick" data-window="63">63 sessions</button>
+        <button type="button" class="quick" data-window="126">126 sessions</button>
+        <button type="button" class="quick" data-window="252">252 sessions</button>
+      </div>
+      <div class="chartwrap" id="usdJpyChartWrap" style="position:relative"></div>
+      <p class="hint" id="usdJpyChartNote"></p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Macro — Gold (10Y Real Yield / DXY)</h2>
     <p class="hint">Pulled live from the Treasury.gov daily yield curve feed &mdash; the macro driver most correlated with gold: real yields up historically pressures gold down, and vice versa. Free, official, no API key required.</p>
     <p class="hint" id="macroStatus"></p>
   </div>
@@ -1410,7 +1451,11 @@ function renderMacroChart(series,windowSize){
 // publishes. It tracks the real DXY closely but is a synthetic approximation, not the licensed
 // number — the "as of" line says so. Kept as its own cache/fetch, independent of the Treasury
 // yield fetch above, so a failure in one never blocks or corrupts the other.
-const DXY_CACHE_KEY="macroDxyCache_v3";
+// Bumped to v4 when the cached series started also carrying the raw USD/JPY rate (jpy field,
+// used by the Macro — NQ card below) alongside the computed DXY value — the shape changed, so a
+// stale v3 cache from today (which the date-based freshness check would otherwise accept as-is)
+// needs to be dropped rather than silently missing the new field until tomorrow's refetch.
+const DXY_CACHE_KEY="macroDxyCache_v4";
 let dxyCache=loadDxyCache();
 function loadDxyCache(){try{return JSON.parse(localStorage.getItem(DXY_CACHE_KEY)||"null")}catch{return null}}
 function saveDxyCache(c){try{localStorage.setItem(DXY_CACHE_KEY,JSON.stringify(c))}catch{}}
@@ -1433,7 +1478,7 @@ async function fetchDxy(force){
     const series=Object.keys(rates).sort().map(date=>{
       const r=rates[date];
       if(!["EUR","JPY","GBP","CAD","SEK","CHF"].every(k=>Number.isFinite(r[k])))return null;
-      return{date,value:computeDxy(r)};
+      return{date,value:computeDxy(r),jpy:r.JPY};
     }).filter(Boolean);
     if(!series.length)throw new Error("Frankfurter FX feed returned no usable data");
     dxyCache={fetchedDate:today,year,series,lastAttemptAt:Date.now()};
@@ -1559,6 +1604,122 @@ function renderDxy(){
   }).join("");
   changeRowsEl.innerHTML=`<div class="tablewrap"><table><tr><th>Sessions</th><th style="text-align:right">DXY</th><th style="text-align:right">&Delta;</th><th>Regime</th></tr>${rows}</table></div>`;
 }
+// --- USD/JPY (Macro — NQ: BOJ carry-trade proxy) ---
+// Cheap yen funding gets borrowed and parked in US growth/tech names (the carry trade); a BOJ
+// hike or hawkish surprise strengthens the yen, forcing carry unwinds that tend to hit NQ hard
+// (e.g. Aug 2024). Reuses dxyCache's already-fetched ECB rates (same Frankfurter call already
+// pulls JPY for the DXY basket) instead of a second network round-trip — see jpy field above.
+function usdJpySeries(){return(dxyCache&&dxyCache.series)||[]}
+function usdJpyIndexForDate(dateStr){return dxyIndexForDate(dateStr)}
+function usdJpyValueNSessionsAgo(dateStr,lookback){
+  const s=usdJpySeries();
+  const idx=usdJpyIndexForDate(dateStr);
+  if(idx<lookback)return null;
+  if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
+  return s[idx-lookback].jpy;
+}
+// Same small-bar-for-genuine-quiet approach as DXY_REGIME_THRESHOLD/DXY_TREND_THRESHOLD, actually
+// rescaled this time (not just copied) to USD/JPY's own ~150 level: DXY's 0.15/0.03 thresholds
+// are ~0.15%/0.03% of its own ~100 index level, so the same relative bar on a ~150 rate is
+// 0.15%*150≈0.225 and 0.03%*150≈0.045, rounded to these two clean numbers. Labeled by carry-trade
+// direction (not raw Rising/Falling) since that's the whole point of this card; colored by what
+// it means for NQ — yen weakening (carry ON, historically risk-on) green, yen strengthening
+// (carry-unwind risk) red — the opposite color mapping from DXY/yield, which color by what's
+// bullish for gold instead.
+const USDJPY_REGIME_THRESHOLD=0.25;
+const USDJPY_TREND_THRESHOLD=0.05;
+function usdJpyRegimeForDate(dateStr,lookback){
+  const s=usdJpySeries();
+  const idx=usdJpyIndexForDate(dateStr);
+  if(idx<lookback)return null;
+  if((new Date(dateStr)-new Date(s[idx].date))/86400000>7)return null;
+  const deltaPts=Math.round((s[idx].jpy-s[idx-lookback].jpy)*100)/100;
+  return{deltaPts,label:deltaPts>USDJPY_REGIME_THRESHOLD?"Yen Weakening":deltaPts<-USDJPY_REGIME_THRESHOLD?"Yen Strengthening":"Flat"};
+}
+function usdJpyRegimeBadgeColor(label){return label==="Yen Weakening"?["#16a34a","white"]:label==="Yen Strengthening"?["#dc2626","white"]:["#334155","white"]}
+let usdJpyChartWindow=21;
+// Same SVG generator shape as renderDxyChart, plotting the raw USD/JPY rate instead of DXY.
+function renderUsdJpyChart(series,windowSize){
+  const wrap=document.getElementById("usdJpyChartWrap");
+  if(!wrap)return;
+  const data=series.slice(-windowSize);
+  if(data.length<2){wrap.innerHTML="";return}
+  const W=1120,H=260,padL=42,padR=14,padT=14,padB=26;
+  const vals=data.map(d=>d.jpy);
+  const vMin=Math.floor(Math.min(...vals)*2)/2-0.5,vMax=Math.ceil(Math.max(...vals)*2)/2+0.5;
+  const n=data.length;
+  const x=i=>padL+(W-padL-padR)*(i/(n-1));
+  const y=v=>padT+(H-padT-padB)*(1-(v-vMin)/(vMax-vMin));
+  const path=data.map((d,i)=>(i===0?"M":"L")+x(i).toFixed(2)+","+y(d.jpy).toFixed(2)).join(" ");
+  const area=path+` L${x(n-1).toFixed(2)},${(H-padB).toFixed(2)} L${x(0).toFixed(2)},${(H-padB).toFixed(2)} Z`;
+  let gridSvg="";
+  for(let t=0;t<=5;t++){
+    const v=vMin+(vMax-vMin)*(t/5),yy=y(v);
+    gridSvg+=`<line x1="${padL}" x2="${W-padR}" y1="${yy.toFixed(2)}" y2="${yy.toFixed(2)}" stroke="#334155" stroke-width="1" opacity=".5"/>`;
+    gridSvg+=`<text x="${padL-6}" y="${(yy+3).toFixed(2)}" text-anchor="end" font-size="10" fill="#94a3b8">${v.toFixed(1)}</text>`;
+  }
+  let xLabels="";
+  [0,Math.round((n-1)*0.25),Math.round((n-1)*0.5),Math.round((n-1)*0.75),n-1].forEach(i=>{
+    xLabels+=`<text x="${x(i).toFixed(2)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#94a3b8">${fmtMacroDate(data[i].date)}</text>`;
+  });
+  const hoverDots=data.map((d,i)=>`<circle class="chart-hoverdot" cx="${x(i).toFixed(2)}" cy="${y(d.jpy).toFixed(2)}" r="3.5" fill="#38bdf8"/>`).join("");
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" preserveAspectRatio="none">
+    <defs><linearGradient id="usdJpyFillGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity=".22"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${gridSvg}${xLabels}
+    <path d="${area}" fill="url(#usdJpyFillGrad)" stroke="none"/>
+    <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="${x(n-1).toFixed(2)}" cy="${y(data[n-1].jpy).toFixed(2)}" r="4" fill="#38bdf8"/>
+    <line class="chart-hoverline" x1="0" x2="0" y1="${padT}" y2="${H-padB}"/>
+    ${hoverDots}
+  </svg>`;
+  attachChartHover(wrap,data,"jpy",x,y,W,H,padL,padR,v=>v.toFixed(2),"USD/JPY","#38bdf8");
+}
+function renderUsdJpy(){
+  const valueEl=document.getElementById("usdJpyLatest"),asOfEl=document.getElementById("usdJpyAsOf");
+  const prev1El=document.getElementById("usdJpyPrev1"),regimeBadgeEl=document.getElementById("usdJpyRegimeBadge");
+  const changeRowsEl=document.getElementById("usdJpyChangeRows");
+  const chartTitleEl=document.getElementById("usdJpyChartTitle"),chartNoteEl=document.getElementById("usdJpyChartNote");
+  const statusEl=document.getElementById("usdJpyStatus");
+  if(!valueEl)return;
+  const series=usdJpySeries();
+  if(!series.length){
+    valueEl.textContent="—";
+    if(prev1El)prev1El.textContent="—";
+    if(regimeBadgeEl)regimeBadgeEl.textContent="—";
+    asOfEl.textContent=dxyCache&&dxyCache.error?`Couldn't load: ${dxyCache.error}`:"Loading…";
+    if(statusEl)statusEl.textContent=asOfEl.textContent;
+    if(changeRowsEl)changeRowsEl.innerHTML="";
+    if(chartTitleEl)chartTitleEl.textContent="USD/JPY";
+    document.getElementById("usdJpyChartWrap").innerHTML="";
+    if(chartNoteEl)chartNoteEl.textContent="";
+    return;
+  }
+  const latest=series[series.length-1];
+  const p1=usdJpyValueNSessionsAgo(latest.date,1),p2=usdJpyValueNSessionsAgo(latest.date,2);
+  valueEl.innerHTML=latest.jpy.toFixed(2)+trendArrowHtml(p1==null?null:latest.jpy-p1,USDJPY_TREND_THRESHOLD);
+  if(prev1El)prev1El.innerHTML=(p1==null?"—":p1.toFixed(2))+trendArrowHtml(p1==null||p2==null?null:p1-p2,USDJPY_TREND_THRESHOLD);
+  if(regimeBadgeEl){
+    const r=usdJpyRegimeForDate(latest.date,1);
+    regimeBadgeEl.innerHTML=r?(()=>{const[bg,fg]=usdJpyRegimeBadgeColor(r.label);return `<span class="pill" style="background:${bg};color:${fg}">${r.label}</span>`})():`<span class="hint" style="margin:0">n/a</span>`;
+  }
+  asOfEl.textContent=`as of ${fmtMacroDate(latest.date)} — from live ECB reference rates`+(dxyCache.error?` (most recent refresh failed: ${dxyCache.error})`:"");
+  if(statusEl)statusEl.textContent=`Live — ${series.length} trading day${series.length===1?"":"s"} loaded from the same ECB feed as DXY below.`+(dxyCache.error?` (using last successful fetch — most recent refresh failed: ${dxyCache.error})`:"");
+  if(chartTitleEl)chartTitleEl.textContent=`USD/JPY — last ${Math.min(usdJpyChartWindow,series.length)} sessions`;
+  renderUsdJpyChart(series,usdJpyChartWindow);
+  if(chartNoteEl)chartNoteEl.textContent="USD/JPY from live ECB reference rates (same feed as the DXY basket below) — the higher this number, the weaker the yen.";
+  if(!changeRowsEl)return;
+  const rows=MACRO_CHANGE_WINDOWS.map(w=>{
+    const v=usdJpyValueNSessionsAgo(latest.date,w);
+    const r=usdJpyRegimeForDate(latest.date,w);
+    const valText=v==null?"—":v.toFixed(2);
+    const deltaText=r?(r.deltaPts>0?"+":"")+r.deltaPts.toFixed(2):"—";
+    const badge=r?(()=>{const[bg,fg]=usdJpyRegimeBadgeColor(r.label);return `<span class="pill" style="background:${bg};color:${fg}">${r.label}</span>`})():`<span class="hint" style="margin:0">n/a</span>`;
+    return `<tr><td>${w}</td><td style="text-align:right">${valText}</td><td style="text-align:right">${deltaText}</td><td>${badge}</td></tr>`;
+  }).join("");
+  changeRowsEl.innerHTML=`<div class="tablewrap"><table><tr><th>Sessions</th><th style="text-align:right">USD/JPY</th><th style="text-align:right">&Delta;</th><th>Regime</th></tr>${rows}</table></div>`;
+}
 // --- Incoming Volatility calendar (Macro News tab) ---
 // Same Forex Factory feed the manual "Fetch This Week's USD Releases" button uses, but pulled
 // independently on a daily cache (same TTL/backoff shape as fetchDxy above) so the Incoming
@@ -1597,6 +1758,7 @@ function renderMacro(){
   const regimeStatsEl=document.getElementById("macroRegimeStats");
   if(!statusEl)return;
   renderDxy();
+  renderUsdJpy();
   const series=macroSeries();
   if(!series.length){
     statusEl.textContent=macroCache&&macroCache.error?`Couldn't load live macro data: ${macroCache.error}. Your sessions are unaffected — this only powers this tab. Try Refresh in your browser.`:"Loading live data from Treasury.gov…";
@@ -1666,6 +1828,13 @@ document.getElementById("dxyWindowButtons").addEventListener("click",e=>{
   dxyChartWindow=parseInt(btn.dataset.window,10);
   document.querySelectorAll("#dxyWindowButtons button").forEach(b=>b.classList.toggle("active",b===btn));
   renderDxy();
+});
+document.getElementById("usdJpyWindowButtons").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-window]");
+  if(!btn)return;
+  usdJpyChartWindow=parseInt(btn.dataset.window,10);
+  document.querySelectorAll("#usdJpyWindowButtons button").forEach(b=>b.classList.toggle("active",b===btn));
+  renderUsdJpy();
 });
 // --- Trade Entries: computed fields & grouping ---
 function timeToMinutes(t){if(!t)return null;const m=/^(\d{1,2}):(\d{2})/.exec(t);if(!m)return null;return Number(m[1])*60+Number(m[2])}
