@@ -978,6 +978,16 @@ function setCheckboxGroupInForm(containerId,vals){const set=new Set(vals||[]);do
 // of a text field, so they're tracked in their own module-level array (teScreenshotsState)
 // rather than read straight off a form control at submit time.
 let teScreenshotsState=[];
+// Additional Signals was reworked: "Positive Delta"/"Negative Delta" were renamed to "High
+// Positive/Negative Delta", and "Footprint Trapped 30m/15m/5m" were removed outright. Without
+// this, loading an older entry that had any of those checked would silently show them unchecked
+// (no matching checkbox exists), and saving the entry for any unrelated reason would then
+// overwrite additionalSignals with just what's currently checked — permanently losing the old
+// data. Renamed values are translated onto their new checkbox; values with no current equivalent
+// are tracked here and carried through formToEntry() untouched until the user's own data
+// naturally ages out.
+const ADDITIONAL_SIGNALS_RENAMES={"Positive Delta":"High Positive Delta","Negative Delta":"High Negative Delta"};
+let teLegacyAdditionalSignals=[];
 function compressImageFile(file,maxWidth=1280,quality=0.72){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -1759,7 +1769,7 @@ function formToEntry(){
   let o={};
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
   ["entryPrice","stopLossPrice","exitPrice"].forEach(k=>o[k]=n(o[k]));
-  o.additionalSignals=getCheckboxGroupFromForm("teAdditionalSignals");
+  o.additionalSignals=[...getCheckboxGroupFromForm("teAdditionalSignals"),...teLegacyAdditionalSignals];
   o.screenshots=teScreenshotsState.slice();
   o.id=teRecordId.value||crypto.randomUUID();
   o.updatedAt=new Date().toISOString();
@@ -1768,7 +1778,10 @@ function formToEntry(){
 function entryToForm(e){
   teRecordId.value=e.id||"";
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)el.value=e[teKey(name)]??""});
-  setCheckboxGroupInForm("teAdditionalSignals",e.additionalSignals);
+  const translatedSignals=(e.additionalSignals||[]).map(v=>ADDITIONAL_SIGNALS_RENAMES[v]||v);
+  const currentSignalValues=new Set([...document.querySelectorAll("#teAdditionalSignals input[type=checkbox]")].map(cb=>cb.value));
+  teLegacyAdditionalSignals=translatedSignals.filter(v=>!currentSignalValues.has(v));
+  setCheckboxGroupInForm("teAdditionalSignals",translatedSignals);
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
@@ -1780,6 +1793,7 @@ function resetTradeEntryForm(){
   teRecordId.value="";
   if(!teDate.value)teDate.value=new Date().toISOString().slice(0,10);
   teScreenshotsState=[];
+  teLegacyAdditionalSignals=[];
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
   syncPlanDeviationVisibility();
