@@ -140,6 +140,7 @@
     <button class="tab" data-tab="teStats">Execution Stats</button>
     <button class="tab" data-tab="teNew">New Entry</button>
     <button class="tab" data-tab="teLog">Entry Log</button>
+    <button class="tab" data-tab="skipped">Skipped Setups</button>
     <button class="tab" data-tab="psychology">Psychology</button>
     <button class="tab" data-tab="research">Research</button>
     <button class="tab" data-tab="settings">Settings</button>
@@ -375,7 +376,7 @@
       <div class="form-grid">
         <div><label>Date</label><input id="teDate" type="date" required/></div>
         <div><label>Session Type <span class="hint" style="font-weight:400">(optional)</span></label><select id="teSessionType"><option value="">—</option><option>Weekly</option><option>Daily</option><option>London</option><option>New York</option></select></div>
-        <div><label>Market</label><select id="teMarket"><option>GC</option><option>MGC</option></select></div>
+        <div><label>Market</label><select id="teMarket"><option>GC</option><option>MGC</option><option>NQ</option><option>MNQ</option></select></div>
         <div><label>Entry Time</label><input id="teEntryTime" type="time"/></div>
 
         <div><label>Entry Price</label><input id="teEntryPrice" type="number" step="0.01"/></div>
@@ -386,18 +387,30 @@
         <div><label>Day Type</label><select id="teDayType"><option value="">—</option><option>Trend Day</option><option>Non-Trend Day</option></select></div>
         <div><label>GEX</label><select id="teGex"><option value="">—</option><option>Positive</option><option>Zero</option><option>Negative</option></select></div>
         <div><label>GEX Additional</label><select id="teGexAdditional"><option value="">—</option><option>Aggression</option><option>Put Wall</option><option>Call Wall</option></select></div>
-        <div><label>Strategy</label><select id="teStrategy"><option value="">—</option><option>LBF</option><option>LAF</option><option>LVN</option><option>HVN</option></select></div>
+        <div><label>Strategy</label><select id="teStrategy"><option value="">—</option><option>LBF</option><option>LAF</option><option>LVN</option><option>HVN</option><option>80/20</option></select></div>
+
+        <div style="grid-column:1/-1;margin-top:4px;padding-top:12px;border-top:1px solid var(--line)">
+          <strong style="color:#e5e7eb">Pre-Entry Grading</strong>
+          <span class="hint" style="font-weight:400">— structure, level, pattern quality, confluence and time window. Grade every setup before you click the button; all five should read A or better for an A+, drop one for an A, drop two or more and it's a B/C you skip.</span>
+        </div>
+        <div><label>Pattern</label><select id="tePatternType"><option value="">—</option><option>Fork</option><option>Cross Section</option><option>h Pattern</option><option>Repair</option><option>Other</option></select></div>
+        <div><label>Structure <span class="hint" style="font-weight:400">(trend alignment)</span></label><select id="teStructureAlignment"><option value="">—</option><option>10-Min Trend Aligned</option><option>Aligned</option><option>Conflicting or Flat</option></select></div>
+        <div><label>Level <span class="hint" style="font-weight:400">(80/20 test count)</span></label><select id="teLevelStatus"><option value="">—</option><option>80/20 Untested</option><option>80/20 Tested 1x</option><option>80/20 Tested 2x+</option><option>No Clear Level</option></select></div>
+        <div><label>Pattern Quality</label><select id="tePatternQuality"><option value="">—</option><option>Clean Pattern</option><option>Slightly Messy</option><option>Forced Pattern</option></select></div>
+        <div><label>Confluence <span class="hint" style="font-weight:400">(structural, not indicator)</span></label><select id="teStructuralConfluence"><option value="">—</option><option>Repair + Swing Point Cluster</option><option>At Least 1 Factor</option><option>None</option></select></div>
+        <div><label>Time Window <span class="hint" style="font-weight:400">(UK time)</span></label><select id="teEntryTimeWindow"><option value="">—</option><option>NY A+ Window — AM (14:30–16:00 UK)</option><option>NY A+ Window — PM (20:00–21:00 UK)</option><option>London Session</option><option>Asia Session</option><option>NY Midday</option></select></div>
+        <div><label>Setup Grade <span class="hint" style="font-weight:400">(A+ / A get capital, B / C get nothing)</span></label><select id="teSetupGrade"><option value="">—</option><option>A+</option><option>A</option><option>B</option><option>C</option></select></div>
 
         <div style="grid-column:1/-1">
           <label>Additional Signals <span class="hint" style="font-weight:400">(select all that apply)</span></label>
           <div id="teAdditionalSignals" class="checkrow">
             <label class="chk-item"><input type="checkbox" value="Trapped Buyers"/> Trapped Buyers</label>
             <label class="chk-item"><input type="checkbox" value="Trapped Sellers"/> Trapped Sellers</label>
-            <label class="chk-item"><input type="checkbox" value="Positive Delta"/> Positive Delta</label>
-            <label class="chk-item"><input type="checkbox" value="Negative Delta"/> Negative Delta</label>
-            <label class="chk-item"><input type="checkbox" value="Footprint Trapped 30m"/> Footprint Trapped Buyers/Sellers 30m</label>
-            <label class="chk-item"><input type="checkbox" value="Footprint Trapped 15m"/> Footprint Trapped Buyers/Sellers 15m</label>
-            <label class="chk-item"><input type="checkbox" value="Footprint Trapped 5m"/> Footprint Trapped Buyers/Sellers 5m</label>
+            <label class="chk-item"><input type="checkbox" value="High Positive Delta"/> High Positive Delta</label>
+            <label class="chk-item"><input type="checkbox" value="High Negative Delta"/> High Negative Delta</label>
+            <label class="chk-item"><input type="checkbox" value="Buying Imbalances"/> Buying Imbalances</label>
+            <label class="chk-item"><input type="checkbox" value="Selling Imbalances"/> Selling Imbalances</label>
+            <label class="chk-item"><input type="checkbox" value="Absorption"/> Absorption</label>
           </div>
         </div>
         <div><label>Did I Follow My Plan?</label><select id="tePlanAdherence"><option value="">—</option><option>Yes</option><option>No</option></select></div>
@@ -426,6 +439,14 @@
   <div class="grid">
     <div class="card span-12"><h2>By Time of Day</h2><p class="hint">Entry Time grouped into 4-hour blocks, using your browser's local time.</p><div class="tablewrap"><table id="teHourTable"></table></div></div>
     <div class="card span-12"><h2>By Week of Month</h2><p class="hint">Entry Date's day-of-month grouped into calendar weeks (1-7, 8-14, 15-21, 22-28, 29-31).</p><div class="tablewrap"><table id="teWeekOfMonthTable"></table></div></div>
+
+    <div class="card span-12"><h2>By Setup Grade (A+ / A / B / C)</h2><p class="hint">Grade every setup against the five-column checklist (Structure, Level, Pattern Quality, Confluence, Time Window) before you enter. A+ and A setups get capital; B and C get nothing — this count is the fastest check on whether you're actually holding that line.</p><div class="tablewrap"><table id="teSetupGradeTable"></table></div></div>
+    <div class="card span-6"><h2>By Pattern</h2><p class="hint">Fork, Cross Section, h Pattern, or a Repair — which structural pattern the entry was built around.</p><div class="tablewrap"><table id="tePatternTypeTable"></table></div></div>
+    <div class="card span-6"><h2>By Structure</h2><p class="hint">Trend alignment across timeframes at entry.</p><div class="tablewrap"><table id="teStructureAlignmentTable"></table></div></div>
+    <div class="card span-6"><h2>By Level (80/20)</h2><p class="hint">How many times the 80/20 level had already been tested before this entry. An untested level is the A+ read; a level tested 2x or more, or no clear level at all, is where edge tends to decay.</p><div class="tablewrap"><table id="teLevelStatusTable"></table></div></div>
+    <div class="card span-6"><h2>By Pattern Quality</h2><p class="hint">How clean the pattern itself looked. If you had to squint to convince yourself it was there, it wasn't clean.</p><div class="tablewrap"><table id="tePatternQualityTable"></table></div></div>
+    <div class="card span-6"><h2>By Confluence (Structure)</h2><p class="hint">Structural confluence at the level — a Repair plus a swing point cluster, at least one factor, or none. Separate from the orderflow Additional Signals above.</p><div class="tablewrap"><table id="teStructuralConfluenceTable"></table></div></div>
+    <div class="card span-6"><h2>By Time Window</h2><p class="hint">Whether the entry landed in the defined A+ window, just an active session, any time, or the midday chop.</p><div class="tablewrap"><table id="teEntryTimeWindowTable"></table></div></div>
   </div>
 </section>
 
@@ -444,6 +465,68 @@
   <div class="card">
     <h2>Entry Log</h2>
     <div class="tablewrap"><table id="teLogTable"></table></div>
+  </div>
+</section>
+
+<section id="skipped" class="page hidden">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Skipped Setup</h2>
+    <p class="hint">A setup you graded but didn't take — log it the same way as a taken trade, then check back after the session to see whether your B/C-skip discipline is actually paying off.</p>
+    <form id="skipForm">
+      <input type="hidden" id="skipRecordId"/>
+      <div class="form-grid">
+        <div><label>Date</label><input id="skipDate" type="date" required/></div>
+        <div><label>Session Type <span class="hint" style="font-weight:400">(optional)</span></label><select id="skipSessionType"><option value="">—</option><option>Weekly</option><option>Daily</option><option>London</option><option>New York</option></select></div>
+        <div><label>Market</label><select id="skipMarket"><option>GC</option><option>MGC</option><option>NQ</option><option>MNQ</option></select></div>
+        <div><label>Time Seen</label><input id="skipTime" type="time"/></div>
+
+        <div><label>Pattern</label><select id="skipPatternType"><option value="">—</option><option>Fork</option><option>Cross Section</option><option>h Pattern</option><option>Repair</option><option>Other</option></select></div>
+        <div><label>Structure <span class="hint" style="font-weight:400">(trend alignment)</span></label><select id="skipStructureAlignment"><option value="">—</option><option>10-Min Trend Aligned</option><option>Aligned</option><option>Conflicting or Flat</option></select></div>
+        <div><label>Level <span class="hint" style="font-weight:400">(80/20 test count)</span></label><select id="skipLevelStatus"><option value="">—</option><option>80/20 Untested</option><option>80/20 Tested 1x</option><option>80/20 Tested 2x+</option><option>No Clear Level</option></select></div>
+        <div><label>Pattern Quality</label><select id="skipPatternQuality"><option value="">—</option><option>Clean Pattern</option><option>Slightly Messy</option><option>Forced Pattern</option></select></div>
+
+        <div><label>Confluence <span class="hint" style="font-weight:400">(structural, not indicator)</span></label><select id="skipStructuralConfluence"><option value="">—</option><option>Repair + Swing Point Cluster</option><option>At Least 1 Factor</option><option>None</option></select></div>
+        <div><label>Time Window <span class="hint" style="font-weight:400">(UK time)</span></label><select id="skipEntryTimeWindow"><option value="">—</option><option>NY A+ Window — AM (14:30–16:00 UK)</option><option>NY A+ Window — PM (20:00–21:00 UK)</option><option>London Session</option><option>Asia Session</option><option>NY Midday</option></select></div>
+        <div><label>Setup Grade</label><select id="skipSetupGrade"><option value="">—</option><option>A+</option><option>A</option><option>B</option><option>C</option></select></div>
+        <div><label>Outcome <span class="hint" style="font-weight:400">(graded after the fact)</span></label><select id="skipOutcome"><option value="">—</option><option>Hit Target</option><option>Hit Stop</option><option>Went Nowhere</option><option>Unclear</option></select></div>
+
+        <div style="grid-column:1/-1">
+          <label>Reason(s) Skipped <span class="hint" style="font-weight:400">(select all that apply)</span></label>
+          <div id="skipReasonSkipped" class="checkrow">
+            <label class="chk-item"><input type="checkbox" value="Already in a Trade"/> Already in a Trade</label>
+            <label class="chk-item"><input type="checkbox" value="Hesitated"/> Hesitated</label>
+            <label class="chk-item"><input type="checkbox" value="Missed It / Too Slow"/> Missed It / Too Slow</label>
+            <label class="chk-item"><input type="checkbox" value="Max Daily Trades Reached"/> Max Daily Trades Reached</label>
+            <label class="chk-item"><input type="checkbox" value="Didn't Trust the Read"/> Didn't Trust the Read</label>
+            <label class="chk-item"><input type="checkbox" value="Away From Desk"/> Away From Desk</label>
+            <label class="chk-item"><input type="checkbox" value="80/20 Tested Multiple Times"/> 80/20 Tested Multiple Times</label>
+            <label class="chk-item"><input type="checkbox" value="Other"/> Other</label>
+          </div>
+        </div>
+        <div style="grid-column:1/-1"><label>Notes</label><textarea id="skipNotes" placeholder="What you saw, why you passed, what price did after..."></textarea></div>
+        <div style="grid-column:1/-1">
+          <label>Screenshots <span class="hint" style="font-weight:400">(chart, footprint, bookmap — compressed and saved with the entry)</span></label>
+          <input id="skipScreenshotsInput" type="file" accept="image/*" multiple/>
+          <div id="skipScreenshotsList" style="margin-top:8px"></div>
+        </div>
+      </div>
+      <p id="skipFormError" class="hint" style="color:#f87171;font-weight:700;display:none"></p>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="primary" type="submit">Save Skipped Setup</button>
+        <button type="button" id="skipClearForm">Clear Form</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h2>Taken vs. Skipped by Grade</h2>
+    <p class="hint">Counts only — the fastest check on whether your grading line is actually holding. If B/C skips are piling up with "Hit Target" outcomes, your bar is too strict; if A+/A takes aren't clearly outperforming, it's too loose.</p>
+    <div class="tablewrap"><table id="skipGradeCompareTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Skipped Setup Log</h2>
+    <div class="tablewrap"><table id="skipLogTable"></table></div>
   </div>
 </section>
 
@@ -736,6 +819,8 @@ const ENTRIES_STORAGE_KEY="trading_projection_entries_v1";
 const PENDING_ENTRY_DELETES_KEY="trading_projection_pending_entry_deletes_v1";
 const PLANS_STORAGE_KEY="trading_projection_plans_v1";
 const PENDING_PLAN_DELETES_KEY="trading_projection_pending_plan_deletes_v1";
+const SKIPPED_STORAGE_KEY="trading_projection_skipped_setups_v1";
+const PENDING_SKIPPED_DELETES_KEY="trading_projection_pending_skipped_deletes_v1";
 const OI_STORAGE_KEY="trading_projection_oi_snapshots_v2";
 const PENDING_OI_DELETES_KEY="trading_projection_pending_oi_deletes_v2";
 const LEGACY_OI_STORAGE_KEY="trading_projection_oi_snapshots_v1";
@@ -806,6 +891,20 @@ function savePlans(){
 }
 function loadPendingPlanDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_PLAN_DELETES_KEY)||"[]")}catch{return[]}}
 function savePendingPlanDeletes(){localStorage.setItem(PENDING_PLAN_DELETES_KEY,JSON.stringify(pendingPlanDeletes))}
+// Skipped Setups — a setup you graded but didn't take, logged with the same grading checklist as
+// a taken trade entry (pattern/structure/level/quality/confluence/time window/grade) plus why you
+// skipped it and what it did afterward, so Taken vs Skipped can be compared by grade. Same
+// id-keyed, upsert + pendingDeletes sync convention as tradeEntries/tradingPlans.
+function loadSkipped(){try{return JSON.parse(localStorage.getItem(SKIPPED_STORAGE_KEY)||"[]")}catch{return[]}}
+function saveSkipped(){
+  try{
+    localStorage.setItem(SKIPPED_STORAGE_KEY,JSON.stringify(skippedSetups));
+  }catch(err){
+    alert("Could not save locally — your browser's storage is full. Delete some entries, or use Download Backup to export first, then try again.");
+  }
+}
+function loadPendingSkippedDeletes(){try{return JSON.parse(localStorage.getItem(PENDING_SKIPPED_DELETES_KEY)||"[]")}catch{return[]}}
+function savePendingSkippedDeletes(){localStorage.setItem(PENDING_SKIPPED_DELETES_KEY,JSON.stringify(pendingSkippedDeletes))}
 // oiSnapshots rows are keyed by date+dte+strike (not a uuid id) — see the matching note on the
 // oi_snapshots table in supabase_schema.sql for why: re-uploading a date should overwrite it,
 // not accumulate duplicate rows. Storage key bumped to v2 when the dte column was added — every
@@ -850,6 +949,7 @@ function saveWeekOutcomes(){localStorage.setItem(WEEK_OUTCOMES_KEY,JSON.stringif
 let sessions=loadSessions(), pendingDeletes=loadPendingDeletes(), filtered=[], supabaseClient=null;
 let tradeEntries=loadEntries(), pendingEntryDeletes=loadPendingEntryDeletes();
 let tradingPlans=loadPlans(), pendingPlanDeletes=loadPendingPlanDeletes();
+let skippedSetups=loadSkipped(), pendingSkippedDeletes=loadPendingSkippedDeletes();
 let oiSnapshots=loadOiSnapshots(), pendingOiDeletes=loadPendingOiDeletes();
 let macroEvents=loadMacroEvents(), pendingMacroEventDeletes=loadPendingMacroEventDeletes();
 let monthOutcomes=loadMonthOutcomes();
@@ -859,9 +959,14 @@ const fields=["date","day","sessionType","market","dayType","openType","bias","o
 // (teId: "te"+Name) and the object key (teKey: name lower-cased at index 0), mirroring how
 // `fields` drives the session form, but kept as its own list/prefix so entry-log field ids
 // never collide with the session form's ids (both live in the same document at once).
-const teFieldNames=["Date","SessionType","Market","EntryTime","EntryPrice","StopLossPrice","ExitPrice","MarketCondition","DayType","Gex","GexAdditional","Strategy","PlanAdherence","PlanDeviationNotes","Notes"];
+const teFieldNames=["Date","SessionType","Market","EntryTime","EntryPrice","StopLossPrice","ExitPrice","MarketCondition","DayType","Gex","GexAdditional","Strategy","PatternType","StructureAlignment","LevelStatus","PatternQuality","StructuralConfluence","EntryTimeWindow","SetupGrade","PlanAdherence","PlanDeviationNotes","Notes"];
 function teId(name){return "te"+name}
 function teKey(name){return name[0].toLowerCase()+name.slice(1)}
+// Skipped Setups form — same teId/teKey-style name-driven mapping as trade entries, its own
+// "skip" prefix so the DOM ids never collide (teKey is reused as-is: it's prefix-agnostic).
+const skipFieldNames=["Date","SessionType","Market","Time","PatternType","StructureAlignment","LevelStatus","PatternQuality","StructuralConfluence","EntryTimeWindow","SetupGrade","Outcome","Notes"];
+function skipId(name){return "skip"+name}
+const SKIP_OUTCOME_LABELS=["Hit Target","Hit Stop","Went Nowhere","Unclear"];
 // Institutional Trades and Mistake Tags are fixed checkbox groups (multiple selections), not
 // single-value fields, so they're handled separately from teFieldNames/teId's one-element-per-field
 // mapping — the checkboxes themselves (and their value list) live directly in the container's HTML
@@ -873,6 +978,16 @@ function setCheckboxGroupInForm(containerId,vals){const set=new Set(vals||[]);do
 // of a text field, so they're tracked in their own module-level array (teScreenshotsState)
 // rather than read straight off a form control at submit time.
 let teScreenshotsState=[];
+// Additional Signals was reworked: "Positive Delta"/"Negative Delta" were renamed to "High
+// Positive/Negative Delta", and "Footprint Trapped 30m/15m/5m" were removed outright. Without
+// this, loading an older entry that had any of those checked would silently show them unchecked
+// (no matching checkbox exists), and saving the entry for any unrelated reason would then
+// overwrite additionalSignals with just what's currently checked — permanently losing the old
+// data. Renamed values are translated onto their new checkbox; values with no current equivalent
+// are tracked here and carried through formToEntry() untouched until the user's own data
+// naturally ages out.
+const ADDITIONAL_SIGNALS_RENAMES={"Positive Delta":"High Positive Delta","Negative Delta":"High Negative Delta"};
+let teLegacyAdditionalSignals=[];
 function compressImageFile(file,maxWidth=1280,quality=0.72){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -1576,6 +1691,16 @@ function parseEntryDate(e){
 // Sunday/Monday week boundary — simplest read on "which week of the month" without pulling in a
 // full calendar-week library. Week 5 only ever gets the 29th-31st, so it's naturally sparse.
 const WEEK_OF_MONTH_BUCKETS=[{label:"Week 1",lo:1,hi:8},{label:"Week 2",lo:8,hi:15},{label:"Week 3",lo:15,hi:22},{label:"Week 4",lo:22,hi:29},{label:"Week 5",lo:29,hi:32}];
+// Pre-entry grading fields (Pattern/Structure/Level/Pattern Quality/Confluence/Time Window/Grade)
+// — fixed, best-to-worst label order (not frequency-sorted) so these count tables read like the
+// A+/A/B/C grading matrix itself rather than shuffling row order as your trade mix changes.
+const PATTERN_TYPE_LABELS=["Fork","Cross Section","h Pattern","Repair","Other"];
+const STRUCTURE_ALIGNMENT_LABELS=["10-Min Trend Aligned","Aligned","Conflicting or Flat"];
+const LEVEL_STATUS_LABELS=["80/20 Untested","80/20 Tested 1x","80/20 Tested 2x+","No Clear Level"];
+const PATTERN_QUALITY_LABELS=["Clean Pattern","Slightly Messy","Forced Pattern"];
+const STRUCTURAL_CONFLUENCE_LABELS=["Repair + Swing Point Cluster","At Least 1 Factor","None"];
+const ENTRY_TIME_WINDOW_LABELS=["NY A+ Window — AM (14:30–16:00 UK)","NY A+ Window — PM (20:00–21:00 UK)","London Session","Asia Session","NY Midday"];
+const SETUP_GRADE_LABELS=["A+","A","B","C"];
 function weekOfMonthOf(e){
   const d=parseEntryDate(e);
   if(!d)return null;
@@ -1614,6 +1739,13 @@ function renderEntryStats(){
   teMCount.textContent=tradeEntries.length;
   renderCountTable("teHourTable","Hour",entryCountRows(tradeEntries,x=>hourBucketOf(x.entryTime),HOUR_BUCKETS.map(b=>b.label)));
   renderCountTable("teWeekOfMonthTable","Week",entryCountRows(tradeEntries,weekOfMonthOf,WEEK_OF_MONTH_BUCKETS.map(b=>b.label)));
+  renderCountTable("teSetupGradeTable","Grade",entryCountRows(tradeEntries,x=>x.setupGrade||null,SETUP_GRADE_LABELS));
+  renderCountTable("tePatternTypeTable","Pattern",entryCountRows(tradeEntries,x=>x.patternType||null,PATTERN_TYPE_LABELS));
+  renderCountTable("teStructureAlignmentTable","Structure",entryCountRows(tradeEntries,x=>x.structureAlignment||null,STRUCTURE_ALIGNMENT_LABELS));
+  renderCountTable("teLevelStatusTable","Level (80/20)",entryCountRows(tradeEntries,x=>x.levelStatus||null,LEVEL_STATUS_LABELS));
+  renderCountTable("tePatternQualityTable","Pattern Quality",entryCountRows(tradeEntries,x=>x.patternQuality||null,PATTERN_QUALITY_LABELS));
+  renderCountTable("teStructuralConfluenceTable","Confluence",entryCountRows(tradeEntries,x=>x.structuralConfluence||null,STRUCTURAL_CONFLUENCE_LABELS));
+  renderCountTable("teEntryTimeWindowTable","Time Window",entryCountRows(tradeEntries,x=>x.entryTimeWindow||null,ENTRY_TIME_WINDOW_LABELS));
 }
 function renderPsychologyStats(){
   psyMCount.textContent=tradeEntries.length;
@@ -1624,8 +1756,8 @@ function renderPsychologyStats(){
 }
 function renderEntryLogTable(){
   const e=tradeEntries.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Market</th><th>Entry Time</th><th>Entry</th><th>Stop</th><th>Exit</th><th>Market Cond.</th><th>Day Type</th><th>GEX</th><th>GEX Add'l</th><th>Strategy</th><th>Signals</th><th>Plan</th><th>What Happened</th><th>Notes</th><th>Photos</th><th>Actions</th></tr></thead><tbody>${
-    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${escapeHtml(x.market||"")}</td><td>${x.entryTime||""}</td><td>${Number.isFinite(x.entryPrice)?fmt(x.entryPrice):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${escapeHtml(x.marketCondition||"")}</td><td>${escapeHtml(x.dayType||"")}</td><td>${escapeHtml(x.gex||"")}</td><td>${escapeHtml(x.gexAdditional||"")}</td><td>${escapeHtml(x.strategy||"")}</td><td>${escapeHtml((x.additionalSignals||[]).join(", "))}</td><td>${escapeHtml(x.planAdherence||"")}</td><td>${escapeHtml(x.planDeviationNotes||"")}</td><td>${escapeHtml(x.notes||"")}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
+  teLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Market</th><th>Entry Time</th><th>Entry</th><th>Stop</th><th>Exit</th><th>Market Cond.</th><th>Day Type</th><th>GEX</th><th>GEX Add'l</th><th>Strategy</th><th>Pattern</th><th>Structure</th><th>Level</th><th>Pattern Quality</th><th>Confluence</th><th>Time Window</th><th>Grade</th><th>Signals</th><th>Plan</th><th>What Happened</th><th>Notes</th><th>Photos</th><th>Actions</th></tr></thead><tbody>${
+    e.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${escapeHtml(x.market||"")}</td><td>${x.entryTime||""}</td><td>${Number.isFinite(x.entryPrice)?fmt(x.entryPrice):""}</td><td>${Number.isFinite(x.stopLossPrice)?fmt(x.stopLossPrice):""}</td><td>${Number.isFinite(x.exitPrice)?fmt(x.exitPrice):""}</td><td>${escapeHtml(x.marketCondition||"")}</td><td>${escapeHtml(x.dayType||"")}</td><td>${escapeHtml(x.gex||"")}</td><td>${escapeHtml(x.gexAdditional||"")}</td><td>${escapeHtml(x.strategy||"")}</td><td>${escapeHtml(x.patternType||"")}</td><td>${escapeHtml(x.structureAlignment||"")}</td><td>${escapeHtml(x.levelStatus||"")}</td><td>${escapeHtml(x.patternQuality||"")}</td><td>${escapeHtml(x.structuralConfluence||"")}</td><td>${escapeHtml(x.entryTimeWindow||"")}</td><td>${escapeHtml(x.setupGrade||"")}</td><td>${escapeHtml((x.additionalSignals||[]).join(", "))}</td><td>${escapeHtml(x.planAdherence||"")}</td><td>${escapeHtml(x.planDeviationNotes||"")}</td><td>${escapeHtml(x.notes||"")}</td><td>${(x.screenshots||[]).length?`<button onclick="viewScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td><button onclick="editEntry('${x.id}')">Edit</button> <button class="danger" onclick="deleteEntry('${x.id}')">Delete</button></td></tr>`).join("")
   }</tbody>`;
 }
 // Shows the "what happened" textarea only when the plan was not followed — matches the same
@@ -1637,7 +1769,7 @@ function formToEntry(){
   let o={};
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)o[teKey(name)]=el.value});
   ["entryPrice","stopLossPrice","exitPrice"].forEach(k=>o[k]=n(o[k]));
-  o.additionalSignals=getCheckboxGroupFromForm("teAdditionalSignals");
+  o.additionalSignals=[...getCheckboxGroupFromForm("teAdditionalSignals"),...teLegacyAdditionalSignals];
   o.screenshots=teScreenshotsState.slice();
   o.id=teRecordId.value||crypto.randomUUID();
   o.updatedAt=new Date().toISOString();
@@ -1646,7 +1778,10 @@ function formToEntry(){
 function entryToForm(e){
   teRecordId.value=e.id||"";
   teFieldNames.forEach(name=>{const el=document.getElementById(teId(name)); if(el)el.value=e[teKey(name)]??""});
-  setCheckboxGroupInForm("teAdditionalSignals",e.additionalSignals);
+  const translatedSignals=(e.additionalSignals||[]).map(v=>ADDITIONAL_SIGNALS_RENAMES[v]||v);
+  const currentSignalValues=new Set([...document.querySelectorAll("#teAdditionalSignals input[type=checkbox]")].map(cb=>cb.value));
+  teLegacyAdditionalSignals=translatedSignals.filter(v=>!currentSignalValues.has(v));
+  setCheckboxGroupInForm("teAdditionalSignals",translatedSignals);
   teScreenshotsState=(e.screenshots||[]).slice();
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
@@ -1658,6 +1793,7 @@ function resetTradeEntryForm(){
   teRecordId.value="";
   if(!teDate.value)teDate.value=new Date().toISOString().slice(0,10);
   teScreenshotsState=[];
+  teLegacyAdditionalSignals=[];
   renderScreenshotThumbs();
   teEntryFormError.style.display="none";
   syncPlanDeviationVisibility();
@@ -1703,6 +1839,39 @@ planScreenshotsInput.addEventListener("change",async()=>{
   if(planScreenshotsState===targetState)renderPlanScreenshotThumbs();
 });
 window.viewPlanScreenshots=id=>{const p=tradingPlans.find(x=>x.id===id);if(p)openScreenshotModal(p.screenshots)}
+let skipScreenshotsState=[];
+function renderSkipScreenshotThumbs(){
+  skipScreenshotsList.innerHTML="";
+  skipScreenshotsState.forEach((s,i)=>{
+    const wrap=document.createElement("div");wrap.className="shot-thumb";
+    const img=document.createElement("img");img.src=s.dataUrl;img.alt=s.name||"image";
+    img.addEventListener("click",()=>openScreenshotModal(skipScreenshotsState));
+    const rm=document.createElement("button");rm.type="button";rm.className="shot-remove";rm.textContent="✕";
+    rm.title="Remove";
+    rm.addEventListener("click",()=>{skipScreenshotsState.splice(i,1);renderSkipScreenshotThumbs()});
+    wrap.appendChild(img);wrap.appendChild(rm);
+    skipScreenshotsList.appendChild(wrap);
+  });
+}
+skipScreenshotsInput.addEventListener("change",async()=>{
+  const files=[...skipScreenshotsInput.files];
+  skipScreenshotsInput.value="";
+  // Snapshot the array reference (same reasoning as the plan/trade-entry screenshot handlers): if
+  // the form switches to a different skipped setup while a compression is still running,
+  // skipScreenshotsState !== targetState here and we drop the now-stale image instead of pushing
+  // it into whatever record happens to be on screen when it resolves.
+  const targetState=skipScreenshotsState;
+  for(const f of files){
+    if(skipScreenshotsState!==targetState){console.warn("Discarding a skipped-setup image — the form moved to a different record while it was still processing.");break}
+    try{
+      const dataUrl=await compressImageFile(f);
+      if(skipScreenshotsState!==targetState){console.warn("Discarding a skipped-setup image — the form moved to a different record while it was still processing.");break}
+      skipScreenshotsState.push({name:f.name,dataUrl});
+    }catch(err){console.error("Failed to process skipped-setup image:",err)}
+  }
+  if(skipScreenshotsState===targetState)renderSkipScreenshotThumbs();
+});
+window.viewSkipScreenshots=id=>{const x=skippedSetups.find(s=>s.id===id);if(x)openScreenshotModal(x.screenshots)}
 function formToPlan(){
   let o={};
   PLAN_FIELDS.forEach(k=>{const el=document.getElementById(planFieldId[k]); if(el)o[k]=el.value});
@@ -1768,6 +1937,84 @@ planClearForm.addEventListener("click",resetPlanForm);
 planDate.addEventListener("input",()=>{planFormError.style.display="none"});
 if(!planDate.value)planDate.value=new Date().toISOString().slice(0,10);
 
+// ----- Skipped Setups -----
+function formToSkip(){
+  let o={};
+  skipFieldNames.forEach(name=>{const el=document.getElementById(skipId(name)); if(el)o[teKey(name)]=el.value});
+  o.reasonSkipped=getCheckboxGroupFromForm("skipReasonSkipped");
+  o.screenshots=skipScreenshotsState.slice();
+  o.id=skipRecordId.value||crypto.randomUUID();
+  o.updatedAt=new Date().toISOString();
+  return o;
+}
+function skipToForm(x){
+  skipRecordId.value=x.id||"";
+  skipFieldNames.forEach(name=>{const el=document.getElementById(skipId(name)); if(el)el.value=x[teKey(name)]??""});
+  setCheckboxGroupInForm("skipReasonSkipped",x.reasonSkipped);
+  skipScreenshotsState=(x.screenshots||[]).slice();
+  renderSkipScreenshotThumbs();
+  skipFormError.style.display="none";
+  showTab("skipped");
+}
+function resetSkipForm(){
+  skipForm.reset();
+  skipRecordId.value="";
+  if(!skipDate.value)skipDate.value=new Date().toISOString().slice(0,10);
+  skipScreenshotsState=[];
+  renderSkipScreenshotThumbs();
+  skipFormError.style.display="none";
+}
+window.editSkip=id=>{const x=skippedSetups.find(s=>s.id===id);if(x)skipToForm(x)}
+window.deleteSkip=async id=>{if(!confirm("Delete this skipped setup?"))return;skippedSetups=skippedSetups.filter(x=>x.id!==id);saveSkipped();await syncSkipDelete(id);if(skipRecordId.value===id)resetSkipForm();renderAll()}
+function renderSkipLogTable(){
+  const rows=skippedSetups.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  skipLogTable.innerHTML=`<thead><tr><th>Date</th><th>Session</th><th>Market</th><th>Time Seen</th><th>Pattern</th><th>Structure</th><th>Level</th><th>Pattern Quality</th><th>Confluence</th><th>Time Window</th><th>Grade</th><th>Reason Skipped</th><th>Outcome</th><th>Notes</th><th>Photos</th><th>Actions</th></tr></thead><tbody>${
+    rows.map(x=>`<tr><td>${formatDMY(x.date)}</td><td>${x.sessionType||""}</td><td>${escapeHtml(x.market||"")}</td><td>${x.time||""}</td><td>${escapeHtml(x.patternType||"")}</td><td>${escapeHtml(x.structureAlignment||"")}</td><td>${escapeHtml(x.levelStatus||"")}</td><td>${escapeHtml(x.patternQuality||"")}</td><td>${escapeHtml(x.structuralConfluence||"")}</td><td>${escapeHtml(x.entryTimeWindow||"")}</td><td>${escapeHtml(x.setupGrade||"")}</td><td>${escapeHtml((x.reasonSkipped||[]).join(", "))}</td><td>${escapeHtml(x.outcome||"")}</td><td>${escapeHtml(x.notes||"")}</td><td>${(x.screenshots||[]).length?`<button onclick="viewSkipScreenshots('${x.id}')">${x.screenshots.length} 📷</button>`:""}</td><td><button onclick="editSkip('${x.id}')">Edit</button> <button class="danger" onclick="deleteSkip('${x.id}')">Delete</button></td></tr>`).join("")
+  }</tbody>`;
+}
+// Counts only (same lean, no-Result-R convention as the rest of this version) — Taken comes from
+// tradeEntries' Setup Grade, Skipped from this log's, broken down further by after-the-fact
+// Outcome so a grading line that's too strict (B/C skips hitting target) or too loose (A+/A takes
+// not clearly outperforming) shows up directly.
+function renderSkipGradeCompareTable(){
+  const takenByGrade=new Map();
+  tradeEntries.forEach(x=>{if(!x.setupGrade)return;takenByGrade.set(x.setupGrade,(takenByGrade.get(x.setupGrade)||0)+1)});
+  const skippedByGrade=new Map();
+  skippedSetups.forEach(x=>{if(!x.setupGrade)return;if(!skippedByGrade.has(x.setupGrade))skippedByGrade.set(x.setupGrade,[]);skippedByGrade.get(x.setupGrade).push(x)});
+  const rows=SETUP_GRADE_LABELS.map(grade=>{
+    const skippedArr=skippedByGrade.get(grade)||[];
+    const outcomeCounts=SKIP_OUTCOME_LABELS.map(o=>skippedArr.filter(s=>s.outcome===o).length);
+    return{grade,taken:takenByGrade.get(grade)||0,skipped:skippedArr.length,outcomeCounts};
+  }).filter(r=>r.taken>0||r.skipped>0);
+  const headers=["Grade","Taken","Skipped",...SKIP_OUTCOME_LABELS];
+  const table=document.getElementById("skipGradeCompareTable");
+  if(!rows.length){table.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody><tr><td colspan="${headers.length}">No entries logged yet.</td></tr></tbody>`;return}
+  table.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r=>`<tr><td>${r.grade}</td><td>${r.taken}</td><td>${r.skipped}</td>${r.outcomeCounts.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")
+  }</tbody>`;
+}
+let skipSavedMsgTimer=null;
+skipForm.addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const rec=formToSkip();
+  const isNew=!skipRecordId.value;
+  const i=skippedSetups.findIndex(x=>x.id===rec.id);
+  if(i>=0)skippedSetups[i]={...skippedSetups[i],...rec};else skippedSetups.push(rec);
+  skippedSetups.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  saveSkipped();
+  await syncSkipUpsert([rec]);
+  resetSkipForm();
+  renderAll();
+  skipFormError.textContent=isNew?"✓ Skipped setup saved.":"✓ Skipped setup updated.";
+  skipFormError.style.color="var(--green)";
+  skipFormError.style.display="block";
+  clearTimeout(skipSavedMsgTimer);
+  skipSavedMsgTimer=setTimeout(()=>{skipFormError.style.display="none";skipFormError.style.color="";},2500);
+});
+skipClearForm.addEventListener("click",resetSkipForm);
+skipDate.addEventListener("input",()=>{skipFormError.style.display="none"});
+if(!skipDate.value)skipDate.value=new Date().toISOString().slice(0,10);
+
 function loadSessions(){
   try{
     const cur=localStorage.getItem(STORAGE_KEY);
@@ -1788,6 +2035,7 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
   if(!alreadyActive&&b.dataset.tab==="entry"&&entryFormError.style.display!=="block")resetEntryForm();
   if(!alreadyActive&&b.dataset.tab==="teNew"&&teEntryFormError.style.display!=="block")resetTradeEntryForm();
   if(!alreadyActive&&b.dataset.tab==="plan"&&planFormError.style.display!=="block")resetPlanForm();
+  if(!alreadyActive&&b.dataset.tab==="skipped"&&skipFormError.style.display!=="block")resetSkipForm();
   showTab(b.dataset.tab);
 }));
 function formatDMY(iso){if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}/${m}/${y.slice(2)}`}
@@ -3239,7 +3487,7 @@ function applyDataFilters(){
 }
 [dfSession,dfDay,dfDateFrom,dfDateTo].forEach(el=>el.addEventListener("change",applyDataFilters));
 dfReset.addEventListener("click",()=>{dfSession.value="";dfDay.value="";dfDateFrom.value="";dfDateTo.value="";applyDataFilters()});
-function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderLetterOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryLogTable,renderPlanLog,renderMacro,renderMacroNews,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
+function renderAll(){[renderProjectionGrid,renderMetrics,renderIbStats,renderLetterOutcomeStats,renderWeeklyPointStats,renderEdgeDecay,renderRangeCorr,renderVaOpen,renderConfidenceStats,renderNewsImpact,applyDataFilters,applyResearch,renderEntryStats,renderPsychologyStats,renderEntryLogTable,renderPlanLog,renderSkipGradeCompareTable,renderSkipLogTable,renderMacro,renderMacroNews,renderAllOiTabs].forEach(fn=>{try{fn()}catch(err){console.error("renderAll step failed:",err)}})}
 
 function csvEscape(v){if(v==null)return"";const s=String(v);return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
@@ -3250,7 +3498,7 @@ exportEntriesCsv.addEventListener("click",()=>download("trading_projection_entri
 // oiSnapshots is included here (unlike before Volume Level Tracking existed) because it now
 // holds hand-graded Hit/Outcome/tracked judgments that, unlike the raw Call/Put OI numbers,
 // can't be reconstructed by just re-uploading the original QuikStrike file.
-downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,tradingPlans,posSizing:getPosSizing(),oiSnapshots,macroEvents,monthOutcomes,weekOutcomes},null,2),"application/json"));
+downloadJson.addEventListener("click",()=>download("trading_projection_backup_v4.json",JSON.stringify({sessions,tradeEntries,tradingPlans,skippedSetups,posSizing:getPosSizing(),oiSnapshots,macroEvents,monthOutcomes,weekOutcomes},null,2),"application/json"));
 importJson.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
   const data=JSON.parse(await f.text());
@@ -3259,6 +3507,7 @@ importJson.addEventListener("change",async e=>{
     sessions=data.sessions;
     if(Array.isArray(data.tradeEntries))tradeEntries=data.tradeEntries;
     if(Array.isArray(data.tradingPlans))tradingPlans=data.tradingPlans;
+    if(Array.isArray(data.skippedSetups))skippedSetups=data.skippedSetups;
     if(data.posSizing){localStorage.setItem(POS_SIZING_KEY,JSON.stringify(data.posSizing));applyPosSizingToForm(data.posSizing);renderPosSizingSummary(data.posSizing)}
     if(Array.isArray(data.oiSnapshots))oiSnapshots=data.oiSnapshots;
     if(Array.isArray(data.macroEvents))macroEvents=data.macroEvents;
@@ -3273,7 +3522,7 @@ importJson.addEventListener("change",async e=>{
         .filter(o=>o.month&&Number.isInteger(o.week)&&o.week>=1&&o.week<=5);
     }
   }else{return alert("Invalid file")}
-  saveSessions();saveEntries();savePlans();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();saveWeekOutcomes();renderAll();
+  saveSessions();saveEntries();savePlans();saveSkipped();saveOiSnapshots();saveMacroEvents();saveMonthOutcomes();saveWeekOutcomes();renderAll();
   const seen=new Set(),dupKeys=new Set();
   sessions.forEach(s=>{const k=s.date+"|"+s.sessionType;if(seen.has(k))dupKeys.add(k);else seen.add(k)});
   if(dupKeys.size)alert(`Warning: this backup has ${dupKeys.size} Date+Session Type combination(s) with more than one entry (e.g. ${[...dupKeys][0]}). Delete the extra entries in the Data tab to avoid duplicate rows.`);
@@ -3284,7 +3533,7 @@ importJson.addEventListener("change",async e=>{
   tradeEntries.forEach(x=>{const k=entryDupKey(x);if(k==null)return;if(seenEntries.has(k))dupEntryKeys.add(k);else seenEntries.add(k)});
   if(dupEntryKeys.size)alert(`Warning: this backup has ${dupEntryKeys.size} trade entry combination(s) (same Date+Market+Direction+Entry Time+Entry Price) with more than one entry. Delete the extra entries in the Entry Log tab to avoid duplicate rows.`);
 });
-clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data (sessions, trade entries and trading plans)?"))return;sessions=[];tradeEntries=[];tradingPlans=[];saveSessions();saveEntries();savePlans();renderAll()});
+clearAll.addEventListener("click",()=>{if(!confirm("Clear all local data (sessions, trade entries, trading plans and skipped setups)?"))return;sessions=[];tradeEntries=[];tradingPlans=[];skippedSetups=[];saveSessions();saveEntries();savePlans();saveSkipped();renderAll()});
 
 function readSettings(){
   try{
@@ -3379,8 +3628,8 @@ function bootAuth(){
 }
 function toDb(s){return{id:s.id,user_id:authUser?authUser.id:null,date:s.date||null,day:s.day||null,session_type:s.sessionType||null,market:s.market||null,day_type:s.dayType||null,open_type:s.openType||null,bias:s.bias||null,outcome:s.outcome||null,prev_week_high:s.prevWeekHigh,prev_week_low:s.prevWeekLow,prev_day_high:s.prevDayHigh,prev_day_low:s.prevDayLow,prev_ny_high:s.prevNyHigh,prev_ny_low:s.prevNyLow,london_high:s.londonHigh,london_low:s.londonLow,open_vs_va:s.openVsVa||null,open_range_open:s.openRangeOpen,open_range_close:s.openRangeClose,close_range_open:s.closeRangeOpen,close_range_close:s.closeRangeClose,high:s.high,high_time:s.highTime||null,low:s.low,low_time:s.lowTime||null,poc:s.poc,vpoc:s.vpoc,ib_high:s.ibHigh,ib_low:s.ibLow,ib_current_hit:s.ibCurrentHit||null,ib_current_outcome:s.ibCurrentOutcome||null,ib_prev_hit:s.ibPrevHit||null,ib_prev_outcome:s.ibPrevOutcome||null,ib_past_hit:s.ibPastHit||null,ib_past_outcome:s.ibPastOutcome||null,letter_b_dir_60:s.letterBDir60||null,letter_c_dir_90:s.letterCDir90||null,open_outcome:s.openOutcome||null,ny_high:s.nyHigh,ny_low:s.nyLow,extreme_high:s.extremeHigh,extreme_low:s.extremeLow,volume:s.volume,open_interest:s.openInterest,delta:s.delta,delta_min_max:s.deltaMinMax,delta_finish:s.deltaFinish,result_r:s.resultR,tpos:s.tpos,confidence_score:s.confidenceScore,fr_hit:s.frHit,hr_hit:s.hrHit,qr_hit:s.qrHit,er_hit:s.erHit,up_total_hit:s.upTotalHit,down_total_hit:s.downTotalHit,real_yield_10y:s.realYield10y??null,nominal_yield_10y:s.nominalYield10y??null,news_events:s.newsEvents||[],notes:s.notes||null,updated_at:new Date().toISOString()}}
 function fromDb(r){return{id:r.id,date:r.date,day:r.day,sessionType:r.session_type,market:r.market,dayType:r.day_type,openType:r.open_type,bias:r.bias,outcome:r.outcome,prevWeekHigh:r.prev_week_high,prevWeekLow:r.prev_week_low,prevDayHigh:r.prev_day_high,prevDayLow:r.prev_day_low,prevNyHigh:r.prev_ny_high,prevNyLow:r.prev_ny_low,londonHigh:r.london_high,londonLow:r.london_low,openVsVa:r.open_vs_va,openRangeOpen:r.open_range_open,openRangeClose:r.open_range_close,closeRangeOpen:r.close_range_open,closeRangeClose:r.close_range_close,high:r.high,highTime:r.high_time,low:r.low,lowTime:r.low_time,poc:r.poc,vpoc:r.vpoc,ibHigh:r.ib_high,ibLow:r.ib_low,ibCurrentHit:r.ib_current_hit,ibCurrentOutcome:r.ib_current_outcome,ibPrevHit:r.ib_prev_hit,ibPrevOutcome:r.ib_prev_outcome,ibPastHit:r.ib_past_hit,ibPastOutcome:r.ib_past_outcome,letterBDir60:r.letter_b_dir_60,letterCDir90:r.letter_c_dir_90,openOutcome:r.open_outcome,nyHigh:r.ny_high,nyLow:r.ny_low,extremeHigh:r.extreme_high,extremeLow:r.extreme_low,volume:r.volume,openInterest:r.open_interest,delta:r.delta,deltaMinMax:r.delta_min_max,deltaFinish:r.delta_finish,resultR:r.result_r,tpos:r.tpos,confidenceScore:r.confidence_score,frHit:r.fr_hit,hrHit:r.hr_hit,qrHit:r.qr_hit,erHit:r.er_hit,upTotalHit:r.up_total_hit,downTotalHit:r.down_total_hit,realYield10y:r.real_yield_10y,nominalYield10y:r.nominal_yield_10y,newsEvents:r.news_events||[],notes:r.notes,updatedAt:r.updated_at}}
-function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,entry_time:e.entryTime||null,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,market_condition:e.marketCondition||null,day_type:e.dayType||null,gex:e.gex||null,gex_additional:e.gexAdditional||null,strategy:e.strategy||null,additional_signals:e.additionalSignals||[],plan_adherence:e.planAdherence||null,plan_deviation_notes:e.planDeviationNotes||null,screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
-function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,entryTime:r.entry_time,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,marketCondition:r.market_condition,dayType:r.day_type,gex:r.gex,gexAdditional:r.gex_additional,strategy:r.strategy,additionalSignals:r.additional_signals||[],planAdherence:r.plan_adherence,planDeviationNotes:r.plan_deviation_notes,screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
+function toEntryDb(e){return{id:e.id,user_id:authUser?authUser.id:null,date:e.date||null,session_type:e.sessionType||null,market:e.market||null,entry_time:e.entryTime||null,entry_price:e.entryPrice,stop_loss_price:e.stopLossPrice,exit_price:e.exitPrice,market_condition:e.marketCondition||null,day_type:e.dayType||null,gex:e.gex||null,gex_additional:e.gexAdditional||null,strategy:e.strategy||null,pattern_type:e.patternType||null,structure_alignment:e.structureAlignment||null,level_status:e.levelStatus||null,pattern_quality:e.patternQuality||null,structural_confluence:e.structuralConfluence||null,entry_time_window:e.entryTimeWindow||null,setup_grade:e.setupGrade||null,additional_signals:e.additionalSignals||[],plan_adherence:e.planAdherence||null,plan_deviation_notes:e.planDeviationNotes||null,screenshots:e.screenshots||[],notes:e.notes||null,updated_at:new Date().toISOString()}}
+function fromEntryDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,entryTime:r.entry_time,entryPrice:r.entry_price,stopLossPrice:r.stop_loss_price,exitPrice:r.exit_price,marketCondition:r.market_condition,dayType:r.day_type,gex:r.gex,gexAdditional:r.gex_additional,strategy:r.strategy,patternType:r.pattern_type,structureAlignment:r.structure_alignment,levelStatus:r.level_status,patternQuality:r.pattern_quality,structuralConfluence:r.structural_confluence,entryTimeWindow:r.entry_time_window,setupGrade:r.setup_grade,additionalSignals:r.additional_signals||[],planAdherence:r.plan_adherence,planDeviationNotes:r.plan_deviation_notes,screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
 async function syncEntryUpsert(records){
   // Nothing to sync isn't a failure — an account with zero records in this table (e.g. never
   // graded a Monthly Outcome) would otherwise permanently show "Sync failed" with no real error
@@ -3444,6 +3693,52 @@ async function syncPlansFromCloud(){
     return await syncPlanUpsert(tradingPlans);
   }catch(err){
     showSyncError("fullsync:plans:select",planSchemaMsg(errMsg(err)));
+    return false;
+  }
+}
+function toSkipDb(x){return{id:x.id,user_id:authUser?authUser.id:null,date:x.date||null,session_type:x.sessionType||null,market:x.market||null,time:x.time||null,pattern_type:x.patternType||null,structure_alignment:x.structureAlignment||null,level_status:x.levelStatus||null,pattern_quality:x.patternQuality||null,structural_confluence:x.structuralConfluence||null,entry_time_window:x.entryTimeWindow||null,setup_grade:x.setupGrade||null,reason_skipped:x.reasonSkipped||[],outcome:x.outcome||null,screenshots:x.screenshots||[],notes:x.notes||null,updated_at:new Date().toISOString()}}
+function fromSkipDb(r){return{id:r.id,date:r.date,sessionType:r.session_type,market:r.market,time:r.time,patternType:r.pattern_type,structureAlignment:r.structure_alignment,levelStatus:r.level_status,patternQuality:r.pattern_quality,structuralConfluence:r.structural_confluence,entryTimeWindow:r.entry_time_window,setupGrade:r.setup_grade,reasonSkipped:r.reason_skipped||[],outcome:r.outcome,screenshots:r.screenshots||[],notes:r.notes,updatedAt:r.updated_at}}
+// toSkipDb sends every column on every upsert (same as toEntryDb/toPlanDb), so on a Supabase
+// project that hasn't had the skipped_setups block from supabase_schema.sql run yet, PostgREST
+// rejects the whole request — detected and called out explicitly here, same convention as
+// planSchemaMsg.
+function skipSchemaMsg(msg){
+  return /skipped_setups|schema cache|does not exist|find the table/i.test(msg)
+    ?`Failed to sync skipped setups: your Supabase database is missing the "skipped_setups" table this version needs. Run the "skipped_setups" block from supabase_schema.sql, then click Sync Now in Settings. Your local copy is safe.`
+    :`Failed to sync skipped setups to the cloud: ${msg}. Your local copy is safe — click Sync Now in Settings to retry.`;
+}
+async function syncSkipUpsert(records){
+  if(!records.length)return true;
+  if(!supabaseClient||!authUser)return false;
+  const key=records.length===1?"skipupsert:"+records[0].id:"skipupsert:bulk";
+  return runSyncOp(key,
+    ()=>supabaseClient.from("skipped_setups").upsert(records.map(toSkipDb),{onConflict:"id"}),
+    skipSchemaMsg);
+}
+async function syncSkipDelete(id){
+  if(!supabaseClient||!authUser)return false;
+  const ok=await runSyncOp("skipdelete:"+id,
+    ()=>supabaseClient.from("skipped_setups").delete().eq("id",id),
+    msg=>`Failed to sync a skipped setup deletion to the cloud: ${msg}. The entry was removed here but may still exist in Supabase — click Sync Now in Settings to retry.`);
+  if(ok){pendingSkippedDeletes=pendingSkippedDeletes.filter(x=>x!==id)}else if(!pendingSkippedDeletes.includes(id)){pendingSkippedDeletes.push(id)}
+  savePendingSkippedDeletes();
+  return ok;
+}
+async function syncSkippedFromCloud(){
+  try{
+    const {data,error}=await supabaseClient.from("skipped_setups").select("*").order("date",{ascending:true});
+    if(error){showSyncError("fullsync:skipped:select",skipSchemaMsg(error.message));return false}
+    clearSyncError("fullsync:skipped:select");
+    const map=new Map();
+    [...skippedSetups,...data.map(fromSkipDb)].filter(x=>!pendingSkippedDeletes.includes(x.id)).forEach(x=>{
+      const existing=map.get(x.id);
+      if(!existing||(x.updatedAt||"")>=(existing.updatedAt||""))map.set(x.id,x);
+    });
+    skippedSetups=[...map.values()].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    saveSkipped();
+    return await syncSkipUpsert(skippedSetups);
+  }catch(err){
+    showSyncError("fullsync:skipped:select",skipSchemaMsg(errMsg(err)));
     return false;
   }
 }
@@ -3702,19 +3997,21 @@ async function fullSync(){
   for(const id of [...pendingDeletes]){await syncDelete(id)}
   for(const id of [...pendingEntryDeletes]){await syncEntryDelete(id)}
   for(const id of [...pendingPlanDeletes]){await syncPlanDelete(id)}
+  for(const id of [...pendingSkippedDeletes]){await syncSkipDelete(id)}
   for(const p of [...pendingOiDeletes]){await syncOiDeleteDate(p.date,p.dte)}
   for(const id of [...pendingMacroEventDeletes]){await syncMacroEventDelete(id)}
   const ok=await syncSessionsFromCloud();
   const entryOk=await syncEntriesFromCloud();
   const planOk=await syncPlansFromCloud();
+  const skipOk=await syncSkippedFromCloud();
   const oiOk=await syncOiFromCloud();
   const macroEventOk=await syncMacroEventsFromCloud();
   const monthOutcomeOk=await syncMonthOutcomesFromCloud();
   const weekOutcomeOk=await syncWeekOutcomesFromCloud();
-  if(ok&&entryOk&&planOk&&oiOk&&macroEventOk&&monthOutcomeOk&&weekOutcomeOk){
-    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${tradingPlans.length} trading plans, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
+  if(ok&&entryOk&&planOk&&skipOk&&oiOk&&macroEventOk&&monthOutcomeOk&&weekOutcomeOk){
+    syncStatus.textContent=`Synced ${sessions.length} sessions, ${tradeEntries.length} trade entries, ${tradingPlans.length} trading plans, ${skippedSetups.length} skipped setups, ${oiSnapshots.length} Open Interest rows, and ${macroEvents.length} macro news releases.`;
   }else{
-    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!planOk&&"trading plans",!oiOk&&"Open Interest data",!macroEventOk&&"macro news releases",!monthOutcomeOk&&"monthly outcomes",!weekOutcomeOk&&"weekly outcomes"].filter(Boolean).join(" and ");
+    const failed=[!ok&&"sessions",!entryOk&&"trade entries",!planOk&&"trading plans",!skipOk&&"skipped setups",!oiOk&&"Open Interest data",!macroEventOk&&"macro news releases",!monthOutcomeOk&&"monthly outcomes",!weekOutcomeOk&&"weekly outcomes"].filter(Boolean).join(" and ");
     syncStatus.textContent=`Sync failed for ${failed} — see the banner above for details.`;
   }
   renderAll();
