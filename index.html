@@ -655,7 +655,7 @@
 
   <div class="card">
     <h2>Original Formula Chain <span class="hint" style="font-weight:400">(the video's own 13 steps, unedited)</span></h2>
-    <p class="hint">Everything above replaces the video's 50/50 coin-flip with your real edge. This section is the opposite: the literal 13 formulas from the video, step by step, with no generalization. Defaults reproduce its own worked Tradeify 50K example exactly (step 13 lands at the corrected ~58% ROI the video itself should have shown, not the uncorrected 136% it quoted) &mdash; change any field to point it at your own firm's numbers.</p>
+    <p class="hint">Everything above replaces the video's 50/50 coin-flip with your real edge. This section is the opposite: the literal 13 formulas from the video, step by step, with no generalization. Defaults reproduce its own worked Tradeify 50K example exactly, including its P(pass) Override pre-filled to the video's own manually-rounded 25% (not the raw 29.6% Step 4 computes) &mdash; that's what step 13 actually lands on, at the corrected ~58% ROI the video itself should have shown, not the uncorrected 136% it quoted. Clear the override to see the raw formula result instead, or change any field to point it at your own firm's numbers.</p>
   </div>
 
   <div class="grid" style="margin-top:14px">
@@ -683,8 +683,8 @@
       <p class="hint">The video reuses the same $2,000 drawdown figure as the "DD" / "Cushion" in these steps too, so DD/SL above is shared here &mdash; only the funded-stage fields below are new.</p>
       <div class="form-grid">
         <div><label>Win-Day $</label><input id="pfLitWinDay" type="number" step="1"/></div>
-        <div><label>k &mdash; flip days to payout 1</label><input id="pfLitK" type="number" step="1"/></div>
-        <div><label>m &mdash; win days to payout 2</label><input id="pfLitM" type="number" step="1"/></div>
+        <div><label>k &mdash; flip days to payout 1</label><input id="pfLitK" type="number" step="1" min="0"/></div>
+        <div><label>m &mdash; win days to payout 2</label><input id="pfLitM" type="number" step="1" min="0"/></div>
         <div><label>Payout % of Balance</label><input id="pfLitPayoutPct" type="number" step="1"/></div>
         <div><label>Profit Split (%)</label><input id="pfLitSplit" type="number" step="1"/></div>
       </div>
@@ -5023,8 +5023,14 @@ const PF_EDGE_DEFAULTS={pfWinRate:50,pfRR:1,pfRisk:150,pfTradesPerDay:3,pfNumAcc
 let pfActivePreset="lucid";
 
 function pfEl(id){return document.getElementById(id)}
-function pfGetForm(){const o={};PF_FIELDS.forEach(id=>{const el=pfEl(id);if(!el)return;o[id]=el.tagName==="SELECT"?el.value:n(el.value)});return o}
-function pfSetForm(o){PF_FIELDS.forEach(id=>{const el=pfEl(id);if(!el||!(id in o)||o[id]==null)return;el.value=o[id]})}
+// Shared by every field-list-backed form in this tab (the edge-adjusted calculator and the
+// literal formula chain below) so their serialization logic can't drift out of sync with each
+// other: set skips a field entirely when the stored value is null, leaving whatever's already in
+// the input untouched, rather than forcing it blank.
+function pfFieldsGet(fields){const o={};fields.forEach(id=>{const el=pfEl(id);if(!el)return;o[id]=el.tagName==="SELECT"?el.value:n(el.value)});return o}
+function pfFieldsSet(fields,o){fields.forEach(id=>{const el=pfEl(id);if(!el||!(id in o)||o[id]==null)return;el.value=o[id]})}
+function pfGetForm(){return pfFieldsGet(PF_FIELDS)}
+function pfSetForm(o){pfFieldsSet(PF_FIELDS,o)}
 function pfLoad(){
   const saved=readJSON(PF_KEY,{});
   pfActivePreset=saved.pfActivePreset||"lucid";
@@ -5256,11 +5262,15 @@ pfUseStatsBtn.addEventListener("click",()=>{
   pfStatsStatus.textContent=`Pulled from ${withR.length} logged entries: ${fmt(winRate,1)}% win rate, ${fmt(avgLossR?avgWinR/avgLossR:0,2)} R:R.`;
   pfRenderAll();
 });
-let pfRenderTimer=null;
-document.querySelectorAll("#propfirms input, #propfirms select").forEach(el=>{
-  if(el.id.startsWith("pfLit"))return; // wired separately below, see pfLitRenderTimer
-  el.addEventListener("input",()=>{clearTimeout(pfRenderTimer);pfRenderTimer=setTimeout(pfRenderAll,250)});
-});
+// Shared by both calculators in this tab: wires every input/select matching `selector` to call
+// `fn` 250ms after the user stops typing, each with its own independent debounce timer.
+function pfWireDebounced(selector,fn){
+  let t=null;
+  document.querySelectorAll(selector).forEach(el=>{
+    el.addEventListener("input",()=>{clearTimeout(t);t=setTimeout(fn,250)});
+  });
+}
+pfWireDebounced("#propfirms input:not([id^='pfLit']), #propfirms select:not([id^='pfLit'])",pfRenderAll);
 pfLoad();
 pfRenderAll();
 
@@ -5269,13 +5279,19 @@ pfRenderAll();
 // the 50/50-coin-flip P=SL/(SL+TP)) so they can be checked against the source material directly.
 // Defaults are the video's own worked Tradeify 50K example end to end.
 const PF_LIT_KEY="trading_projection_propfirms_literal_v1";
-const PF_LIT_FIELDS=["pfLitDD","pfLitTP","pfLitPtValue","pfLitContracts","pfLitCommissionTicks","pfLitConsistency","pfLitProfitTarget","pfLitDailyTarget","pfLitDdType","pfLitListPrice","pfLitDiscount","pfLitResetPrice","pfLitPassOverride","pfLitWinDay","pfLitK","pfLitM","pfLitPayoutPct","pfLitSplit"];
+// Split eval (steps 1-6) vs funded (steps 7-13) fields to mirror the two input cards in the HTML.
+const PF_LIT_EVAL_FIELDS=["pfLitDD","pfLitTP","pfLitPtValue","pfLitContracts","pfLitCommissionTicks","pfLitConsistency","pfLitProfitTarget","pfLitDailyTarget","pfLitDdType","pfLitListPrice","pfLitDiscount","pfLitResetPrice","pfLitPassOverride"];
+const PF_LIT_FUNDED_FIELDS=["pfLitWinDay","pfLitK","pfLitM","pfLitPayoutPct","pfLitSplit"];
+const PF_LIT_FIELDS=[...PF_LIT_EVAL_FIELDS,...PF_LIT_FUNDED_FIELDS];
+// pfLitPassOverride defaults to the video's own manually-rounded 25% (not the raw 29.6% step 4
+// computes) — that's the number it actually carries through steps 6-13, so defaulting to it is
+// what makes the unedited chain land on the video's own quoted ~58% corrected ROI.
 const PF_LIT_DEFAULTS={pfLitDD:2000,pfLitTP:1000,pfLitPtValue:20,pfLitContracts:4,pfLitCommissionTicks:2,
   pfLitConsistency:40,pfLitProfitTarget:3000,pfLitDailyTarget:1000,pfLitDdType:"trailing",
-  pfLitListPrice:165,pfLitDiscount:35,pfLitResetPrice:99,pfLitPassOverride:"",
+  pfLitListPrice:165,pfLitDiscount:35,pfLitResetPrice:99,pfLitPassOverride:25,
   pfLitWinDay:150,pfLitK:4,pfLitM:5,pfLitPayoutPct:50,pfLitSplit:90};
-function pfLitGetForm(){const o={};PF_LIT_FIELDS.forEach(id=>{const el=pfEl(id);if(!el)return;o[id]=el.tagName==="SELECT"?el.value:(el.value===""?null:n(el.value))});return o}
-function pfLitSetForm(o){PF_LIT_FIELDS.forEach(id=>{const el=pfEl(id);if(!el||!(id in o))return;el.value=o[id]??""})}
+function pfLitGetForm(){return pfFieldsGet(PF_LIT_FIELDS)}
+function pfLitSetForm(o){pfFieldsSet(PF_LIT_FIELDS,o)}
 function pfLitLoad(){pfLitSetForm({...PF_LIT_DEFAULTS,...readJSON(PF_LIT_KEY,{})})}
 function pfLitSave(v){localStorage.setItem(PF_LIT_KEY,JSON.stringify(v))}
 
@@ -5283,16 +5299,19 @@ function pfLitCompute(v){
   // Step 1 — P = SL / (SL+TP), SL is the DD field (the video risks the whole drawdown on the
   // single modelled trade).
   const step1_P=v.pfLitDD/(v.pfLitDD+v.pfLitTP);
-  // Step 2 — bracket sizing in ticks.
-  const step2_points=v.pfLitTP/((v.pfLitPtValue||0)*(v.pfLitContracts||0)||1);
-  const step2_ticks=step2_points*4+(v.pfLitCommissionTicks||0);
+  // Step 2 — bracket sizing in ticks. Null (shown as "—") rather than a bogus number when
+  // $/Point or Contracts is zero/blank, since there's no meaningful bracket size to report.
+  const step2_valid=v.pfLitPtValue>0&&v.pfLitContracts>0;
+  const step2_points=step2_valid?v.pfLitTP/(v.pfLitPtValue*v.pfLitContracts):null;
+  const step2_ticks=step2_points!=null?step2_points*4+(v.pfLitCommissionTicks||0):null;
   // Step 3 — daily target & days needed under the consistency rule.
   const step3_maxDay=(v.pfLitConsistency/100)*v.pfLitProfitTarget;
   const step3_daysN=v.pfLitDailyTarget>0?v.pfLitProfitTarget/v.pfLitDailyTarget:null;
-  // Step 4 — probability of passing the eval.
-  const step4_trailing=step3_daysN!=null?Math.pow(v.pfLitDD/(v.pfLitDD+v.pfLitDailyTarget),step3_daysN):null;
-  const step4_static=v.pfLitDD/(v.pfLitDD+v.pfLitProfitTarget);
-  const step4_formula=v.pfLitDdType==="trailing"?step4_trailing:step4_static;
+  // Step 4 — probability of passing the eval (only the branch matching the selected drawdown
+  // type is computed — the other one is never shown, so there's no point computing it).
+  const step4_formula=v.pfLitDdType==="trailing"
+    ?(step3_daysN!=null?Math.pow(v.pfLitDD/(v.pfLitDD+v.pfLitDailyTarget),step3_daysN):null)
+    :v.pfLitDD/(v.pfLitDD+v.pfLitProfitTarget);
   const step4_used=v.pfLitPassOverride!=null?v.pfLitPassOverride/100:step4_formula;
   // Step 5 — cost of one attempt.
   const step5_accountPrice=v.pfLitListPrice*(1-v.pfLitDiscount/100);
@@ -5301,53 +5320,55 @@ function pfLitCompute(v){
   const step6_cost=Number.isFinite(step6_attempts)?step5_accountPrice+(step6_attempts-1)*v.pfLitResetPrice:Infinity;
   // Step 7 — day-one buffer-clearing probability (always exactly 50% by this formula).
   const step7_Pbuffer=v.pfLitDD/(v.pfLitDD+v.pfLitDD);
-  // Step 8 — flip-days probability.
+  // Step 8 — flip-days probability. k/m are day counts, so clamp negative input to 0 rather than
+  // letting Math.pow's negative-exponent branch push a probability above 100%.
+  const kSafe=Math.max(0,v.pfLitK||0),mSafe=Math.max(0,v.pfLitM||0);
   const step8_Pday=v.pfLitDD/(v.pfLitDD+v.pfLitWinDay);
-  const step8_Pflips=Math.pow(step8_Pday,v.pfLitK);
+  const step8_Pflips=Math.pow(step8_Pday,kSafe);
   // Step 9 — probability of reaching payout 1.
   const step9_P1=step7_Pbuffer*step8_Pflips;
   // Step 10 — size of payout 1.
-  const step10_balance=v.pfLitDD+v.pfLitK*v.pfLitWinDay;
+  const step10_balance=v.pfLitDD+kSafe*v.pfLitWinDay;
   const step10_payout=step10_balance*(v.pfLitPayoutPct/100)*(v.pfLitSplit/100);
   // Step 11 — EV per account (through payout 1).
   const step11_net=step10_payout-step6_cost;
   const step11_EV=Number.isFinite(step6_cost)?step9_P1*step11_net-(1-step9_P1)*step6_cost:null;
   // Step 12 — payout 2.
   const step12_remaining=step10_balance*(1-v.pfLitPayoutPct/100);
-  const step12_P2=Math.pow(step12_remaining/(step12_remaining+v.pfLitWinDay),v.pfLitM);
-  const step12_payout=(step12_remaining+v.pfLitM*v.pfLitWinDay)*(v.pfLitPayoutPct/100)*(v.pfLitSplit/100);
+  const step12_P2=Math.pow(step12_remaining/(step12_remaining+v.pfLitWinDay),mSafe);
+  const step12_payout=(step12_remaining+mSafe*v.pfLitWinDay)*(v.pfLitPayoutPct/100)*(v.pfLitSplit/100);
   // Step 13 — total EV and ROI (payout 2 weighted by its own probability, the video's own
   // correction to its uncorrected "136% ROI").
   const step13_EVtotal=step11_EV!=null?step11_EV+step9_P1*step12_P2*step12_payout:null;
   const step13_ROI=step13_EVtotal!=null&&Number.isFinite(step6_cost)&&step6_cost>0?step13_EVtotal/step6_cost:null;
-  return{step1_P,step2_points,step2_ticks,step3_maxDay,step3_daysN,step4_trailing,step4_static,step4_formula,step4_used,
+  return{step1_P,step2_points,step2_ticks,step3_maxDay,step3_daysN,step4_formula,step4_used,
     step5_accountPrice,step6_attempts,step6_cost,step7_Pbuffer,step8_Pday,step8_Pflips,step9_P1,step10_balance,step10_payout,
-    step11_net,step11_EV,step12_remaining,step12_P2,step12_payout,step13_EVtotal,step13_ROI};
+    step11_net,step11_EV,step12_remaining,step12_P2,step12_payout,step13_EVtotal,step13_ROI,kSafe,mSafe};
 }
 function pfLitRenderAll(){
   const v=pfLitGetForm();
   pfLitSave(v);
   const r=pfLitCompute(v);
+  // Steps 6/11/13 are driven by step4_used, not step4_formula, whenever the override is set —
+  // flag that on every step downstream of it, not just Step 4, so it's never ambiguous which
+  // P(pass) actually produced a given number.
+  const overrideNote=v.pfLitPassOverride!=null?" (from overridden P(pass))":"";
   pfLitOut.innerHTML=
     line("Step 1 — P = SL &divide; (SL+TP)",pct(r.step1_P))+
-    line("Step 2 — Bracket size",`${fmt(r.step2_points,2)} pts = ${fmt(r.step2_ticks,1)} ticks`)+
+    line("Step 2 — Bracket size",r.step2_points!=null?`${fmt(r.step2_points,2)} pts = ${fmt(r.step2_ticks,1)} ticks`:"&mdash;")+
     line("Step 3 — Max day / Days needed",`$${fmt(r.step3_maxDay)} max/day, n=${r.step3_daysN!=null?fmt(r.step3_daysN,2):"&mdash;"} days`)+
     line("Step 4 — P(pass eval)",`${r.step4_formula!=null?pct(r.step4_formula):"&mdash;"} by formula${v.pfLitPassOverride!=null?` (using ${fmt(v.pfLitPassOverride,1)}% override below)`:""}`)+
     line("Step 5 — Account price",`$${fmt(r.step5_accountPrice)}`)+
-    line("Step 6 — Attempts / Expected cost to pass",`${Number.isFinite(r.step6_attempts)?fmt(r.step6_attempts,2):"&mdash;"} attempts, $${Number.isFinite(r.step6_cost)?fmt(r.step6_cost):"&mdash;"}`)+
+    line("Step 6 — Attempts / Expected cost to pass",`${Number.isFinite(r.step6_attempts)?fmt(r.step6_attempts,2):"&mdash;"} attempts, $${Number.isFinite(r.step6_cost)?fmt(r.step6_cost):"&mdash;"}${overrideNote}`)+
     line("Step 7 — P(clear buffer)",pct(r.step7_Pbuffer))+
-    line("Step 8 — P(flip days)",`${pct(r.step8_Pday)} per flip, ${pct(r.step8_Pflips)} for k=${fmt(v.pfLitK,0)}`)+
+    line("Step 8 — P(flip days)",`${pct(r.step8_Pday)} per flip, ${pct(r.step8_Pflips)} for k=${fmt(r.kSafe,0)}`)+
     line("Step 9 — P1 = P(reach payout 1)",pct(r.step9_P1))+
     line("Step 10 — Payout 1 size",`balance $${fmt(r.step10_balance)} &rarr; $${fmt(r.step10_payout)}`)+
-    line("Step 11 — EV per account (through payout 1)",pfSignedDollar(r.step11_EV??0),pfSignColor(r.step11_EV??0))+
+    line("Step 11 — EV per account (through payout 1)",r.step11_EV!=null?pfSignedDollar(r.step11_EV)+overrideNote:"&mdash;",r.step11_EV!=null?pfSignColor(r.step11_EV):"")+
     line("Step 12 — Payout 2",`P2=${pct(r.step12_P2)}, remaining $${fmt(r.step12_remaining)} &rarr; $${fmt(r.step12_payout)}`)+
-    line("Step 13 — Total EV / ROI",r.step13_EVtotal!=null?`${pfSignedDollar(r.step13_EVtotal)}, ROI ${r.step13_ROI!=null?pct(r.step13_ROI):"&mdash;"}`:"&mdash;",r.step13_EVtotal!=null?pfSignColor(r.step13_EVtotal):"");
+    line("Step 13 — Total EV / ROI",r.step13_EVtotal!=null?`${pfSignedDollar(r.step13_EVtotal)}, ROI ${r.step13_ROI!=null?pct(r.step13_ROI):"&mdash;"}${overrideNote}`:"&mdash;",r.step13_EVtotal!=null?pfSignColor(r.step13_EVtotal):"");
 }
-let pfLitRenderTimer=null;
-document.querySelectorAll("#propfirms [id^='pfLit']").forEach(el=>{
-  if(el.tagName!=="INPUT"&&el.tagName!=="SELECT")return;
-  el.addEventListener("input",()=>{clearTimeout(pfLitRenderTimer);pfLitRenderTimer=setTimeout(pfLitRenderAll,250)});
-});
+pfWireDebounced("#propfirms input[id^='pfLit'], #propfirms select[id^='pfLit']",pfLitRenderAll);
 pfLitLoad();
 pfLitRenderAll();
 
