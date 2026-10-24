@@ -143,6 +143,7 @@
     <button class="tab" data-tab="skipped">Skipped Setups</button>
     <button class="tab" data-tab="psychology">Psychology</button>
     <button class="tab" data-tab="research">Research</button>
+    <button class="tab" data-tab="propfirms">Prop Firms</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
 </header>
@@ -560,6 +561,104 @@
     <div class="metric span-2"><div class="label">ER</div><div class="value" id="rER">0%</div></div>
     <div class="metric span-2"><div class="label">Expectancy</div><div class="value" id="rExp">0.00R</div></div>
     <div class="card span-12"><h2>Filtered Data</h2><div class="tablewrap"><table id="researchTable"></table></div></div>
+  </div>
+</section>
+
+<section id="propfirms" class="page hidden">
+  <div class="card">
+    <h2>Prop Firm Payout-Chain Calculator</h2>
+    <p class="hint">Models the full evaluation &rarr; funded &rarr; payout chain as a biased random walk. The source idea (a YouTube breakdown of Tradeify-style accounts) assumed a random 50/50 entry and showed the firm's own fee/reset/payout structure can still make that profitable on average. This version replaces the coin flip with <b>your</b> measured win rate and reward:risk below, via the general (biased) gambler's-ruin formula &mdash; the video's simple ratios (e.g. <code>SL&divide;(SL+TP)</code>) are just the zero-edge special case of it.</p>
+    <p class="hint">Two panels below: <b>Analytical Estimate</b> solves the two-barrier first-passage probability in closed form (fast, but blind to the consistency rule, daily loss limits, intraday-trailing drawdown and contract step-ups). <b>Monte Carlo Simulation</b> runs your numbers trade-by-trade through every one of those rules and is the one to trust when they disagree.</p>
+  </div>
+
+  <div class="session-buttons" id="pfPresetButtons">
+    <button type="button" class="quick active" data-pfpreset="lucid">Lucid Flex 25K</button>
+    <button type="button" class="quick" data-pfpreset="apex">Apex 25K</button>
+    <button type="button" class="quick" data-pfpreset="custom">Custom</button>
+  </div>
+  <p class="hint">Presets fill in the Evaluation/Funded/Costs cards from each firm's published rule structure &mdash; firms change prices and terms often (one already doubled on the creator mid-series), so check your own cart/dashboard before trusting these. Your Strategy Edge card is never overwritten by a preset switch &mdash; that's you, not the firm.</p>
+
+  <div class="grid" style="margin-top:14px">
+    <div class="card span-6">
+      <h2>Your Strategy Edge</h2>
+      <p class="hint">This is what replaces the coin flip. Enter your real numbers for this exact setup, or pull them from what you've already logged.</p>
+      <div class="form-grid">
+        <div><label>Win Rate %</label><input id="pfWinRate" type="number" step="0.1"/></div>
+        <div><label>Reward:Risk Ratio</label><input id="pfRR" type="number" step="0.01"/></div>
+        <div><label>Risk per Trade ($)</label><input id="pfRisk" type="number" step="1"/></div>
+        <div><label>Avg Trades per Day</label><input id="pfTradesPerDay" type="number" step="1"/></div>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button type="button" id="pfUseStatsBtn">Use My Logged Stats (Result R)</button>
+        <span class="hint" id="pfStatsStatus" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="card span-6">
+      <h2>Evaluation Rules</h2>
+      <div class="form-grid">
+        <div><label>Profit Target ($)</label><input id="pfProfitTarget" type="number" step="1"/></div>
+        <div><label>Max Drawdown ($)</label><input id="pfEvalDD" type="number" step="1"/></div>
+        <div><label>Drawdown Type</label><select id="pfDdType"><option value="trailingEod">Trailing &mdash; End of Day</option><option value="trailingIntraday">Trailing &mdash; Intraday</option><option value="static">Static</option></select></div>
+        <div><label>Consistency Rule (%, 0 = none)</label><input id="pfConsistency" type="number" step="1"/></div>
+        <div><label>Daily Loss Limit ($, 0 = none)</label><input id="pfDailyLossLimit" type="number" step="1"/></div>
+      </div>
+    </div>
+
+    <div class="card span-4">
+      <h2>Costs</h2>
+      <div class="form-grid">
+        <div><label>Eval Price ($)</label><input id="pfEvalPrice" type="number" step="1"/></div>
+        <div><label>Reset Price ($)</label><input id="pfResetPrice" type="number" step="1"/></div>
+        <div><label>Activation Fee ($)</label><input id="pfActivationFee" type="number" step="1"/></div>
+      </div>
+    </div>
+
+    <div class="card span-8">
+      <h2>Funded Account Rules</h2>
+      <div class="form-grid">
+        <div><label>Funded Drawdown ($)</label><input id="pfFundedDD" type="number" step="1"/></div>
+        <div><label>Funded Drawdown Type</label><select id="pfFundedDdType"><option value="trailingEod">Trailing &mdash; End of Day</option><option value="trailingIntraday">Trailing &mdash; Intraday</option><option value="static">Static</option></select></div>
+        <div><label>Payout Trigger &mdash; Profit Cushion ($)</label><input id="pfPayoutTrigger" type="number" step="1"/></div>
+        <div><label>Payout % of Eligible Balance</label><input id="pfPayoutPct" type="number" step="1"/></div>
+        <div><label>Profit Split (your %)</label><input id="pfSplit" type="number" step="1"/></div>
+        <div><label>Payout Cap ($, 0 = none)</label><input id="pfPayoutCap" type="number" step="1"/></div>
+        <div><label>Balance Lock Threshold ($, 0 = none)</label><input id="pfLock" type="number" step="1"/></div>
+        <div><label>Contract Step-Up at Profit ($, 0 = none)</label><input id="pfStepUpProfit" type="number" step="1"/></div>
+        <div><label>Step-Up Size Multiple (&times;)</label><input id="pfStepUpMult" type="number" step="0.1"/></div>
+      </div>
+    </div>
+
+    <div class="card span-12">
+      <h2>Simulation Settings</h2>
+      <div class="form-grid">
+        <div><label>Simulated Accounts</label><input id="pfNumAccounts" type="number" step="100"/></div>
+        <div><label>Max Simulated Eval Days / Attempt</label><input id="pfMaxEvalDays" type="number" step="10"/></div>
+        <div><label>Max Simulated Funded Days</label><input id="pfMaxFundedDays" type="number" step="10"/></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Analytical Estimate <span class="hint" style="font-weight:400">(edge-adjusted gambler's ruin)</span></h2>
+    <div id="pfAnalyticalOut"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Monte Carlo Simulation <span class="hint" style="font-weight:400">(respects every rule above, exactly)</span></h2>
+    <p class="hint" id="pfSimStatus"></p>
+    <div id="pfSimOut"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Before You Trust the Numbers</h2>
+    <ul style="margin:0;padding-left:20px;line-height:1.7">
+      <li>Trust the Monte Carlo panel over the Analytical one whenever they diverge &mdash; the analytical formula ignores the consistency rule, daily loss limits, intraday-trailing drawdown, and contract step-ups.</li>
+      <li>Intraday trailing drawdown is strictly worse than end-of-day trailing (it can stop you out on an open-profit pullback that never touches your real equity) &mdash; confirm which type your actual plan uses before relying on this.</li>
+      <li>Your win rate and R:R can drift with instrument, session, or bracket size. Re-measure on the exact setup you intend to trade funded, not a different market's stats.</li>
+      <li>Firms can refuse payouts over prohibited-practice clauses (minimum hold times, microscalping bans, anti-"gambling" clauses) and can change prices, remove flex plans, or alter terms at any time &mdash; none of that is modelled here.</li>
+      <li>These numbers are an average over many simulated accounts. Any single account can lose repeatedly before passing &mdash; keep a bankroll well beyond one eval price, not just the EV.</li>
+    </ul>
   </div>
 </section>
 
@@ -4845,6 +4944,241 @@ async function refreshMacroYields(){
 const macroFetchPromise=refreshMacroYields();
 setInterval(refreshMacroYields,60*60*1000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshMacroYields()});
+// ================= Prop Firms: edge-based payout-chain calculator =================
+// Generalizes the source video's coin-flip (50/50) assumption to the trader's own measured win
+// rate and reward:risk, via the biased gambler's-ruin formula from Wald's exponential-martingale
+// identity (pfRuin below). That closed form ignores path-dependent rules (consistency %, daily
+// loss limits, trailing-DD type, contract step-ups, balance locks), so a trade-by-trade Monte
+// Carlo simulation runs alongside it as the number to actually trust.
+const PF_KEY="trading_projection_propfirms_v1";
+const PF_FIELDS=["pfWinRate","pfRR","pfRisk","pfTradesPerDay","pfProfitTarget","pfEvalDD","pfDdType","pfConsistency","pfDailyLossLimit","pfEvalPrice","pfResetPrice","pfActivationFee","pfFundedDD","pfFundedDdType","pfPayoutTrigger","pfPayoutPct","pfSplit","pfPayoutCap","pfLock","pfStepUpProfit","pfStepUpMult","pfNumAccounts","pfMaxEvalDays","pfMaxFundedDays"];
+// Firm-rule fields only — Your Strategy Edge (win rate/R:R/risk/trades-per-day) is the trader's,
+// not the firm's, so preset switches never touch it.
+const PF_PRESETS={
+  lucid:{pfProfitTarget:1500,pfEvalDD:1500,pfDdType:"trailingEod",pfConsistency:50,pfDailyLossLimit:0,
+    pfEvalPrice:150,pfResetPrice:80,pfActivationFee:0,
+    pfFundedDD:1500,pfFundedDdType:"trailingEod",pfPayoutTrigger:1500,pfPayoutPct:50,pfSplit:90,pfPayoutCap:0,
+    pfLock:100,pfStepUpProfit:1000,pfStepUpMult:2},
+  apex:{pfProfitTarget:1500,pfEvalDD:1500,pfDdType:"trailingEod",pfConsistency:0,pfDailyLossLimit:0,
+    pfEvalPrice:170,pfResetPrice:85,pfActivationFee:0,
+    pfFundedDD:1500,pfFundedDdType:"trailingEod",pfPayoutTrigger:1500,pfPayoutPct:50,pfSplit:90,pfPayoutCap:1000,
+    pfLock:100,pfStepUpProfit:0,pfStepUpMult:1},
+};
+// Defaults to the zero-edge (coin-flip) baseline on purpose — pfRR:1 at pfWinRate:50 means
+// per-trade expectancy starts at exactly $0, so nothing looks falsely profitable until the
+// trader overwrites these with their own measured win rate and R:R.
+const PF_EDGE_DEFAULTS={pfWinRate:50,pfRR:1,pfRisk:150,pfTradesPerDay:3,pfNumAccounts:3000,pfMaxEvalDays:60,pfMaxFundedDays:500};
+let pfActivePreset="lucid";
+
+function pfEl(id){return document.getElementById(id)}
+function pfGetForm(){const o={};PF_FIELDS.forEach(id=>{const el=pfEl(id);if(!el)return;o[id]=el.tagName==="SELECT"?el.value:n(el.value)});return o}
+function pfSetForm(o){PF_FIELDS.forEach(id=>{const el=pfEl(id);if(!el||!(id in o)||o[id]==null)return;el.value=o[id]})}
+function pfLoad(){
+  const saved=readJSON(PF_KEY,{});
+  pfActivePreset=saved.pfActivePreset||"lucid";
+  const base=PF_PRESETS[pfActivePreset]||PF_PRESETS.lucid;
+  pfSetForm({...PF_EDGE_DEFAULTS,...base,...saved});
+  document.querySelectorAll("[data-pfpreset]").forEach(b=>b.classList.toggle("active",b.dataset.pfpreset===pfActivePreset));
+}
+function pfSaveForm(pf){localStorage.setItem(PF_KEY,JSON.stringify({...pf,pfActivePreset}))}
+
+// Two-barrier first-passage probability for a biased random walk: each trial wins +gain (prob p)
+// or loses -loss (prob 1-p); returns P(cumulative sum hits +A before -B). Derived from Wald's
+// identity: find the nonzero root theta of p*e^(theta*gain)+(1-p)*e^(-theta*loss)=1, then
+// P = (1-e^(-theta*B)) / (e^(theta*A)-e^(-theta*B)). When the per-trade $ expectancy is exactly
+// zero this collapses to the classical B/(A+B) — the video's coin-flip ratio is that special case.
+function pfRuin(p,gain,loss,A,B){
+  if(!(p>0&&p<1)||!(gain>0)||!(loss>0)||!(A>0)||!(B>0))return null;
+  const q=1-p,edge=p*gain-q*loss;
+  if(Math.abs(edge)<1e-9)return B/(A+B);
+  const f=th=>p*Math.exp(th*gain)+q*Math.exp(-th*loss)-1;
+  let lo,hi;
+  if(edge>0){hi=-1e-9;lo=-1;let i=0;while(f(lo)<=0&&i++<60)lo*=2}
+  else{lo=1e-9;hi=1;let i=0;while(f(hi)<=0&&i++<60)hi*=2}
+  for(let i=0;i<100;i++){
+    const mid=(lo+hi)/2,fm=f(mid);
+    if(edge>0){if(fm>0)lo=mid;else hi=mid}
+    else{if(fm<0)lo=mid;else hi=mid}
+  }
+  const theta=(lo+hi)/2;
+  const P=(1-Math.exp(-theta*B))/(Math.exp(theta*A)-Math.exp(-theta*B));
+  return Math.min(1,Math.max(0,P));
+}
+
+function pfAnalytical(pf){
+  const p=pf.pfWinRate/100,gain=pf.pfRisk*pf.pfRR,loss=pf.pfRisk;
+  const cap=pf.pfPayoutCap>0?pf.pfPayoutCap:Infinity;
+  const perTradeR=p*pf.pfRR-(1-p);
+  const perTradeDollar=p*gain-(1-p)*loss;
+  const Ppass=pfRuin(p,gain,loss,pf.pfProfitTarget,pf.pfEvalDD);
+  const attempts=Ppass>0?1/Ppass:Infinity;
+  const cost=Number.isFinite(attempts)?pf.pfEvalPrice+(attempts-1)*pf.pfResetPrice+(pf.pfActivationFee||0):Infinity;
+  const Pbuffer=pfRuin(p,gain,loss,pf.pfFundedDD,pf.pfFundedDD);
+  const Pflip=pfRuin(p,gain,loss,pf.pfPayoutTrigger,pf.pfFundedDD);
+  const P1=Pbuffer!==null&&Pflip!==null?Pbuffer*Pflip:null;
+  const balance1=pf.pfFundedDD+pf.pfPayoutTrigger;
+  const payout1=Math.min(balance1*(pf.pfPayoutPct/100)*(pf.pfSplit/100),cap);
+  const net1=payout1-cost;
+  const EV1=P1!==null&&Number.isFinite(cost)?P1*net1-(1-P1)*cost:null;
+  const remaining=Math.max(1,balance1*(1-pf.pfPayoutPct/100));
+  const P2=pfRuin(p,gain,loss,pf.pfPayoutTrigger,remaining);
+  const balance2=remaining+pf.pfPayoutTrigger;
+  const payout2=Math.min(balance2*(pf.pfPayoutPct/100)*(pf.pfSplit/100),cap);
+  const EVtotal=EV1!==null&&P1!==null&&P2!==null?EV1+P1*P2*payout2:null;
+  const ROI=EVtotal!==null&&Number.isFinite(cost)&&cost>0?EVtotal/cost:null;
+  return{p,perTradeR,perTradeDollar,Ppass,attempts,cost,Pbuffer,P1,payout1,EV1,P2,payout2,EVtotal,ROI};
+}
+function pfRenderAnalytical(a){
+  pfAnalyticalOut.innerHTML=
+    line("Per-trade edge",`${pct(a.p)} win rate &times; your R:R &rarr; ${fmt(a.perTradeR,3)}R (${a.perTradeDollar>=0?"+":"-"}$${fmt(Math.abs(a.perTradeDollar))}) expected per trade`)+
+    line("P(pass eval)",a.Ppass!=null?pct(a.Ppass):"&mdash;")+
+    line("Expected attempts to pass",Number.isFinite(a.attempts)?fmt(a.attempts,2):"&mdash;")+
+    line("Expected cost to pass",Number.isFinite(a.cost)?"$"+fmt(a.cost):"&mdash;")+
+    line("P(clear funded buffer &times; reach payout 1)",a.P1!=null?pct(a.P1):"&mdash;")+
+    line("Payout 1 size",Number.isFinite(a.payout1)?"$"+fmt(a.payout1):"&mdash;")+
+    line("EV per account (through payout 1)",a.EV1!=null?(a.EV1>=0?"+$":"-$")+fmt(Math.abs(a.EV1)):"&mdash;",a.EV1!=null?(a.EV1>=0?"color:var(--green)":"color:var(--red)"):"")+
+    line("P(reach payout 2 | reached 1)",a.P2!=null?pct(a.P2):"&mdash;")+
+    line("Payout 2 size",Number.isFinite(a.payout2)?"$"+fmt(a.payout2):"&mdash;")+
+    line("Total EV per account",a.EVtotal!=null?(a.EVtotal>=0?"+$":"-$")+fmt(Math.abs(a.EVtotal)):"&mdash;",a.EVtotal!=null?(a.EVtotal>=0?"color:var(--green)":"color:var(--red)"):"")+
+    line("ROI",a.ROI!=null?pct(a.ROI):"&mdash;",a.ROI!=null?(a.ROI>=0?"color:var(--green)":"color:var(--red)"):"");
+}
+
+// Deterministic PRNG (mulberry32) so re-running with the same inputs reproduces the same sim.
+function pfMakeRng(seed){let a=seed>>>0;return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+function pfSimEval(p,gain,loss,pf,rng){
+  let balance=0,floor=-pf.pfEvalDD,hi=0,maxDay=0;
+  for(let day=0;day<pf.pfMaxEvalDays;day++){
+    let dayPnl=0,dayFailed=false;
+    for(let t=0;t<pf.pfTradesPerDay;t++){
+      dayPnl+=rng()<p?gain:-loss;
+      const equity=balance+dayPnl;
+      if(pf.pfDdType==="trailingIntraday"){hi=Math.max(hi,equity);floor=Math.max(floor,hi-pf.pfEvalDD)}
+      if(pf.pfDailyLossLimit>0&&dayPnl<=-pf.pfDailyLossLimit){dayFailed=true;break}
+      if(equity<=floor)return false;
+    }
+    if(dayFailed)return false;
+    balance+=dayPnl;
+    if(balance<=floor)return false;
+    if(pf.pfDdType!=="static"){hi=Math.max(hi,balance);if(pf.pfDdType==="trailingEod")floor=Math.max(floor,hi-pf.pfEvalDD)}
+    maxDay=Math.max(maxDay,dayPnl);
+    if(balance>=pf.pfProfitTarget&&(pf.pfConsistency<=0||maxDay<=(pf.pfConsistency/100)*balance))return true;
+  }
+  return false;
+}
+function pfSimFunded(p,gain0,loss0,pf,rng){
+  let balance=0,floor=-pf.pfFundedDD,hi=0,cumProfit=0,locked=false;
+  let totalPaid=0,reached1=false,reached2=false,payoutCount=0;
+  const cap=pf.pfPayoutCap>0?pf.pfPayoutCap:Infinity;
+  for(let day=0;day<pf.pfMaxFundedDays;day++){
+    const mult=pf.pfStepUpProfit>0&&cumProfit>=pf.pfStepUpProfit?pf.pfStepUpMult:1;
+    const gain=gain0*mult,loss=loss0*mult;
+    let dayPnl=0;
+    for(let t=0;t<pf.pfTradesPerDay;t++){
+      dayPnl+=rng()<p?gain:-loss;
+      const equity=balance+dayPnl;
+      if(pf.pfFundedDdType==="trailingIntraday"){
+        hi=Math.max(hi,equity);
+        let f=hi-pf.pfFundedDD; if(locked)f=Math.max(f,0);
+        floor=Math.max(floor,f);
+      }
+      if(equity<=floor)return{totalPaid,reached1,reached2};
+    }
+    balance+=dayPnl;cumProfit+=Math.max(0,dayPnl);
+    if(balance<=floor)return{totalPaid,reached1,reached2};
+    if(pf.pfLock>0&&!locked&&balance>=pf.pfLock)locked=true;
+    if(pf.pfFundedDdType==="static"){if(locked)floor=Math.max(floor,0)}
+    else{
+      hi=Math.max(hi,balance);
+      let f=hi-pf.pfFundedDD; if(locked)f=Math.max(f,0);
+      if(pf.pfFundedDdType==="trailingEod")floor=Math.max(floor,f);
+    }
+    if(balance>=pf.pfPayoutTrigger){
+      const payout=Math.min(balance*(pf.pfPayoutPct/100)*(pf.pfSplit/100),cap);
+      totalPaid+=payout;payoutCount++;
+      if(payoutCount===1)reached1=true;
+      if(payoutCount===2)reached2=true;
+      balance=balance*(1-pf.pfPayoutPct/100);
+    }
+  }
+  return{totalPaid,reached1,reached2};
+}
+function pfRunSimulation(pf){
+  const p=pf.pfWinRate/100,gain=pf.pfRisk*pf.pfRR,loss=pf.pfRisk;
+  const rng=pfMakeRng(20261024);
+  const N=Math.max(100,Math.min(20000,pf.pfNumAccounts||3000));
+  let totalCost=0,totalPayout=0,passCount=0,reached1Count=0,reached2Count=0;
+  const nets=[];
+  for(let i=0;i<N;i++){
+    let attempts=0,cost=0,passed=false;
+    while(!passed&&attempts<30){
+      attempts++;
+      cost+=attempts===1?pf.pfEvalPrice:pf.pfResetPrice;
+      passed=pfSimEval(p,gain,loss,pf,rng);
+    }
+    let payout=0;
+    if(passed){
+      passCount++;
+      cost+=pf.pfActivationFee||0;
+      const f=pfSimFunded(p,gain,loss,pf,rng);
+      payout=f.totalPaid;
+      if(f.reached1)reached1Count++;
+      if(f.reached2)reached2Count++;
+    }
+    totalCost+=cost;totalPayout+=payout;
+    nets.push(payout-cost);
+  }
+  nets.sort((a,b)=>a-b);
+  const pctl=q=>nets[Math.min(nets.length-1,Math.max(0,Math.floor(q*nets.length)))];
+  return{N,passRate:passCount/N,reached1Rate:reached1Count/N,reached2Rate:reached2Count/N,
+    avgCost:totalCost/N,avgPayout:totalPayout/N,EV:(totalPayout-totalCost)/N,
+    ROI:totalCost>0?(totalPayout-totalCost)/totalCost:null,
+    p10:pctl(0.10),p50:pctl(0.50),p90:pctl(0.90)};
+}
+function pfRenderSim(pf,s){
+  pfSimOut.innerHTML=
+    line("Simulated accounts",fmt(s.N,0))+
+    line("P(pass eval)",pct(s.passRate))+
+    line("P(reach payout 1)",pct(s.reached1Rate))+
+    line("P(reach payout 2)",pct(s.reached2Rate))+
+    line("Avg cost per account",`$${fmt(s.avgCost)}`)+
+    line("Avg total payout per account",`$${fmt(s.avgPayout)}`)+
+    line("EV per account",(s.EV>=0?"+$":"-$")+fmt(Math.abs(s.EV)),s.EV>=0?"color:var(--green)":"color:var(--red)")+
+    line("ROI",s.ROI!=null?pct(s.ROI):"&mdash;",s.ROI!=null?(s.ROI>=0?"color:var(--green)":"color:var(--red)"):"")+
+    line("Outcome range &mdash; 10th / 50th / 90th pct, net $",`${fmt(s.p10)} / ${fmt(s.p50)} / ${fmt(s.p90)}`)+
+    line("Suggested bankroll (video's own rule of thumb: 10&times; eval price)",`$${fmt((pf.pfEvalPrice||0)*10)}`,"color:var(--muted)");
+  pfSimStatus.textContent=`Simulated ${fmt(s.N,0)} accounts trade-by-trade just now.`;
+}
+function pfRenderAll(){
+  const pf=pfGetForm();
+  pfSaveForm(pf);
+  pfRenderAnalytical(pfAnalytical(pf));
+  pfRenderSim(pf,pfRunSimulation(pf));
+}
+document.querySelectorAll("[data-pfpreset]").forEach(b=>b.addEventListener("click",()=>{
+  pfActivePreset=b.dataset.pfpreset;
+  document.querySelectorAll("[data-pfpreset]").forEach(x=>x.classList.toggle("active",x===b));
+  if(PF_PRESETS[pfActivePreset]){const cur=pfGetForm();pfSetForm({...cur,...PF_PRESETS[pfActivePreset]})}
+  pfRenderAll();
+}));
+pfUseStatsBtn.addEventListener("click",()=>{
+  const withR=sessions.filter(s=>Number.isFinite(s.resultR));
+  if(!withR.length){pfStatsStatus.textContent="No logged Result R values yet — log some sessions with Result R filled in first.";return}
+  const wins=withR.filter(s=>s.resultR>0),losses=withR.filter(s=>s.resultR<0);
+  const winRate=wins.length/withR.length*100;
+  const avgWinR=wins.length?avg(wins.map(s=>s.resultR)):0;
+  const avgLossR=losses.length?Math.abs(avg(losses.map(s=>s.resultR))):1;
+  pfWinRate.value=fmt(winRate,1);pfRR.value=fmt(avgLossR?avgWinR/avgLossR:0,2);
+  pfStatsStatus.textContent=`Pulled from ${withR.length} logged entries: ${fmt(winRate,1)}% win rate, ${fmt(avgLossR?avgWinR/avgLossR:0,2)} R:R.`;
+  pfRenderAll();
+});
+let pfRenderTimer=null;
+document.querySelectorAll("#propfirms input, #propfirms select").forEach(el=>{
+  el.addEventListener("input",()=>{clearTimeout(pfRenderTimer);pfRenderTimer=setTimeout(pfRenderAll,250)});
+});
+pfLoad();
+pfRenderAll();
+
 bootAuth();
 </script>
 </body>
